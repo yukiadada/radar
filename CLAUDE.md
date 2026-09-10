@@ -87,6 +87,16 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 
 - 해석 (축/테마): 행마다 한 줄. 커짐/작아짐과 이유. 팩트 셀에는 해석을 넣지 않는다.
 
+## 쉬운 말로
+- **시그널 짧은 이름**
+  - 무슨 일: 중학생이 읽어도 되게. 전문용어는 괄호로 풀이
+  - 왜 중요: 어느 축이 왜 커지거나 작아지는지
+  - 누가 이득·손해: 섹터·티커를 쉬운 이름과 함께
+
+## 누가 유리하고 불리한가
+| 티커 | 무엇 | 방향 | 확신 | 왜 |
+|---|---|---|---|---|
+
 ## 버린 뉴스 (한 줄씩, 왜 버렸는지)
 
 ## 30일 누적
@@ -107,18 +117,19 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 - 시간은 미국 동부 기준(ET)으로 표기하고 KST를 괄호로 덧붙인다.
 - 형용사 줄이고 숫자와 출처로 말한다.
 - 모르면 "확인 안 됨"이라고 쓴다.
+- "쉬운 말로"와 "누가 유리하고 불리한가"는 중학생 기준으로 쓴다. 관세, ETF, 연준, 반독점 같은 용어는 처음 나올 때 괄호로 한 줄 풀이. 환율 환산 같은 추정 숫자는 만들지 않는다.
 
 ## 현재 상태
 
-> /save 자동 업데이트 — 2026-09-11 00:24
+> /save 자동 업데이트 — 2026-09-11 00:33
 
 **브랜치:** main
-**마지막 커밋:** 213c829 site: 표 열 너비·모바일 메뉴·본문 제목 중복 정리, CLAUDE.md 현재 상태에 GitHub 주소
+**마지막 커밋:** 8d26c4d docs: session log 2026-09-11 — 첫 /brief, GitHub 연동, Pages 웹페이지
 
 **미완료 항목:**
 - 첫 /brief 판단 3건 확인: 캐나다 건 출처를 White House 포고 URL로 쓴 것(brief.md 규칙과 다름), ECB 인상을 4축 밖으로 버린 것, Goldman–NEOS를 코인/현물 ETF로 분류한 것
+- 다음 /brief부터 "쉬운 말로"·"누가 유리하고 불리한가" 섹션 필수. 장부 스키마는 그대로
 - Google News 링크 디코딩 스크립트(scratchpad/gn_decode.py)를 brief.md 절차에 넣을지 검토
 - 공개 저장소라 raw/·logs/ 공개됨. 감추려면 .gitignore와 /save 규칙 조정
 - /brief 자동화(/schedule)는 며칠 수동 실행 뒤 결정
-- FR 200건 캡 경고는 실질 누락 없음. 거슬리면 --hours 36 검토
 - GitHub: https://github.com/yukiadada/radar (public). push 하면 GitHub Pages 자동 배포: https://yukiadada.github.io/radar/
