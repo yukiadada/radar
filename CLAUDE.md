@@ -112,11 +112,11 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 
 > /save 자동 업데이트 — 2026-09-10 23:40 (이번엔 수동 갱신)
 
-**브랜치:** main
-**마지막 커밋:** 초기 커밋 (이 섹션 갱신 직후 생성)
+**브랜치:** main (origin/main 추적)
+**마지막 커밋:** git log 참조
 
 **미완료 항목:**
 - 첫 `/brief` 수동 실행 (Ken 호출). `raw/2026-09-10/` 준비됨. 판정 품질 확인 뒤 자동화 검토
 - `/brief` 자동화: `/schedule`(클라우드)은 GitHub 원격이 필요. 원격 없음 → 수동 실행 몇 번 뒤 결정
 - Federal Register 200건 캡: 48h 창이 게재일 2일치를 덮어 경고가 자주 뜸. 07:30 KST 실행에서는 직전 ET 게재일이 먼저 들어오므로 실질 누락은 없음. 거슬리면 `--hours 36` 검토
-- git 원격 없음. `/save`의 push 는 건너뜀
+- GitHub: https://github.com/yukiadada/radar (public). push 하면 GitHub Pages 가 자동 빌드·배포됨: https://yukiadada.github.io/radar/
