@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>radar</title>
+<meta name="description" content="코인, 기술권력, 정치권력, 자본권력 네 축의 일간 관측 장부">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=Noto+Serif+KR:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ground:#F3F4F2; --ink:#1E2A3A; --ink2:#5A6675; --muted:#6F7A86;
+  --hair:#D8DCE0; --hair2:#E7EAED; --wash:#E9ECEF;
+  --accent:#2A6FBF; --grow:#2A6FBF; --shrink:#BD5A19; --hold:#A6ADB4;
+  --sans:"IBM Plex Sans KR",-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --serif:"Noto Serif KR","Apple SD Gothic Neo","Nanum Myeongjo",serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --ground:#14171B; --ink:#ECEEF0; --ink2:#A9B1BA; --muted:#8A939D;
+    --hair:#2B3138; --hair2:#22272D; --wash:#1C2026;
+    --accent:#4A8FD6; --grow:#4A8FD6; --shrink:#D9743F; --hold:#5B646E;
+    color-scheme:dark;
+  }
+}
+*{box-sizing:border-box}
+html{background:var(--ground)}
+body{margin:0;font-family:var(--sans);font-size:16px;line-height:1.7;color:var(--ink);background:var(--ground);-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
+a:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mast,#app,.foot{max-width:920px;margin:0 auto;padding-left:24px;padding-right:24px}
+.mast{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 18px;padding-top:22px;padding-bottom:14px;border-bottom:1px solid var(--hair)}
+.brand{font-weight:600;font-size:21px;letter-spacing:-.01em;color:var(--ink);text-decoration:none}
+.tagline{margin:0;font-size:13.5px;color:var(--ink2)}
+.mast nav{margin-left:auto;display:flex;gap:16px;font-size:14px}
+.mast nav a{color:var(--ink2);text-decoration:none;padding:4px 0;border-bottom:2px solid transparent}
+.mast nav a[aria-current=page]{color:var(--ink);border-bottom-color:var(--ink)}
+#app{padding-bottom:72px;min-height:60vh}
+.foot{padding-top:18px;padding-bottom:40px;border-top:1px solid var(--hair);font-size:12.5px;color:var(--muted);display:flex;flex-wrap:wrap;gap:16px}
+.foot a{color:var(--muted)}
+h2.sec{font-size:15px;font-weight:600;margin:40px 0 12px;padding-top:14px;border-top:1px solid var(--hair)}
+h2.sec .dim,.dim{color:var(--ink2);font-weight:400}
+.empty,.loading{color:var(--ink2);font-size:15px;margin:16px 0}
+ul.plain{list-style:none;padding:0;margin:0}
+ul.plain li{padding:6px 0;border-bottom:1px solid var(--hair2);font-size:15px}
+.pager{display:flex;justify-content:space-between;font-size:14px;margin:28px 0 0}
+
+/* 축 저울 */
+.dateline{font-family:var(--serif);font-size:26px;font-weight:600;line-height:1.35;margin:30px 0 2px}
+.hero-sub{color:var(--ink2);font-size:14px;margin:0}
+.scale{margin:22px 0 4px}
+.scale figcaption{font-size:15px;font-weight:500;margin-bottom:4px}
+.scale figcaption span{color:var(--ink2);font-weight:400;margin-left:8px;font-size:13.5px}
+.legend{display:flex;gap:16px;font-size:12.5px;color:var(--ink2);margin-bottom:10px}
+.sw{display:inline-block;width:12px;height:12px;border-radius:2px;vertical-align:-1px;margin-right:5px}
+.sw.grow{background:var(--grow)}.sw.shrink{background:var(--shrink)}
+.srow{display:grid;grid-template-columns:76px 1fr 96px;align-items:center;gap:10px;height:34px}
+.srow .lab{font-size:14px;font-weight:500}
+.track{display:grid;grid-template-columns:1fr 2px 1fr;align-items:center;height:100%}
+.arm{display:flex;align-items:center;gap:6px;height:16px;min-width:0}
+.arm.left{justify-content:flex-end}
+.arm i{display:block;height:16px;width:0;transition:width .6s cubic-bezier(.2,.7,.2,1)}
+.arm.left i{background:var(--shrink);border-radius:4px 0 0 4px}
+.arm.right i{background:var(--grow);border-radius:0 4px 4px 0}
+.arm b{font-size:13px;font-weight:500;color:var(--ink2);font-variant-numeric:tabular-nums}
+.mid{width:2px;height:24px;background:var(--hair)}
+.srow .hold{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+@media (prefers-reduced-motion:reduce){.arm i{transition:none}}
+@media (max-width:560px){.srow{grid-template-columns:64px 1fr 72px;gap:6px}.dateline{font-size:22px}}
+
+/* 표 */
+table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.55}
+th{font-size:12.5px;font-weight:500;color:var(--ink2);text-align:left;padding:8px 10px;border-bottom:1px solid var(--hair);white-space:nowrap;vertical-align:bottom}
+td{padding:9px 10px;border-bottom:1px solid var(--hair2);vertical-align:top}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.tbl{overflow-x:auto;margin:0 0 6px}
+.tbl.wide table{min-width:860px}
+td.date{white-space:nowrap;font-variant-numeric:tabular-nums}
+td.small{font-size:13px;color:var(--ink2)}
+
+/* 필터 */
+.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:16px 0 10px;font-size:14px}
+.filters label{color:var(--ink2)}
+select,input[type=search]{font:inherit;font-size:14px;padding:6px 10px;border:1px solid var(--hair);border-radius:6px;background:var(--ground);color:var(--ink)}
+input[type=search]{min-width:200px}
+.count{color:var(--ink2);font-size:13.5px}
+
+/* 브리프 본문 (markdown) */
+.md{font-family:var(--serif);font-size:17px;line-height:1.85}
+.md>*:not(.tbl){max-width:74ch}
+.md h1{font-family:var(--sans);font-size:20px;font-weight:600;line-height:1.4;margin:6px 0 18px}
+.md h2{font-family:var(--sans);font-size:15px;font-weight:600;margin:36px 0 10px;padding-top:12px;border-top:1px solid var(--hair)}
+.md p{margin:0 0 14px}
+.md ul{padding-left:20px;margin:0 0 14px}
+.md li{margin:5px 0}
+.md .tbl{margin:0 0 16px}
+.md table{font-family:var(--sans);font-size:14px;line-height:1.55;min-width:760px}
+.md td{font-size:14px}
+.md code{font-family:var(--sans);background:var(--wash);padding:1px 5px;border-radius:4px;font-size:.92em}
+pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.6;background:var(--wash);padding:16px 18px;border-radius:8px;overflow-x:auto;color:var(--ink)}
+</style>
+</head>
+<body>
+<header class="mast">
+  <a class="brand" href="#/">radar</a>
+  <p class="tagline">코인, 기술권력, 정치권력, 자본권력 네 축의 일간 관측 장부</p>
+  <nav id="nav" aria-label="주 메뉴">
+    <a href="#/" data-route="home">오늘</a>
+    <a href="#/trend" data-route="trend">트렌드</a>
+    <a href="#/ledger" data-route="ledger">장부</a>
+    <a href="#/briefs" data-route="briefs">브리프</a>
+    <a href="#/framework" data-route="framework">기준</a>
+  </nav>
+</header>
+<main id="app"><p class="loading">불러오는 중</p></main>
+<footer class="foot"><span id="gen"></span><a href="https://github.com/yukiadada/radar">저장소</a><span>판단 재료이지 매매 신호가 아닙니다</span></footer>
+<noscript><p style="padding:24px">이 페이지는 JavaScript 로 장부와 브리프를 읽습니다. data.json 과 briefs/ 는 저장소에서 직접 볼 수 있습니다.</p></noscript>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/18.0.12/lib/marked.umd.js"></script>
+<script>
+(function () {
+  const app = document.getElementById('app');
+  let D = null;
+
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const fmtDate = s => { const [y, m, d] = s.split('-').map(Number); const w = '일월화수목금토'[new Date(y, m - 1, d).getDay()]; return `${y}년 ${m}월 ${d}일 ${w}요일`; };
+  const pct = x => `${Math.round(x * 100)}%`;
+  const list = (arr, n) => arr.slice(0, n).map(([k, v]) => `${esc(k)}(${v})`).join(', ') || '';
+
+  function md(text) {
+    const el = document.createElement('div');
+    el.className = 'md';
+    el.innerHTML = marked.parse(text, { gfm: true, breaks: false });
+    el.querySelectorAll('table').forEach(t => { const w = document.createElement('div'); w.className = 'tbl'; t.parentNode.insertBefore(w, t); w.appendChild(t); });
+    el.querySelectorAll('a[href^="http"]').forEach(a => { a.target = '_blank'; a.rel = 'noopener'; });
+    return el;
+  }
+
+  /* 축 저울: 작아짐은 왼팔, 커짐은 오른팔. 유보·미표기는 숫자로만 */
+  function scaleChart(win, caption) {
+    const max = Math.max(1, ...win.axes.flatMap(a => [a.grow, a.shrink]));
+    const rows = win.axes.map(a => {
+      const l = a.shrink ? `<b>${a.shrink}</b><i data-w="${(a.shrink / max * 86).toFixed(1)}"></i>` : '';
+      const r = a.grow ? `<i data-w="${(a.grow / max * 86).toFixed(1)}"></i><b>${a.grow}</b>` : '';
+      const side = [a.hold ? `유보 ${a.hold}` : '', a.untagged ? `미표기 ${a.untagged}` : ''].filter(Boolean).join(', ');
+      const tip = `${a.axis}: 커짐 ${a.grow}, 작아짐 ${a.shrink}, 유보 ${a.hold}${a.untagged ? `, 미표기 ${a.untagged}` : ''}. 총 ${a.count}건`;
+      return `<div class="srow" title="${esc(tip)}"><div class="lab">${a.axis}</div><div class="track"><div class="arm left">${l}</div><div class="mid"></div><div class="arm right">${r}</div></div><div class="hold">${side}</div></div>`;
+    }).join('');
+    return `<figure class="scale" aria-label="축 저울, ${esc(caption)}"><figcaption>축 저울<span>${esc(caption)}</span></figcaption>` +
+      `<div class="legend"><span><span class="sw shrink"></span>작아짐</span><span><span class="sw grow"></span>커짐</span></div>${rows}</figure>`;
+  }
+  function animateBars() {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      app.querySelectorAll('.arm i[data-w]').forEach(i => { i.style.width = i.dataset.w + '%'; });
+    }));
+  }
+
+  function axisTable(win) {
+    const rows = win.axes.map(a => `<tr><td>${a.axis}</td><td class="num">${a.count}</td><td class="num">${win.total ? pct(a.share) : '–'}</td>` +
+      `<td class="num">${a.grow}</td><td class="num">${a.shrink}</td><td class="num">${a.hold}${a.untagged ? ` <span class="dim">(미표기 ${a.untagged})</span>` : ''}</td>` +
+      `<td class="num">${a.dir['+']}/${a.dir['-']}/${a.dir['±']}</td><td class="num">${a.avg_conf ?? '–'}</td><td class="small">${list(a.themes, 3) || '–'}</td><td class="small">${list(a.sectors, 5) || '–'}</td></tr>`).join('');
+    return `<div class="tbl wide"><table><thead><tr><th>축</th><th class="num">건수</th><th class="num">비중</th><th class="num">커짐</th><th class="num">작아짐</th><th class="num">유보</th><th class="num">섹터 방향 +/-/±</th><th class="num">평균 확신</th><th>상위 테마</th><th>상위 섹터</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+
+  function rawLine(date) {
+    const day = D.raw[date];
+    if (!day) return '';
+    const names = Object.keys(day);
+    const zero = names.filter(k => !day[k].count || day[k].error);
+    return `수집 ${names.length}개 소스${zero.length ? `, 0건 ${zero.join(', ')}` : ''}`;
+  }
+
+  /* 화면 */
+  function home() {
+    const b = D.briefs[0];
+    const w = D.trend.w30;
+    const bits = [`최근 30일 장부 ${w.total}건`, `전체 ${D.ledger.length}건`, rawLine(b ? b.date : D.today)].filter(Boolean);
+    let h = `<p class="dateline">${fmtDate(D.today)}</p><p class="hero-sub">${bits.join(', ')}</p>`;
+    h += scaleChart(w, `최근 30일, ${w.from}부터 ${w.to}까지`);
+    if (!D.ledger.length) h += `<p class="empty">장부가 비어 있습니다. /brief 를 실행하고 push 하면 여기에 쌓입니다.</p>`;
+    if (b) h += `<h2 class="sec">${b.date === D.today ? '오늘의 브리프' : '최근 브리프'} <span class="dim">${b.date}</span></h2><div id="brief"></div>`;
+    else h += `<h2 class="sec">브리프</h2><p class="empty">아직 브리프가 없습니다.</p>`;
+    if (D.briefs.length > 1) {
+      h += `<h2 class="sec">지난 브리프</h2><ul class="plain">` + D.briefs.slice(1, 8).map(x =>
+        `<li><a href="#/brief/${x.date}">${x.date}</a> <span class="dim">구조적 ${x.structural}건, 논지 변화 ${esc(x.thesis)}</span></li>`).join('') + `</ul>`;
+      if (D.briefs.length > 8) h += `<p class="dim" style="font-size:14px"><a href="#/briefs">전체 브리프 ${D.briefs.length}건</a></p>`;
+    }
+    app.innerHTML = h;
+    if (b) document.getElementById('brief').appendChild(md(b.md));
+    animateBars();
+  }
+
+  function brief(date) {
+    const i = D.briefs.findIndex(x => x.date === date);
+    if (i < 0) { app.innerHTML = `<p class="empty">${esc(date)} 브리프가 없습니다. <a href="#/briefs">브리프 목록</a></p>`; return; }
+    const b = D.briefs[i], prev = D.briefs[i + 1], next = D.briefs[i - 1];
+    app.innerHTML = `<p class="hero-sub" style="margin-top:28px">${fmtDate(b.date)}${rawLine(b.date) ? ', ' + rawLine(b.date) : ''}</p><div id="brief"></div>` +
+      `<nav class="pager" aria-label="브리프 이동"><span>${prev ? `<a href="#/brief/${prev.date}">이전 ${prev.date}</a>` : ''}</span><span>${next ? `<a href="#/brief/${next.date}">다음 ${next.date}</a>` : ''}</span></nav>`;
+    document.getElementById('brief').appendChild(md(b.md));
+  }
+
+  function trend() {
+    const t = D.trend;
+    let h = `<p class="dateline">어느 축이 커지고 있는가</p><p class="hero-sub">기준일 ${D.today}, 장부 전체 ${D.ledger.length}건</p>`;
+    if (!D.ledger.length) { app.innerHTML = h + `<p class="empty">장부가 비어 있습니다.</p>`; return; }
+    for (const w of [t.w30, t.w90]) {
+      h += `<h2 class="sec">최근 ${w.days}일 <span class="dim">${w.from}부터 ${w.to}까지, ${w.total}건</span></h2>`;
+      h += scaleChart(w, `최근 ${w.days}일`);
+      h += axisTable(w);
+    }
+    h += `<h2 class="sec">30일 단위 추이 <span class="dim">최근에서 과거로, 건수 (커짐/작아짐)</span></h2><div class="tbl"><table><thead><tr><th>축</th>` +
+      t.buckets.map(b => `<th class="num">${b.label}<br><span class="dim">${b.from} ~ ${b.to}</span></th>`).join('') + `</tr></thead><tbody>` +
+      D.axes.map((a, ai) => `<tr><td>${a}</td>` + t.buckets.map(b => { const x = b.axes[ai]; return `<td class="num">${x.count} <span class="dim">(${x.grow}/${x.shrink})</span></td>`; }).join('') + `</tr>`).join('') + `</tbody></table></div>`;
+    const c = t.w90.conflicts, c30 = t.w30.conflicts;
+    h += `<h2 class="sec">축 간 충돌 <span class="dim">90일 ${c.total}건, 30일 ${c30.total}건</span></h2>`;
+    if (!c.total) h += `<p class="empty">없음</p>`;
+    else {
+      h += `<ul class="plain">` + c.pairs.map(p => { const n30 = c30.pairs.find(q => q.pair === p.pair); return `<li>${esc(p.pair)} <span class="dim">90일 ${p.count}건, 30일 ${n30 ? n30.count : 0}건${p.count >= 2 ? ', 반복' : ''}</span></li>`; }).join('') + `</ul>`;
+      h += `<div class="tbl wide" style="margin-top:12px"><table><thead><tr><th>날짜</th><th>축 / 테마</th><th>팩트</th><th>해석</th></tr></thead><tbody>` +
+        c.rows.map(r => `<tr><td class="date">${r.date}</td><td>${esc(r.axis)} / ${esc(r.theme)}</td><td>${esc(r.fact)}</td><td class="small">${esc(r.note)}</td></tr>`).join('') + `</tbody></table></div>`;
+    }
+    app.innerHTML = h;
+    animateBars();
+  }
+
+  function ledger() {
+    const rows = [...D.ledger].sort((a, b) => (b.date + b.line).localeCompare(a.date + a.line) || b.line - a.line);
+    app.innerHTML = `<p class="dateline">장부</p><p class="hero-sub">구조적 시그널만 쌓입니다. 한 줄이 한 사건, 추가만 하고 고치지 않습니다.</p>` +
+      `<div class="filters"><label>축 <select id="f-axis"><option value="">전체</option>${D.axes.map(a => `<option>${a}</option>`).join('')}</select></label>` +
+      `<label>기간 <select id="f-days"><option value="">전체</option><option value="30">최근 30일</option><option value="90">최근 90일</option></select></label>` +
+      `<input type="search" id="f-q" placeholder="테마, 티커, 팩트 검색" aria-label="검색"><span class="count" id="f-count"></span></div><div id="ledger-table"></div>`;
+    const draw = () => {
+      const ax = document.getElementById('f-axis').value, days = Number(document.getElementById('f-days').value), q = document.getElementById('f-q').value.trim().toLowerCase();
+      const cut = days ? new Date(new Date(D.today).getTime() - days * 864e5).toISOString().slice(0, 10) : '';
+      const sel = rows.filter(r => (!ax || r.axis === ax) && (!cut || r.date > cut) && (!q || [r.theme, r.fact, r.note, r.sectors.join(' ')].join(' ').toLowerCase().includes(q)));
+      document.getElementById('f-count').textContent = `${sel.length}건`;
+      document.getElementById('ledger-table').innerHTML = sel.length ? `<div class="tbl wide"><table><thead><tr><th>날짜</th><th>축</th><th>테마</th><th>팩트</th><th>섹터</th><th class="num">방향</th><th class="num">확신</th><th>해석</th></tr></thead><tbody>` +
+        sel.map(r => `<tr><td class="date">${r.date}</td><td>${esc(r.axis)}</td><td>${esc(r.theme)}</td><td>${esc(r.fact)} <a href="${esc(r.source)}" target="_blank" rel="noopener">출처</a></td><td>${r.sectors.map(esc).join(', ')}</td><td class="num">${esc(r.direction)}</td><td class="num">${r.confidence}</td><td class="small">${esc(r.note)}</td></tr>`).join('') +
+        `</tbody></table></div>` : `<p class="empty">조건에 맞는 줄이 없습니다.</p>`;
+    };
+    ['f-axis', 'f-days'].forEach(id => document.getElementById(id).addEventListener('change', draw));
+    document.getElementById('f-q').addEventListener('input', draw);
+    draw();
+  }
+
+  function briefs() {
+    app.innerHTML = `<p class="dateline">브리프</p><p class="hero-sub">${D.briefs.length}건</p>` + (D.briefs.length ?
+      `<div class="tbl"><table><thead><tr><th>날짜</th><th class="num">구조적 시그널</th><th>3~4년 논지 변화</th></tr></thead><tbody>` +
+      D.briefs.map(b => `<tr><td class="date"><a href="#/brief/${b.date}">${b.date}</a></td><td class="num">${b.none_today ? '없음' : b.structural}</td><td>${esc(b.thesis)}</td></tr>`).join('') + `</tbody></table></div>` :
+      `<p class="empty">아직 브리프가 없습니다.</p>`);
+  }
+
+  function framework() {
+    app.innerHTML = `<p class="dateline">판단 기준</p><p class="hero-sub">framework/axes.md 와 framework/sector_map.yaml 그대로. Ken 이 고칩니다.</p><div id="axes"></div><h2 class="sec">섹터 맵 <span class="dim">축, 테마, 티커 화이트리스트</span></h2><pre class="yaml">${esc(D.framework.sector_map)}</pre>`;
+    document.getElementById('axes').appendChild(md(D.framework.axes_md));
+  }
+
+  const views = { home, trend, ledger, briefs, framework, brief: a => brief(a) };
+  const titles = { home: 'radar', trend: '트렌드', ledger: '장부', briefs: '브리프', framework: '기준', brief: '브리프' };
+  function route() {
+    if (!D) return;
+    const [seg, arg] = location.hash.replace(/^#\/?/, '').split('/');
+    const name = views[seg] ? seg : 'home';
+    document.querySelectorAll('#nav a').forEach(a => {
+      const on = a.dataset.route === name || (name === 'brief' && a.dataset.route === 'briefs');
+      if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
+    });
+    document.title = name === 'home' ? 'radar' : `${name === 'brief' ? (arg || '') + ' ' : ''}${titles[name]} | radar`;
+    views[name](arg);
+    window.scrollTo(0, 0);
+  }
+
+  fetch('data.json', { cache: 'no-store' }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(j => {
+    D = j;
+    document.getElementById('gen').textContent = `빌드 ${j.generated_at.replace('T', ' ').slice(0, 16)} KST`;
+    route();
+  }).catch(e => { app.innerHTML = `<p class="empty">data.json 을 불러오지 못했습니다 (${esc(e.message)}). 빌드가 아직 안 됐거나 경로가 다릅니다.</p>`; });
+  window.addEventListener('hashchange', route);
+})();
+</script>
+</body>
+</html>

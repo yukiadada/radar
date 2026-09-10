@@ -32,6 +32,8 @@ briefs/YYYY-MM-DD.md       일간 브리프
 ledger/signals.jsonl       구조적 시그널 누적 장부 (append only, 수정 금지)
 .claude/commands/          /brief, /trend
 logs/                      세션 로그 (/save 가 만듦). 수집 로그는 ~/Library/Logs/market-brief.fetch.log
+site/                      웹페이지. build.py 가 briefs·ledger·framework 를 site/out/ 로 빌드, index.html 이 렌더
+.github/workflows/         main 에 push 되면 site/ 를 빌드해 GitHub Pages 에 배포 (https://yukiadada.github.io/radar/)
 ```
 
 ## 워크플로
