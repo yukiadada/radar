@@ -110,13 +110,15 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 
 ## 현재 상태
 
-> /save 자동 업데이트 — 2026-09-10 23:40 (이번엔 수동 갱신)
+> /save 자동 업데이트 — 2026-09-11 00:24
 
-**브랜치:** main (origin/main 추적)
-**마지막 커밋:** git log 참조
+**브랜치:** main
+**마지막 커밋:** 213c829 site: 표 열 너비·모바일 메뉴·본문 제목 중복 정리, CLAUDE.md 현재 상태에 GitHub 주소
 
 **미완료 항목:**
-- 첫 `/brief` 수동 실행 (Ken 호출). `raw/2026-09-10/` 준비됨. 판정 품질 확인 뒤 자동화 검토
-- `/brief` 자동화: `/schedule`(클라우드)은 GitHub 원격이 필요. 원격 없음 → 수동 실행 몇 번 뒤 결정
-- Federal Register 200건 캡: 48h 창이 게재일 2일치를 덮어 경고가 자주 뜸. 07:30 KST 실행에서는 직전 ET 게재일이 먼저 들어오므로 실질 누락은 없음. 거슬리면 `--hours 36` 검토
-- GitHub: https://github.com/yukiadada/radar (public). push 하면 GitHub Pages 가 자동 빌드·배포됨: https://yukiadada.github.io/radar/
+- 첫 /brief 판단 3건 확인: 캐나다 건 출처를 White House 포고 URL로 쓴 것(brief.md 규칙과 다름), ECB 인상을 4축 밖으로 버린 것, Goldman–NEOS를 코인/현물 ETF로 분류한 것
+- Google News 링크 디코딩 스크립트(scratchpad/gn_decode.py)를 brief.md 절차에 넣을지 검토
+- 공개 저장소라 raw/·logs/ 공개됨. 감추려면 .gitignore와 /save 규칙 조정
+- /brief 자동화(/schedule)는 며칠 수동 실행 뒤 결정
+- FR 200건 캡 경고는 실질 누락 없음. 거슬리면 --hours 36 검토
+- GitHub: https://github.com/yukiadada/radar (public). push 하면 GitHub Pages 자동 배포: https://yukiadada.github.io/radar/
