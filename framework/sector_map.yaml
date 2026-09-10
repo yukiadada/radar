@@ -1,0 +1,76 @@
+# 축 → 테마 → 티커 화이트리스트
+# Claude는 이 파일에 있는 티커만 인용한다. 추가/삭제는 Ken이 한다.
+# ETF를 앞에, 개별 종목은 뒤에. 개별 종목은 "그 테마의 대표"일 때만 넣는다.
+
+정치권력:
+  관세/리쇼어링:
+    tickers: [XLI, CAT, PWR]
+    note: 관세·산업정책 수혜 산업재. PWR은 전력인프라와 겹침
+  방산:
+    tickers: [ITA, LMT, RTX]
+    note: 국방예산 증액, 지정학
+  에너지 정책:
+    tickers: [XLE, XOP]
+    note: 시추 규제 완화, 전략비축유
+  금융 규제완화:
+    tickers: [XLF, KRE]
+    note: 자본규제·지역은행 규제 완화
+  헬스케어 정책:
+    tickers: [XLV, IHE]
+    note: 약가·메디케어. 방향은 대체로 -
+  이민/노동:
+    tickers: [XHB]
+    note: 건설 노동 공급. 방향 대체로 -
+
+기술권력:
+  AI capex:
+    tickers: [SMH, NVDA, AVGO, TSM]
+    note: 하이퍼스케일러 capex 가이던스가 직접 연결
+  하이퍼스케일러:
+    tickers: [QQQ, MSFT, GOOGL, AMZN, META]
+    note: capex 주체이자 반독점 대상
+  전력/인프라:
+    tickers: [PWR, VST, CEG, XLU]
+    note: 데이터센터 전력 계약, 원전
+  소프트웨어:
+    tickers: [IGV]
+    note: AI 수익화의 다음 단계. 대체로 후행
+  피지컬 AI/로봇:
+    tickers: [BOTZ, TSLA]
+    note: 기존 관심 테마. 아직 시그널 빈도 낮을 것
+
+자본권력:
+  유동성/금리:
+    tickers: [TLT, IEF, IWM]
+    note: 금리 방향에 가장 민감한 자산. IWM은 금리 인하 수혜
+  대형은행/운용사:
+    tickers: [XLF, JPM, BLK]
+    note: 규제 완화, 자본시장 활황
+  달러:
+    tickers: [UUP]
+    note: 달러 약세 = 신흥국·원자재 +
+  귀금속:
+    tickers: [GLD, SLV]
+    note: 연준 독립성 훼손·달러 신뢰 하락의 헤지
+  시장 전체:
+    tickers: [SPY, QQQ]
+    note: 다른 테마에 안 걸리는 광범위 유동성 시그널용
+
+코인:
+  현물 ETF:
+    tickers: [IBIT, ETHA]
+    note: 기관 자금흐름의 직접 지표
+  거래소/인프라:
+    tickers: [COIN, HOOD]
+    note: 규제 확정의 1차 수혜
+  기업 보유:
+    tickers: [MSTR]
+    note: 재무제표 보유 결정
+  스테이블코인/결제:
+    tickers: [CRCL, PYPL]
+    note: 스테이블코인 법안 연결
+
+# 사용 규칙
+# - 하나의 시그널에 최대 3개 티커.
+# - 테마 키(관세/리쇼어링 등)는 signals.jsonl의 theme 필드와 정확히 일치해야 한다.
+# - "맵 수정 제안"으로 올라온 티커는 3회 이상 반복 등장할 때만 추가를 검토한다.

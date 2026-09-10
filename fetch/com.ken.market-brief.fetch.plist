@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- market-brief 일일 수집. 매일 07:30 로컬(KST). Mac 이 자고 있었으면 깨어난 직후 실행된다.
+       설치:   cp fetch/com.ken.market-brief.fetch.plist ~/Library/LaunchAgents/ && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.ken.market-brief.fetch.plist
+       해제:   launchctl bootout gui/$(id -u)/com.ken.market-brief.fetch && rm ~/Library/LaunchAgents/com.ken.market-brief.fetch.plist
+       즉시:   launchctl kickstart gui/$(id -u)/com.ken.market-brief.fetch
+       로그:   ~/Library/Logs/market-brief.fetch.log (~/Documents 는 launchd 가 못 열어서 밖에 둔다) -->
+  <key>Label</key>
+  <string>com.ken.market-brief.fetch</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/python3</string>
+    <string>/Users/ken/Documents/0_projects/personal/radar/fetch/fetch.py</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>7</integer>
+    <key>Minute</key>
+    <integer>30</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/Users/ken/Library/Logs/market-brief.fetch.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/ken/Library/Logs/market-brief.fetch.log</string>
+  <key>RunAtLoad</key>
+  <false/>
+</dict>
+</plist>
