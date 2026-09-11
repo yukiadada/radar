@@ -123,15 +123,14 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 
 ## 현재 상태
 
-> /save 자동 업데이트 — 2026-09-11 00:33
+> /save 자동 업데이트 — 2026-09-11 10:12
 
 **브랜치:** main
-**마지막 커밋:** 8d26c4d docs: session log 2026-09-11 — 첫 /brief, GitHub 연동, Pages 웹페이지
+**마지막 커밋:** fc6f87a raw/·logs/ 를 공개 저장소에서 제외. 수집 원문은 비공개 radar-raw 로, brief.md 에 분류 선례 3건
 
 **미완료 항목:**
-- 첫 /brief 판단 3건 확인: 캐나다 건 출처를 White House 포고 URL로 쓴 것(brief.md 규칙과 다름), ECB 인상을 4축 밖으로 버린 것, Goldman–NEOS를 코인/현물 ETF로 분류한 것
-- 다음 /brief부터 "쉬운 말로"·"누가 유리하고 불리한가" 섹션 필수. 장부 스키마는 그대로
-- Google News 링크 디코딩 스크립트(scratchpad/gn_decode.py)를 brief.md 절차에 넣을지 검토
-- 공개 저장소라 raw/·logs/ 공개됨. 감추려면 .gitignore와 /save 규칙 조정
-- /brief 자동화(/schedule)는 며칠 수동 실행 뒤 결정
-- GitHub: https://github.com/yukiadada/radar (public). push 하면 GitHub Pages 자동 배포: https://yukiadada.github.io/radar/
+- 9/12 06:00 Actions 수집 → 06:20 루틴 첫 완전 자동 실행 확인. 사이트에 브리프 없으면 루틴 로그(claude.ai/code/routines/trig_01564MDnvQH3DtPRvCiqfaDY) 확인
+- Ken: claude.ai/code Default 환경 네트워크 접근 확대(루틴의 1차 출처 WebFetch 가 EGRESS_BLOCKED)
+- 로컬 작업 전 `git pull` 필수. 로컬 /brief 는 `python3 fetch/fetch.py` 로 raw/ 를 먼저 만든다(미추적)
+- 루틴 사용량(실행당 opus-5 약 8분)이 매일 누적됨. 부담되면 모델을 sonnet-5 로 변경 가능
+- 운영 저장소: https://github.com/yukiadada/radar (public, raw/·logs/ 제외), https://github.com/yukiadada/radar-raw (private, raw). 사이트 https://yukiadada.github.io/radar/
