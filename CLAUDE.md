@@ -123,14 +123,16 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 
 ## 현재 상태
 
-> /save 자동 업데이트 — 2026-09-11 10:12
+> /save 자동 업데이트 — 2026-09-11 10:49
 
 **브랜치:** main
-**마지막 커밋:** fc6f87a raw/·logs/ 를 공개 저장소에서 제외. 수집 원문은 비공개 radar-raw 로, brief.md 에 분류 선례 3건
+**마지막 커밋:** b2f82cb 코드리뷰 반영: 수집 재실행 안전화, TZ 고정, 확인 등급 규칙 단일화, gn_decode 견고화, 워크플로 정리
 
 **미완료 항목:**
-- 9/12 06:00 Actions 수집 → 06:20 루틴 첫 완전 자동 실행 확인. 사이트에 브리프 없으면 루틴 로그(claude.ai/code/routines/trig_01564MDnvQH3DtPRvCiqfaDY) 확인
-- Ken: claude.ai/code Default 환경 네트워크 접근 확대(루틴의 1차 출처 WebFetch 가 EGRESS_BLOCKED)
-- 로컬 작업 전 `git pull` 필수. 로컬 /brief 는 `python3 fetch/fetch.py` 로 raw/ 를 먼저 만든다(미추적)
-- 루틴 사용량(실행당 opus-5 약 8분)이 매일 누적됨. 부담되면 모델을 sonnet-5 로 변경 가능
-- 운영 저장소: https://github.com/yukiadada/radar (public, raw/·logs/ 제외), https://github.com/yukiadada/radar-raw (private, raw). 사이트 https://yukiadada.github.io/radar/
+- 9/12 05:30 Actions 수집 → 06:20 루틴 첫 완전 자동 실행 확인. 없으면 루틴 로그(claude.ai/code/routines/trig_01564MDnvQH3DtPRvCiqfaDY)와 Actions 로그 확인
+- Ken: claude.ai/code Default 환경 네트워크 접근 확대 (WebFetch EGRESS_BLOCKED 해제 시 1차 출처 본문 확인 가능)
+- gn_decode.py 실제 디코딩은 Google 429 로 미검증. `python3 fetch/gn_decode.py --raw <날짜> gnews_tariff 0` 로 확인
+- 9/11 장부 4번째 줄은 구 규칙(검색 교차만으로 0.6). append only 라 유지
+- 로컬 작업 전 `git pull`. 로컬 /brief 는 `python3 fetch/fetch.py` 로 raw/ 생성(미추적)
+- 루틴 사용량 매일 누적(실행당 opus-5 약 8분). 부담되면 sonnet-5 로 변경
+- 저장소: https://github.com/yukiadada/radar (public), https://github.com/yukiadada/radar-raw (private, raw). 사이트 https://yukiadada.github.io/radar/
