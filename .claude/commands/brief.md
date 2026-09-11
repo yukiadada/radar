@@ -28,6 +28,7 @@ CLAUDE.md "워크플로 > /brief"를 실행한다. 아래 순서를 건너뛰지
 - 모든 항목을 axes.md의 4축 중 하나로 분류한다: 정치권력 / 기술권력 / 자본권력 / 코인. 어느 축에도 안 걸리면 버린다.
 - Google News 항목은 `summary`가 제목과 같은 경우가 대부분이다. 헤드라인만으로 판단할 수 있는 것은 structural=false 판정과 "버린다" 판정뿐이다.
 - **structural=true 후보는 반드시 기사 또는 1차 출처를 열어(WebFetch) 내용을 확인한다.** 열 수 없으면 structural=false로 내리고 confidence 0.3으로 하거나 버린다. 헤드라인만 보고 structural=true를 쓰지 않는다.
+- Google News 링크(news.google.com/rss/articles/...)는 WebFetch로 직접 열리지 않는다. `python3 fetch/gn_decode.py --raw <날짜> <source> <번호...>` 또는 `python3 fetch/gn_decode.py <링크>`로 실제 기사 URL을 얻은 뒤 그 URL을 WebFetch한다. 유료 기사라 못 열면 같은 사건을 다룬 다른 기사나 1차 출처(whitehouse.gov, federalregister.gov API, ecb.europa.eu 등)를 연다.
 - 후보마다 아래 셋을 따로 적는다. 섞지 않는다.
   - 팩트: 출처에 있는 내용만 한 문장. 숫자·날짜·주체를 그대로 옮긴다. 기억이나 추정으로 보강하지 않는다. 헤드라인끼리 숫자가 다르면 "확인 안 됨"이라고 쓴다.
   - 해석: 왜 이 축이 커지거나 작아지는 신호인지. axes.md의 "커진다/작아진다" 기준을 인용한다. 팩트 셀에는 해석을 넣지 않는다.
