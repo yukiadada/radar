@@ -59,7 +59,7 @@
 코인:
   현물 ETF:
     tickers: [IBIT, ETHA]
-    note: 기관 자금흐름의 직접 지표
+    note: 기관 자금흐름의 직접 지표. 은행·운용사가 코인 ETF 사업에 진입하는 사건도 이 테마
   거래소/인프라:
     tickers: [COIN, HOOD]
     note: 규제 확정의 1차 수혜

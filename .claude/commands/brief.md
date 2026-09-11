@@ -1,5 +1,5 @@
 ---
-description: raw/<날짜>를 읽어 4축 일간 브리프(briefs/<날짜>.md)를 쓰고 structural=true 시그널만 ledger에 append. Ken이 직접 호출할 때만 실행
+description: raw/<날짜>를 읽어 4축 일간 브리프(briefs/<날짜>.md)를 쓰고 structural=true 시그널만 ledger에 append. Ken 이 직접 호출하거나 Ken 이 만든 클라우드 루틴이 실행한다. 모델이 스스로 호출하지 않는다
 argument-hint: [YYYY-MM-DD]
 disable-model-invocation: true
 ---
@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 CLAUDE.md "워크플로 > /brief"를 실행한다. 아래 순서를 건너뛰지 않는다. 모든 명령은 레포 루트에서 실행한다.
 
-날짜: `$ARGUMENTS`가 `YYYY-MM-DD` 형식이면 그 날짜, 비어 있으면 `date +%F` 결과(로컬 날짜). 그 외 형식이면 "날짜 형식 오류"라고 답하고 멈춘다. 이하 `<날짜>`.
+날짜: `$ARGUMENTS`가 `YYYY-MM-DD` 형식이면 그 날짜, 비어 있으면 `TZ=Asia/Seoul date +%F` 결과(한국 날짜. 클라우드는 UTC 라 TZ 를 반드시 붙인다). 그 외 형식이면 "날짜 형식 오류"라고 답하고 멈춘다. 이하 `<날짜>`.
 
 ## 0. 규칙 로드
 
@@ -20,22 +20,27 @@ CLAUDE.md "워크플로 > /brief"를 실행한다. 아래 순서를 건너뛰지
 
 1. `raw/<날짜>/*.json`을 확인한다. 폴더가 없거나 json 파일이 0개면 아래 한 줄만 답하고 멈춘다. 실행 여부는 Ken이 정한다.
    > raw/<날짜>/ 없음. 먼저 `python3 fetch/fetch.py --date <날짜>` 실행이 필요합니다.
+
+   비대화형(클라우드 루틴)에서는 Actions 수집이 늦을 수 있으니 2분 간격으로 `git pull` 하며 최대 20분 기다린 뒤 그래도 없으면 멈춘다.
 2. 파일이 있으면 전부 읽는다. 구조는 `{source, feed_url, fetched_at, window_hours, count, items: [{title, link, published, summary}]}`. 파일이 6개 미만이거나, count가 0이거나, `error` 필드가 있는(수집 실패) 소스가 있으면 기억해 두고 마지막 채팅 요약에 적는다(그 축은 입력이 없었다는 뜻).
-3. `briefs/<날짜>.md`가 이미 있으면 내용을 보여주고 덮어쓸지 Ken에게 묻는다. 답을 받기 전에는 덮어쓰지 않는다. Ken이 거부하면 거기서 멈춘다. 장부도 건드리지 않는다.
+3. `briefs/<날짜>.md`가 이미 있으면 내용을 보여주고 덮어쓸지 Ken에게 묻는다. 답을 받기 전에는 덮어쓰지 않는다. Ken이 거부하면 거기서 멈춘다. 장부도 건드리지 않는다. 비대화형(클라우드 루틴)에서는 묻지 않고 "이미 있음"을 출력하고 멈춘다.
 
 ## 2. 분류와 후보 추출
 
-- 모든 항목을 axes.md의 4축 중 하나로 분류한다: 정치권력 / 기술권력 / 자본권력 / 코인. 어느 축에도 안 걸리면 버린다.
-- 분류 선례 (Ken 결정 2026-09-11): ECB 등 해외 중앙은행 결정은 4축 밖이다(자본권력은 연준·월가). 버린 뉴스에 "4축 범위 밖"으로 한 줄 적고 FOMC 판단의 배경으로만 언급한다. 다시 Ken 판단을 요청하지 않는다. 은행·운용사가 코인 상품 회사를 인수하거나 코인 상품을 내는 것은 코인 축 "커짐"(axes "은행이 코인 사업 진입")이고 테마는 상품 종류에 맞춘다(ETF 관련이면 현물 ETF).
+- 모든 항목을 axes.md의 4축 중 하나로 분류한다: 정치권력 / 기술권력 / 자본권력 / 코인. 어느 축에도 안 걸리면 버린다. 해외 중앙은행(ECB 등) 결정은 axes.md 자본권력 절에 적힌 대로 4축 밖이다. "버린 뉴스"에 "4축 범위 밖"으로 한 줄만 적고 FOMC 판단의 배경으로만 언급한다.
+- 용어: **1차 출처**란 발행 기관 사이트다. whitehouse.gov, federalregister.gov(API `https://www.federalregister.gov/api/v1/documents/<문서번호>.json` 과 그 안의 raw_text_url 은 봇 차단 없이 열린다), federalreserve.gov, sec.gov, bls.gov, ecb.europa.eu 등. 이하 "1차 출처"는 이 뜻이다.
 - Google News 항목은 `summary`가 제목과 같은 경우가 대부분이다. 헤드라인만으로 판단할 수 있는 것은 structural=false 판정과 "버린다" 판정뿐이다.
-- **structural=true 후보는 반드시 기사 또는 1차 출처를 열어(WebFetch) 내용을 확인한다.** 열 수 없으면 structural=false로 내리고 confidence 0.3으로 하거나 버린다. 헤드라인만 보고 structural=true를 쓰지 않는다.
-- Google News 링크(news.google.com/rss/articles/...)는 WebFetch로 직접 열리지 않는다. `python3 fetch/gn_decode.py --raw <날짜> <source> <번호...>` 또는 `python3 fetch/gn_decode.py <링크>`로 실제 기사 URL을 얻은 뒤 그 URL을 WebFetch한다. 유료 기사라 못 열면 같은 사건을 다룬 다른 기사나 1차 출처(whitehouse.gov, federalregister.gov API, ecb.europa.eu 등)를 연다.
+- **structural=true 후보는 확인 등급을 거친다.** 순서대로 시도하고, 도달한 등급의 제한을 지킨다.
+  1. 본문 확인: 기사나 1차 출처를 WebFetch 로 연다. Google News 링크(news.google.com/rss/articles/...)는 WebFetch 로 직접 열리지 않으므로 `python3 fetch/gn_decode.py --raw <날짜> <source> <위치...>`(위치는 raw `items` 배열의 순서, 0부터) 또는 `python3 fetch/gn_decode.py <링크>` 로 실제 URL 을 얻은 뒤 연다. Google News 링크가 아니면 그대로 돌려준다. `ERROR` 가 나오거나 유료라 못 열면 같은 사건의 다른 기사나 1차 출처를 연다. 이 등급이면 confidence 0.6 또는 0.8.
+  2. 검색 교차 확인: WebFetch 가 막힌 환경(EGRESS_BLOCKED)이면 WebSearch 로 같은 사건을 다룬 서로 다른 매체 2개 이상의 결과를 교차 확인한다. 이 등급이면 structural=true 는 허용하되 confidence 는 0.6 을 넘기지 않고, note 끝에 ` 확인: 검색 교차` 를 붙이고, 브리프 해석 아래에 "확인 방법 메모" 한 줄을 남긴다.
+  3. 둘 다 안 되면 structural=false, confidence 0.3 으로 내리거나 버린다. 헤드라인만 보고 structural=true 를 쓰지 않는다.
+- 숫자·날짜·주체는 확인한 출처에 있는 것만 쓴다. 검색 결과에서 얻은 숫자는 그 검색 결과 페이지의 URL 을 팩트 셀에 함께 적는다. URL 이 없으면 그 숫자를 쓰지 않는다(CLAUDE.md 규칙 5). 헤드라인끼리 숫자가 다르면 "확인 안 됨".
 - 후보마다 아래 셋을 따로 적는다. 섞지 않는다.
-  - 팩트: 출처에 있는 내용만 한 문장. 숫자·날짜·주체를 그대로 옮긴다. 기억이나 추정으로 보강하지 않는다. 헤드라인끼리 숫자가 다르면 "확인 안 됨"이라고 쓴다.
-  - 해석: 왜 이 축이 커지거나 작아지는 신호인지. axes.md의 "커진다/작아진다" 기준을 인용한다. 팩트 셀에는 해석을 넣지 않는다.
+  - 팩트: 출처에 있는 내용만 한 문장. 기억이나 추정으로 보강하지 않는다.
+  - 해석: 왜 이 축이 커지거나 작아지는 신호인지. axes.md의 "커진다/작아진다" 기준을 인용한다. 팩트 셀에는 해석을, 해석에는 출처 없는 새 숫자를 넣지 않는다.
   - 영향 섹터: sector_map.yaml의 테마 키 하나 + 티커 최대 3개. 영향은 항상 "~라는 가설"로 쓴다.
-- 같은 사건을 다루는 기사가 여럿이면 하나로 합친다. 1차 출처(Federal Register, Fed 보도자료)가 있으면 그 link를 출처로 쓴다.
-- 출처 URL은 raw의 `link`를 그대로 쓴다. Google News의 news.google.com 리다이렉트 URL도 그대로 쓴다(장부 중복 검사 키라서 바꾸면 안 된다). 기사를 열어 원문 URL을 알게 됐으면 note에 덧붙인다. 예외: raw 기사를 못 열고 1차 출처(whitehouse.gov, federalregister.gov, federalreserve.gov, sec.gov 등)에서 사실을 확인했으면 그 1차 출처 URL을 source로 쓴다. 이때 note에 raw 기사 제목을 적어 둔다. (Ken 결정 2026-09-11)
+- 같은 사건을 다루는 기사가 여럿이면 하나로 합친다.
+- 출처(`source`) URL 규칙: 사실을 실제로 확인한 URL 을 쓴다. 1차 출처에서 확인했으면 그 URL, 그렇지 않으면 raw 의 `link` 를 그대로(Google News 리다이렉트 URL 포함). `source` 는 장부 중복 검사 키의 일부이므로 같은 사건이 날마다 같은 URL 이 되도록 1차 출처를 우선한다. 쓰지 않은 쪽(원문 URL 또는 raw 기사 제목)은 note 에 적는다.
 - Federal Register 원문은 하루 수십~수백 건이다. 제목과 summary로 4축 관련만 고른다. 나머지는 "버린 뉴스"에 나열하지 않는다.
 - 시각 표기: `published`는 UTC다. ET로 바꾸고 KST를 괄호로 덧붙인다. 3월 둘째 일요일~11월 첫째 일요일은 EDT(UTC-4), 그 외는 EST(UTC-5). Federal Register 항목은 `published`가 게재일 04:00 UTC 고정이므로 시각 대신 "M/D 게재"라고 쓴다. `published`가 null이면 시각을 쓰지 않는다.
 
@@ -49,6 +54,7 @@ CLAUDE.md "워크플로 > /brief"를 실행한다. 아래 순서를 건너뛰지
 - 확신(confidence)은 0.3 / 0.6 / 0.8 중 하나. 0.9 이상은 쓰지 않는다.
 - 방향(direction)은 **해당 섹터·티커** 기준 `+` / `-` / `±`. 축이 커지는지와는 다른 값이다.
 - 축이 커지는지는 note의 첫 단어로 적는다: `커짐.` / `작아짐.` / `유보.` 그 뒤에 왜 구조적인지 한 줄. /trend가 이 단어를 집계한다.
+- note 끝에는 확인 등급 접미어(` 확인: 검색 교차`)만 붙을 수 있다. 실행 환경 얘기(차단, 도구 이름 등)는 note 에 쓰지 않는다. 그런 메모는 브리프 해석 아래 "확인 방법 메모"에만.
 - 두 축이 정면으로 부딪히는 사건이면 note 맨 앞에 `[충돌: A vs B] `를 붙이고 그 뒤에 커짐/작아짐/유보를 잇는다. A, B는 서로 다른 축이고 순서는 정치권력 > 기술권력 > 자본권력 > 코인 순으로 앞의 것을 A에 쓴다. 누가 이겼는지를 note에 적는다. 예: `[충돌: 정치권력 vs 자본권력] 유보. 인하 압박 vs 동결, 9/16 FOMC가 판정.`
 
 ## 4. 시그널 선정
@@ -57,13 +63,14 @@ CLAUDE.md "워크플로 > /brief"를 실행한다. 아래 순서를 건너뛰지
 - structural=true가 0개면 표 아래에 `오늘 구조적 시그널 없음` 한 줄을 쓴다.
 - theme는 sector_map.yaml의 테마 키와 글자 단위로 같아야 한다. 티커는 시그널당 서로 다른 것 최대 3개, sector_map에 있는 것만. 원칙적으로 그 테마의 tickers에서 고르고, 다른 테마의 티커를 쓸 때는 note에 이유를 적는다.
 - 맵에 없는 티커가 필요하면 "맵 수정 제안"에만 적고 표와 장부에는 넣지 않는다.
+- 은행·운용사가 코인 상품 회사를 인수하거나 코인 상품을 내는 사건은 코인 축 "커짐"(axes "은행이 코인 사업 진입")이고, 테마는 상품 종류에 맞춘다(ETF 관련이면 현물 ETF).
 - "사라", "팔아라", "지금이 기회" 류 매매 지시 표현 금지.
 
 ## 5. 검증 + 30일 집계 (APPEND = False)
 
 아래 스크립트에 structural=true 시그널만 `ROWS`에 넣고 **`APPEND = False`인 채로** 실행한다. 검증과 30일 누적 계산만 하고 장부는 건드리지 않는다. 0개면 `ROWS = []`로 실행해서 집계만 받는다. 검증에 걸리면 시그널을 고쳐서 다시 실행한다.
 
-`skip 중복`이 찍힌 행은 이미 장부에 있는 사건이다. 표에는 남겨도 되지만 장부에는 안 올라간다. 마지막 채팅 요약에 적는다.
+`skip 중복`이 찍힌 행은 이미 장부에 있는 사건이다. 표에는 남겨도 되지만 장부에는 안 올라간다. 마지막 채팅 요약에 적는다. `경고 유사 사건`이 찍히면 최근 7일 장부의 같은 테마 행과 팩트가 많이 겹치는 것이다. 같은 사건이면(출처 URL 이 달라도) 그 행을 ROWS 에서 빼고 다시 실행한다. 다른 사건이면 그대로 진행한다.
 
 ```bash
 python3 - <<'EOF'
@@ -144,6 +151,12 @@ for i, r in enumerate(ROWS):
     if not m: errors.append(f"{p}: note 는 '[충돌: A vs B] '(선택) + '커짐.'|'작아짐.'|'유보.' 로 시작해야 함")
     elif m.group(1) and (m.group(1) == m.group(2) or AXES.index(m.group(1)) > AXES.index(m.group(2))): errors.append(f"{p}: 충돌 태그는 서로 다른 축을 {' > '.join(AXES)} 순서로")
     if BAD.search(r["fact"] + " " + r["note"]): errors.append(f"{p}: 매매 지시 표현 금지")
+    grams = lambda t: {t[i:i + 2] for t in [re.sub(r"[^가-힣a-z0-9]", "", t.lower())] for i in range(len(t) - 1)}
+    g = grams(r["fact"])
+    for d in recent:
+        if d["theme"] == r["theme"] and d["source"] != r["source"]:
+            h = grams(d["fact"]); j = len(g & h) / max(1, len(g | h))
+            if j >= 0.35: print(f"경고 유사 사건 {p}: {d['date']} 장부 행과 팩트 겹침 {j:.2f}. 같은 사건이면 ROWS 에서 뺀다: {d['fact'][:70]}")
     key = (r["source"], r["theme"])
     if key in seen: skipped.append(f"{p}: 이미 {seen[key]} 에 기록됨 ({r['theme']}, {r['source'][:70]})"); continue
     seen[key] = DATE
@@ -171,8 +184,7 @@ for d in existing + todo:
     if cut < dd <= today: c[d["axis"]][d["direction"]] += 1
 print("\n30일 누적")
 for a in AXES:
-    n, pm = sum(c[a].values()), c[a]["±"]
-    print(f"- {a}: {n}건 (+{c[a]['+']} / -{c[a]['-']}" + (f" / ±{pm}" if pm else "") + ")")
+    print(f"- {a}: {sum(c[a].values())}건 (+{c[a]['+']} / -{c[a]['-']} / ±{c[a]['±']})")
 EOF
 ```
 
@@ -207,10 +219,10 @@ EOF
 - 제목 — 이유
 
 ## 30일 누적
-- 정치권력: n건 (+x / -y)
-- 기술권력: n건 (+x / -y)
-- 자본권력: n건 (+x / -y)
-- 코인: n건 (+x / -y)
+- 정치권력: n건 (+x / -y / ±z)
+- 기술권력: n건 (+x / -y / ±z)
+- 자본권력: n건 (+x / -y / ±z)
+- 코인: n건 (+x / -y / ±z)
 
 ## 3~4년 논지 변화?
 없음

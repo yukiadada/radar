@@ -7,7 +7,7 @@ argument-hint: [YYYY-MM-DD]
 
 CLAUDE.md "워크플로 > /trend"를 실행한다. 레포 루트에서 실행한다. 파일은 만들지 않고 채팅에만 출력한다. 장부는 읽기만 한다. 어떤 경우에도 `ledger/signals.jsonl`을 수정하지 않는다.
 
-기준일: `$ARGUMENTS`가 `YYYY-MM-DD` 형식이면 그 날짜, 비어 있으면 `date +%F` 결과(로컬 날짜). 그 외 형식이면 "날짜 형식 오류"라고 답하고 멈춘다. 이하 `<기준일>`.
+기준일: `$ARGUMENTS`가 `YYYY-MM-DD` 형식이면 그 날짜, 비어 있으면 `TZ=Asia/Seoul date +%F` 결과(한국 날짜). 그 외 형식이면 "날짜 형식 오류"라고 답하고 멈춘다. 이하 `<기준일>`.
 
 ## 1. 집계
 

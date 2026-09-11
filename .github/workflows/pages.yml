@@ -1,8 +1,12 @@
 name: Deploy radar to GitHub Pages
 
+# main 에 push 될 때, 그리고 매일 07:00 KST(22:00 UTC)에 사이트를 빌드·배포한다.
+# 07:00 실행은 루틴이 push 하지 못한 날에도 날짜와 수집 현황을 갱신하기 위한 것.
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: "0 22 * * *"
   workflow_dispatch:
 
 permissions:
@@ -14,24 +18,33 @@ concurrency:
   group: pages
   cancel-in-progress: true
 
+env:
+  TZ: Asia/Seoul
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: 최근 14일 raw 폴더 목록
+        run: |
+          { echo "RAW_DIRS<<EOF"; for i in $(seq 0 13); do date -d "-$i day" +raw/%F; done; echo "EOF"; } >> "$GITHUB_ENV"
+      - name: radar-raw 체크아웃 (수집 현황용, 실패해도 계속)
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: yukiadada/radar-raw
+          ssh-key: ${{ secrets.RAW_DEPLOY_KEY }}
+          path: radar-raw
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: ${{ env.RAW_DIRS }}
+      - name: raw 연결
+        run: |
+          if [ -d radar-raw/raw ]; then rm -rf raw && ln -s "$GITHUB_WORKSPACE/radar-raw/raw" raw && echo "raw 연결됨: $(ls raw | wc -l) 일치"; else echo "radar-raw 없음, 수집 현황 없이 빌드"; fi
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Raw counts from private radar-raw (optional)
-        env:
-          RAW_DEPLOY_KEY: ${{ secrets.RAW_DEPLOY_KEY }}
-        run: |
-          if [ -z "$RAW_DEPLOY_KEY" ]; then echo "no key, 수집 현황 없이 빌드"; exit 0; fi
-          mkdir -p ~/.ssh
-          printf '%s\n' "$RAW_DEPLOY_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
-          git clone --quiet --depth 1 git@github.com:yukiadada/radar-raw.git /tmp/radar-raw && ln -sfn /tmp/radar-raw/raw raw || echo "radar-raw clone 실패, 수집 현황 없이 빌드"
       - name: Build site/out
         run: python3 site/build.py
       - uses: actions/configure-pages@v5

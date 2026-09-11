@@ -26,17 +26,17 @@
 CLAUDE.md                  이 파일. 프레임워크와 규칙
 framework/axes.md          4축 정의, "커진다/작아진다" 판단 기준
 framework/sector_map.yaml  축 → 테마 → ETF/티커 매핑 (Ken이 큐레이션)
-fetch/                     수집 스크립트 (python). 매일 06:00 KST GitHub Actions 가 실행해 raw/ 를 커밋
+fetch/                     수집 스크립트 (python)
 raw/YYYY-MM-DD/            당일 수집 원문. 비공개 저장소 radar-raw 에만 커밋 (여기서는 git 미추적)
 briefs/YYYY-MM-DD.md       일간 브리프
 ledger/signals.jsonl       구조적 시그널 누적 장부 (append only, 수정 금지)
 .claude/commands/          /brief, /trend
 logs/                      세션 로그 (/save 가 만듦, git 미추적)
 site/                      웹페이지. build.py 가 briefs·ledger·framework 를 site/out/ 로 빌드, index.html 이 렌더
-.github/workflows/         fetch.yml 06:00 KST 수집 → radar-raw 커밋, pages.yml push 마다 site/ 빌드·배포 (https://yukiadada.github.io/radar/)
+.github/workflows/         fetch.yml 수집, pages.yml 사이트 빌드·배포
 ```
 
-매일 흐름: 06:00 KST Actions 수집 → 비공개 radar-raw 커밋 → 06:20 KST 클라우드 루틴(claude.ai/code/routines)이 radar 와 radar-raw 를 함께 받아 /brief 실행·push → Pages 갱신. 로컬에서 작업하기 전에 `git pull` 부터 한다. 로컬에서 /brief 를 돌리려면 `python3 fetch/fetch.py` 로 raw/ 를 만들면 된다(미추적).
+매일 흐름 (시각은 여기에만 적는다): 05:30 KST GitHub Actions(fetch.yml) 수집 → 비공개 radar-raw 커밋 → 06:20 KST 클라우드 루틴(claude.ai/code/routines)이 radar 와 radar-raw 를 함께 받아 /brief 실행·push → Pages 갱신(07:00 KST 에 한 번 더 빌드). 사이트 https://yukiadada.github.io/radar/. 로컬에서 작업하기 전에 `git pull` 부터 한다. 로컬에서 /brief 를 돌리려면 `python3 fetch/fetch.py` 로 raw/ 를 만들면 된다(미추적).
 
 ## 워크플로
 
@@ -102,10 +102,10 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 ## 버린 뉴스 (한 줄씩, 왜 버렸는지)
 
 ## 30일 누적
-- 정치권력: n건 (+x / -y)
-- 기술권력: n건
-- 자본권력: n건
-- 코인: n건
+- 정치권력: n건 (+x / -y / ±z)
+- 기술권력: n건 (+x / -y / ±z)
+- 자본권력: n건 (+x / -y / ±z)
+- 코인: n건 (+x / -y / ±z)
 
 ## 3~4년 논지 변화?
 없음 / 있음 — 있으면 한 문단
