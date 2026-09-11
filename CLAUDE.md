@@ -26,15 +26,17 @@
 CLAUDE.md                  이 파일. 프레임워크와 규칙
 framework/axes.md          4축 정의, "커진다/작아진다" 판단 기준
 framework/sector_map.yaml  축 → 테마 → ETF/티커 매핑 (Ken이 큐레이션)
-fetch/                     수집 스크립트 (python) + launchd plist (매일 07:30 KST 자동 수집)
+fetch/                     수집 스크립트 (python). 매일 06:00 KST GitHub Actions 가 실행해 raw/ 를 커밋
 raw/YYYY-MM-DD/            당일 수집 원문
 briefs/YYYY-MM-DD.md       일간 브리프
 ledger/signals.jsonl       구조적 시그널 누적 장부 (append only, 수정 금지)
 .claude/commands/          /brief, /trend
-logs/                      세션 로그 (/save 가 만듦). 수집 로그는 ~/Library/Logs/market-brief.fetch.log
+logs/                      세션 로그 (/save 가 만듦)
 site/                      웹페이지. build.py 가 briefs·ledger·framework 를 site/out/ 로 빌드, index.html 이 렌더
-.github/workflows/         main 에 push 되면 site/ 를 빌드해 GitHub Pages 에 배포 (https://yukiadada.github.io/radar/)
+.github/workflows/         fetch.yml 06:00 KST 수집·커밋, pages.yml push 마다 site/ 빌드·배포 (https://yukiadada.github.io/radar/)
 ```
+
+매일 흐름: 06:00 KST Actions 수집 → 06:20 KST 클라우드 루틴(claude.ai/code/routines)이 /brief 실행·push → Pages 갱신. 로컬에서 작업하기 전에 `git pull` 부터 한다.
 
 ## 워크플로
 
