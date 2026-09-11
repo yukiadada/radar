@@ -22,6 +22,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Raw counts from private radar-raw (optional)
+        env:
+          RAW_DEPLOY_KEY: ${{ secrets.RAW_DEPLOY_KEY }}
+        run: |
+          if [ -z "$RAW_DEPLOY_KEY" ]; then echo "no key, 수집 현황 없이 빌드"; exit 0; fi
+          mkdir -p ~/.ssh
+          printf '%s\n' "$RAW_DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git clone --quiet --depth 1 git@github.com:yukiadada/radar-raw.git /tmp/radar-raw && ln -sfn /tmp/radar-raw/raw raw || echo "radar-raw clone 실패, 수집 현황 없이 빌드"
       - name: Build site/out
         run: python3 site/build.py
       - uses: actions/configure-pages@v5

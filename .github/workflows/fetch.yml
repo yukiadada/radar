@@ -1,14 +1,14 @@
 name: Fetch raw feeds
 
-# 매일 06:00 KST(21:00 UTC)에 6개 소스를 수집해 raw/<KST 날짜>/ 를 커밋한다.
-# 클라우드 루틴(06:20 KST)은 이 커밋을 읽어 브리프를 쓴다. 샌드박스는 외부 RSS 접근이 막혀 있기 때문.
+# 매일 06:00 KST(21:00 UTC)에 6개 소스를 수집해 비공개 저장소 radar-raw 의 raw/<KST 날짜>/ 에 커밋한다.
+# 공개 저장소(여기)에는 raw 를 남기지 않는다. 클라우드 루틴(06:20 KST)은 radar-raw 를 함께 클론해 읽는다.
 on:
   schedule:
     - cron: "0 21 * * *"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: fetch
@@ -31,12 +31,23 @@ jobs:
           DATE="$(date +%F)"
           echo "DATE=$DATE" >> "$GITHUB_ENV"
           python3 fetch/fetch.py --date "$DATE" || echo "일부 소스 실패 (성공한 소스는 저장됨)"
-      - name: Commit raw
+      - name: Push raw to private radar-raw
+        env:
+          RAW_DEPLOY_KEY: ${{ secrets.RAW_DEPLOY_KEY }}
         run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$RAW_DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          git clone --quiet --depth 1 git@github.com:yukiadada/radar-raw.git /tmp/radar-raw
+          mkdir -p /tmp/radar-raw/raw
+          rm -rf "/tmp/radar-raw/raw/$DATE"
+          cp -r "raw/$DATE" /tmp/radar-raw/raw/
+          cd /tmp/radar-raw
           git config user.name "radar fetch"
           git config user.email "radar-fetch@users.noreply.github.com"
-          git add "raw/$DATE"
+          git add raw
           if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
-          git commit -m "raw $DATE: 자동 수집 (actions)"
-          git pull --rebase origin main
-          git push origin main
+          git commit -q -m "raw $DATE: 자동 수집 (actions)"
+          git push -q origin HEAD:main
+          echo "pushed raw/$DATE to radar-raw"

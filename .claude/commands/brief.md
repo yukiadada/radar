@@ -26,6 +26,7 @@ CLAUDE.md "워크플로 > /brief"를 실행한다. 아래 순서를 건너뛰지
 ## 2. 분류와 후보 추출
 
 - 모든 항목을 axes.md의 4축 중 하나로 분류한다: 정치권력 / 기술권력 / 자본권력 / 코인. 어느 축에도 안 걸리면 버린다.
+- 분류 선례 (Ken 결정 2026-09-11): ECB 등 해외 중앙은행 결정은 4축 밖이다(자본권력은 연준·월가). 버린 뉴스에 "4축 범위 밖"으로 한 줄 적고 FOMC 판단의 배경으로만 언급한다. 다시 Ken 판단을 요청하지 않는다. 은행·운용사가 코인 상품 회사를 인수하거나 코인 상품을 내는 것은 코인 축 "커짐"(axes "은행이 코인 사업 진입")이고 테마는 상품 종류에 맞춘다(ETF 관련이면 현물 ETF).
 - Google News 항목은 `summary`가 제목과 같은 경우가 대부분이다. 헤드라인만으로 판단할 수 있는 것은 structural=false 판정과 "버린다" 판정뿐이다.
 - **structural=true 후보는 반드시 기사 또는 1차 출처를 열어(WebFetch) 내용을 확인한다.** 열 수 없으면 structural=false로 내리고 confidence 0.3으로 하거나 버린다. 헤드라인만 보고 structural=true를 쓰지 않는다.
 - Google News 링크(news.google.com/rss/articles/...)는 WebFetch로 직접 열리지 않는다. `python3 fetch/gn_decode.py --raw <날짜> <source> <번호...>` 또는 `python3 fetch/gn_decode.py <링크>`로 실제 기사 URL을 얻은 뒤 그 URL을 WebFetch한다. 유료 기사라 못 열면 같은 사건을 다룬 다른 기사나 1차 출처(whitehouse.gov, federalregister.gov API, ecb.europa.eu 등)를 연다.
@@ -34,7 +35,7 @@ CLAUDE.md "워크플로 > /brief"를 실행한다. 아래 순서를 건너뛰지
   - 해석: 왜 이 축이 커지거나 작아지는 신호인지. axes.md의 "커진다/작아진다" 기준을 인용한다. 팩트 셀에는 해석을 넣지 않는다.
   - 영향 섹터: sector_map.yaml의 테마 키 하나 + 티커 최대 3개. 영향은 항상 "~라는 가설"로 쓴다.
 - 같은 사건을 다루는 기사가 여럿이면 하나로 합친다. 1차 출처(Federal Register, Fed 보도자료)가 있으면 그 link를 출처로 쓴다.
-- 출처 URL은 raw의 `link`를 그대로 쓴다. Google News의 news.google.com 리다이렉트 URL도 그대로 쓴다(장부 중복 검사 키라서 바꾸면 안 된다). 기사를 열어 원문 URL을 알게 됐으면 note에 덧붙인다.
+- 출처 URL은 raw의 `link`를 그대로 쓴다. Google News의 news.google.com 리다이렉트 URL도 그대로 쓴다(장부 중복 검사 키라서 바꾸면 안 된다). 기사를 열어 원문 URL을 알게 됐으면 note에 덧붙인다. 예외: raw 기사를 못 열고 1차 출처(whitehouse.gov, federalregister.gov, federalreserve.gov, sec.gov 등)에서 사실을 확인했으면 그 1차 출처 URL을 source로 쓴다. 이때 note에 raw 기사 제목을 적어 둔다. (Ken 결정 2026-09-11)
 - Federal Register 원문은 하루 수십~수백 건이다. 제목과 summary로 4축 관련만 고른다. 나머지는 "버린 뉴스"에 나열하지 않는다.
 - 시각 표기: `published`는 UTC다. ET로 바꾸고 KST를 괄호로 덧붙인다. 3월 둘째 일요일~11월 첫째 일요일은 EDT(UTC-4), 그 외는 EST(UTC-5). Federal Register 항목은 `published`가 게재일 04:00 UTC 고정이므로 시각 대신 "M/D 게재"라고 쓴다. `published`가 null이면 시각을 쓰지 않는다.
 
