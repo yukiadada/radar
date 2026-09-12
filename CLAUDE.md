@@ -163,17 +163,17 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 
 ## 현재 상태
 
-> /save 자동 업데이트 — 2026-09-12 22:25
+> /save 자동 업데이트 — 2026-09-12 23:16
 
 **브랜치:** main
-**마지막 커밋:** bf24c55 기업 탭: 일별 막대를 기업별 누적 라인차트로 교체 (관찰 건수 / 회사에 유리−불리 전환, 30·90일). 겹치는 선은 실선·파선·점선으로 구분
+**마지막 커밋:** 8af66a2 코드리뷰 20건 반영: 브리프 구조적 건수를 4축 표만 세기, 기업 피드 첫날 누락, dedup 이 새 기사 버리던 것, 장부 정렬, rebase 실패 은폐, companies.yaml 오류 처리, 문서 잔재·KST 표기. 구조: fetch/config.py 공용 파서, fetch/ledger.py 검증 CLI(brief.md 인라인 스크립트 대체), build.py 로더·창 통합과 브리프별 파일, index.html 차트 프레임·버킷 공용화, fetch 병렬 수집·--list, fetch.yml 예약 2회·기대 소스 수·pip 캐시, pages.yml setup-python 제거
 
 **미완료 항목:**
-- 9/13 06:20 KST 루틴이 새 스키마(horizon·impact·channel·thesis·reverses)와 기업 관찰(2b/5b, companies.jsonl)까지 사람 개입 없이 끝내는지 확인. 루틴 로그 claude.ai/code/routines/trig_01564MDnvQH3DtPRvCiqfaDY
+- 9/13 06:20 KST 루틴이 새 절차(fetch/ledger.py --append, 기업 관찰 2b/5b)로 사람 개입 없이 끝나는지 확인. 루틴 로그 claude.ai/code/routines/trig_01564MDnvQH3DtPRvCiqfaDY
 - SpaceX 상장(SPCX) 반영: companies.yaml 티커와 sector_map.yaml "우주/위성 [SPCX]" 테마는 Ken 확인 필요. 원치 않으면 되돌림
 - 첫 /review 는 10월 초 (9월 backdrop.md 행 + 확인 대기 점검). thesis.md 상태 변경은 Ken 승인 후에만
 - Ken: claude.ai/code Default 환경 네트워크 접근 확대 (WebFetch EGRESS_BLOCKED 해제 시 1차 출처 본문 확인 가능)
 - 9/11 장부 4번째 줄은 구 규칙(검색 교차만으로 0.6). 1~6번 줄에는 새 필드 없음. append only 라 유지
-- 로컬 작업 전 `git pull`. 로컬 /brief 는 `python3 fetch/fetch.py` 로 raw/ 생성(미추적)
+- 로컬 작업 전 `git pull`. 로컬 /brief 는 `python3 fetch/fetch.py` 로 raw/ 생성(미추적). 장부는 `fetch/ledger.py --append` 로만
 - 루틴 사용량 매일 누적(실행당 opus-5 약 8분, 기업 관찰로 늘어남). 부담되면 sonnet-5 로 변경
 - 저장소: https://github.com/yukiadada/radar (public), https://github.com/yukiadada/radar-raw (private, raw). 사이트 https://yukiadada.github.io/radar/
