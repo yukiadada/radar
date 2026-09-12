@@ -163,10 +163,10 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 
 ## 현재 상태
 
-> /save 자동 업데이트 — 2026-09-12 23:16
+> /save 자동 업데이트 — 2026-09-12 23:30
 
 **브랜치:** main
-**마지막 커밋:** 8af66a2 코드리뷰 20건 반영: 브리프 구조적 건수를 4축 표만 세기, 기업 피드 첫날 누락, dedup 이 새 기사 버리던 것, 장부 정렬, rebase 실패 은폐, companies.yaml 오류 처리, 문서 잔재·KST 표기. 구조: fetch/config.py 공용 파서, fetch/ledger.py 검증 CLI(brief.md 인라인 스크립트 대체), build.py 로더·창 통합과 브리프별 파일, index.html 차트 프레임·버킷 공용화, fetch 병렬 수집·--list, fetch.yml 예약 2회·기대 소스 수·pip 캐시, pages.yml setup-python 제거
+**마지막 커밋:** 27147f6 sector_map: 우주/위성 [SPCX] 테마 Ken 승인 (2026-09-12)
 
 **미완료 항목:**
 - 9/13 06:20 KST 루틴이 새 절차(fetch/ledger.py --append, 기업 관찰 2b/5b)로 사람 개입 없이 끝나는지 확인. 루틴 로그 claude.ai/code/routines/trig_01564MDnvQH3DtPRvCiqfaDY
