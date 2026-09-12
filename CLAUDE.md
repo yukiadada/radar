@@ -29,7 +29,7 @@ framework/sector_map.yaml  축 → 테마 → ETF/티커 매핑 (Ken이 큐레�
 framework/thesis.md        3~5년 논지 T1… 와 확인·반증 신호 (Ken이 큐레이션. /review 가 상태 변경 제안)
 framework/backdrop.md      월 1회 배경 지표 (실질금리·신용·EPS·P/E). /review 가 출처와 함께 채움
 framework/companies.yaml   기업 관찰 대상 (SpaceX·Google·Microsoft)의 검색어·티커 (Ken이 큐레이션)
-fetch/                     수집 스크립트 (python)
+fetch/                     fetch.py 수집, ledger.py 장부 검증·추가(장부에 쓰는 유일한 수단), config.py framework/*.yaml 파서, gn_decode.py
 raw/YYYY-MM-DD/            당일 수집 원문. 비공개 저장소 radar-raw 에만 커밋 (여기서는 git 미추적)
 briefs/YYYY-MM-DD.md       일간 브리프
 ledger/signals.jsonl       구조적 시그널 누적 장부 (append only, 수정 금지)
@@ -40,7 +40,7 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 .github/workflows/         fetch.yml 수집, pages.yml 사이트 빌드·배포
 ```
 
-매일 흐름 (시각은 여기에만 적는다): 04:30 KST GitHub Actions(fetch.yml) 예약 수집 → 비공개 radar-raw 커밋 → 06:20 KST 클라우드 루틴(claude.ai/code/routines)이 radar 와 radar-raw 를 함께 받아 /brief 실행·push → Pages 갱신(07:00 KST 에 한 번 더 빌드). GitHub 예약은 1~2시간 늦을 수 있어 루틴은 raw 가 없으면 fetch.yml 을 직접 실행하고 기다린다. 사이트 https://yukiadada.github.io/radar/. 로컬에서 작업하기 전에 `git pull` 부터 한다. 로컬에서 /brief 를 돌리려면 `python3 fetch/fetch.py` 로 raw/ 를 만들면 된다(미추적).
+매일 흐름 (시각은 여기에만 적는다): 04:30 KST GitHub Actions(fetch.yml) 예약 수집(05:15 KST 에 한 번 더. 워크플로는 멱등) → 비공개 radar-raw 커밋 → 06:20 KST 클라우드 루틴(claude.ai/code/routines)이 radar 와 radar-raw 를 함께 받아 /brief 실행·push → Pages 갱신(07:00 KST 에 한 번 더 빌드). GitHub 예약은 1~2시간 늦을 수 있어 루틴은 raw 가 없으면 fetch.yml 을 직접 실행하고 기다린다. 사이트 https://yukiadada.github.io/radar/. 로컬에서 작업하기 전에 `git pull` 부터 한다. 로컬에서 /brief 를 돌리려면 `python3 fetch/fetch.py` 로 raw/ 를 만들면 된다(미추적).
 
 ## 워크플로
 
@@ -49,7 +49,7 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 2. 4축으로 분류 → 축별 후보 시그널 추출.
 3. 각 후보에 structural 판정. 기준은 `framework/axes.md` 참고. 함께 horizon(분기/1년/다년)·impact(1~3)·channel(실적/멀티플/수급)을 정한다 (axes.md "공통 규칙").
 4. `briefs/오늘.md` 작성 (아래 템플릿).
-5. structural=true 시그널만 `ledger/signals.jsonl`에 append.
+5. structural=true 시그널만 `ledger/signals.jsonl`에 append (`fetch/ledger.py --append` 로만).
 6. "논지 점검" 섹션: 오늘 시그널이 `framework/thesis.md`의 어느 논지를 확인·반증하는지 번호로 한 줄씩. 대부분 "해당 없음"이어야 정상. 논지 자체는 고치지 않는다. (템플릿 순서상 "맵 수정 제안"이 그 뒤에 온다)
 7. 기업 관찰: `framework/companies.yaml`의 기업마다 4축에 영향을 주는 뉴스를 하루 최대 3건 골라 "기업 관찰" 표에 쓰고 `ledger/companies.jsonl`에 append. 방향은 회사 기준, 커짐/작아짐은 축 기준.
 
@@ -99,7 +99,7 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 - `channel`: 실적 | 멀티플 | 수급. 권력 변화가 시장에 닿는 길 하나.
 - `thesis`: thesis.md 번호 + 방향. `T1+` 확인, `T1-` 반증. 해당 없으면 `[]`.
 - `reverses`: 이전 시그널을 뒤집는 행이면 그 줄 번호, 아니면 null. 장부는 수정하지 않으므로 번복은 새 행으로 남긴다.
-- 2026-09-12 이전 줄에는 뒤의 다섯 필드가 없다. 집계는 없는 값을 "미표기"로 다루고 가중 1로 센다.
+- 장부 1~6번 줄(2026-09-12 스키마 확장 전에 기록)에는 뒤의 다섯 필드가 없다. 집계는 없는 값을 "미표기"로 다루고 가중 1로 센다. 장부는 수정하지 않으므로 그대로 둔다.
 
 ## 기업 관찰 스키마 (ledger/companies.jsonl 한 줄)
 
@@ -109,7 +109,7 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 
 - `company`: companies.yaml 의 키. `axis`: 그 뉴스가 건드리는 축 하나.
 - `direction`: **회사에** + / - / ±. `note` 첫 단어 커짐/작아짐/유보는 **그 축**이 그 뉴스로 커지는지.
-- `tickers`: companies.yaml 의 그 기업 티커만. SpaceX 는 비상장이라 `[]`.
+- `tickers`: companies.yaml 의 그 기업 티커만. 비상장이면 `[]`. companies.yaml 의 티커는 sector_map 에도 있어야 한다(규칙 4).
 - 기업당 하루 최대 3건. 중복 키는 (company, source).
 
 ## 일간 브리프 템플릿
@@ -173,7 +173,7 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 - SpaceX 상장(SPCX) 반영: companies.yaml 티커와 sector_map.yaml "우주/위성 [SPCX]" 테마는 Ken 확인 필요. 원치 않으면 되돌림
 - 첫 /review 는 10월 초 (9월 backdrop.md 행 + 확인 대기 점검). thesis.md 상태 변경은 Ken 승인 후에만
 - Ken: claude.ai/code Default 환경 네트워크 접근 확대 (WebFetch EGRESS_BLOCKED 해제 시 1차 출처 본문 확인 가능)
-- 9/11 장부 4번째 줄은 구 규칙(검색 교차만으로 0.6). 2026-09-12 이전 6줄에는 새 필드 없음. append only 라 유지
+- 9/11 장부 4번째 줄은 구 규칙(검색 교차만으로 0.6). 1~6번 줄에는 새 필드 없음. append only 라 유지
 - 로컬 작업 전 `git pull`. 로컬 /brief 는 `python3 fetch/fetch.py` 로 raw/ 생성(미추적)
 - 루틴 사용량 매일 누적(실행당 opus-5 약 8분, 기업 관찰로 늘어남). 부담되면 sonnet-5 로 변경
 - 저장소: https://github.com/yukiadada/radar (public), https://github.com/yukiadada/radar-raw (private, raw). 사이트 https://yukiadada.github.io/radar/

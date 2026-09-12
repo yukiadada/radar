@@ -135,10 +135,9 @@ for r in wait: print(f"- 줄 {r['_line']} {r['date']} [{r['axis']}/{r['theme']}]
 if not wait: print("- 없음")
 
 # 맵 수정 제안 반복 횟수 (sector_map.yaml 사용 규칙: 3회 이상 반복 등장할 때만 추가 검토)
-all_tickers = set()
-for line in Path("framework/sector_map.yaml").read_text(encoding="utf-8").split("\n"):
-    m = re.match(r"^\s+tickers:\s*\[(.*?)\]", line)
-    if m: all_tickers.update(t.strip().strip("'\"") for t in m.group(1).split(","))
+sys.path.insert(0, "fetch")
+from config import load_sector_map, all_tickers as _all   # framework/*.yaml 공용 파서 (fetch/config.py)
+all_tickers = _all(load_sector_map())
 STOP = {"ETF", "AI", "US", "USA", "SEC", "CFTC", "FOMC", "FED", "ET", "KST", "QRA", "IPO", "GDP", "CPI", "OCC", "FDIC", "EU", "UK", "NPRM", "URL", "QT", "QE", "EDT", "EST", "UTC", "ETFS", "BTC", "ETH"}
 props = collections.Counter()
 for f in sorted(glob.glob("briefs/*.md")):

@@ -42,11 +42,8 @@ jobs:
       - name: raw 연결
         run: |
           if [ -d radar-raw/raw ]; then rm -rf raw && ln -s "$GITHUB_WORKSPACE/radar-raw/raw" raw && echo "raw 연결됨: $(ls raw | wc -l) 일치"; else echo "radar-raw 없음, 수집 현황 없이 빌드"; fi
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Build site/out
-        run: python3 site/build.py
+      - name: Build site/out (ubuntu-latest 의 python3. build.py 는 표준 라이브러리만)
+        run: python3 --version && python3 site/build.py
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

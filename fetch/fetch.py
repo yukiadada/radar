@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """market-brief 수집 스크립트.
 
-고정 소스 (늘리지 않는다):
+소스 (4축 소스 6개는 여기 고정, 기업 소스는 framework/companies.yaml 이 정한다. `--list` 로 전체 목록):
   federal_register          Federal Register documents RSS
   fed_press                 Federal Reserve Board 보도자료 RSS (press_all)
   gnews_tariff              Google News RSS 검색 "tariff"
   gnews_fed_rate            Google News RSS 검색 "Fed rate"
   gnews_big_tech_antitrust  Google News RSS 검색 "Big Tech antitrust"
   gnews_bitcoin_etf         Google News RSS 검색 "bitcoin ETF"
-  gnews_co_*                framework/companies.yaml 의 기업별 Google News RSS 검색 (SpaceX, Google, Microsoft)
+  gnews_co_<기업>           companies.yaml 의 기업마다 하나 (source/query 필드)
 
 출력: raw/YYYY-MM-DD/{source}.json
   {
@@ -31,15 +31,19 @@
   python3 fetch/fetch.py                                  오늘(로컬 날짜) 폴더
   python3 fetch/fetch.py --hours 0                        시간 필터 없이 전부
   python3 fetch/fetch.py --date 2026-09-08 --only gnews_tariff,fed_press
+  python3 fetch/fetch.py --list                           소스 이름만 한 줄씩 출력 (수집 안 함)
+
+소스는 동시에 받는다 (스레드 풀). 출력 순서는 소스 목록 순서로 고정한다.
 
 같은 날 다시 실행하면 그 날 파일을 덮어쓴다 (실패한 소스의 기존 파일은 남긴다).
 환경변수 MARKET_BRIEF_UA 로 User-Agent 를 바꿀 수 있다.
-종료 코드: 0 전부 성공 / 1 일부 피드 실패 / 2 인자·환경 오류
+종료 코드: 0 전부 성공 / 1 일부 피드 실패 또는 companies.yaml 항목 오류 / 2 인자·환경 오류
 """
 from __future__ import annotations
 
 import argparse
 import http.client
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import os
 import re
@@ -73,39 +77,18 @@ GNEWS_QUERIES = {
     "gnews_big_tech_antitrust": "Big Tech antitrust",
     "gnews_bitcoin_etf": "bitcoin ETF",
 }
-COMPANIES_YAML = Path(__file__).resolve().parent.parent / "framework/companies.yaml"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from config import load_companies  # noqa: E402  (framework/companies.yaml 공용 파서)
 
-
-def company_queries() -> dict[str, str]:
-    """framework/companies.yaml 의 source/query 쌍. 최소 파서(최상위 키, 들여쓰기 키: 값). 파일이 없으면 빈 dict."""
-    out: dict[str, str] = {}
-    if not COMPANIES_YAML.exists():
-        return out
-    src = query = None
-    for raw in COMPANIES_YAML.read_text(encoding="utf-8").split("\n"):
-        line = re.sub(r"\s#.*$|^#.*$", "", raw).rstrip()
-        if not line.strip():
-            continue
-        if re.match(r"^\S", line):
-            if src and query:
-                out[src] = query
-            src = query = None
-            continue
-        m = re.match(r"^\s+(source|query):\s*(.+?)\s*$", line)
-        if m:
-            if m.group(1) == "source":
-                src = m.group(2)
-            else:
-                query = m.group(2)
-    if src and query:
-        out[src] = query
-    bad = [k for k in out if not re.fullmatch(r"gnews_co_[a-z0-9_]+", k)]
-    if bad:
-        raise SystemExit(f"companies.yaml source 이름은 gnews_co_<이름> 형식이어야 한다: {bad}")
-    return out
-
-
-GNEWS_QUERIES.update(company_queries())
+CONFIG_ERRORS: list[str] = []   # companies.yaml 항목 오류. 수집은 계속하고 main 이 [fail] 로 알린다
+try:
+    for _c in load_companies():
+        if _c["error"]:
+            CONFIG_ERRORS.append(f"{_c['name']}: {_c['error']}")
+        else:
+            GNEWS_QUERIES[_c["source"]] = _c["query"]
+except ValueError as _e:
+    CONFIG_ERRORS.append(str(_e))
 SOURCE_NAMES = ["federal_register", "fed_press", *GNEWS_QUERIES]
 FR_FEED_CAP = 200
 
@@ -271,10 +254,10 @@ def select(items: list[dict], hours: int, now: datetime, dedup_title: bool = Fal
         if any(k in seen for k in keys):
             n_dup += 1
             continue
-        seen.update(keys)
         if cutoff and it["published"] and datetime.fromisoformat(it["published"]) < cutoff:
             n_old += 1
-            continue
+            continue  # 시간창 밖 항목의 키는 기억하지 않는다. 같은 제목의 최신 기사가 중복으로 버려지지 않게
+        seen.update(keys)
         kept.append(it)  # published 없는 항목은 판단 불가 → 남긴다
     kept.sort(key=lambda x: x["published"] or "", reverse=True)
     return kept, n_old, n_dup
@@ -297,7 +280,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--only", default="", help="쉼표로 구분한 소스 이름. 비우면 전부. 가능: " + ", ".join(SOURCE_NAMES))
     ap.add_argument("--timeout", type=float, default=30.0, help="피드당 요청 타임아웃 초 (기본 30)")
     ap.add_argument("--retries", type=int, default=2, help="실패 시 재시도 횟수 (기본 2)")
+    ap.add_argument("--list", action="store_true", help="소스 이름만 한 줄씩 출력하고 끝낸다")
     args = ap.parse_args(argv)
+    if args.list:
+        print("\n".join(SOURCE_NAMES))
+        return 0
 
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", args.date):
         ap.error("--date 는 YYYY-MM-DD 형식 (0 을 채운다)")
@@ -322,14 +309,28 @@ def main(argv: list[str] | None = None) -> int:
     out_dir = RAW_DIR / args.date
     now = datetime.now(timezone.utc).replace(microsecond=0)
     failed: list[str] = []
-    for name in names:
+
+    def work(name: str):
+        data = fetch_bytes(sources[name], args.timeout, args.retries)
+        items, warn = parse_items(data)
+        kept, n_old, n_dup = select(items, args.hours, now, dedup_title=name.startswith("gnews_"))
+        return items, warn, kept, n_old, n_dup
+
+    results: dict[str, tuple[str, object]] = {}
+    with ThreadPoolExecutor(max_workers=min(8, len(names))) as ex:   # 소스마다 독립. 느린 소스 하나가 전체를 붙잡지 않게
+        futs = {ex.submit(work, n): n for n in names}
+        for f in as_completed(futs):
+            try:
+                results[futs[f]] = ("ok", f.result())
+            except Exception as e:  # 한 피드 실패가 나머지를 막지 않는다
+                results[futs[f]] = ("err", e)
+    for name in names:   # 출력과 파일 쓰기는 소스 순서대로 메인 스레드에서
         url = sources[name]
         path = out_dir / f"{name}.json"
         rel = path.relative_to(REPO_ROOT)
-        try:
-            data = fetch_bytes(url, args.timeout, args.retries)
-            items, warn = parse_items(data)
-            kept, n_old, n_dup = select(items, args.hours, now, dedup_title=name.startswith("gnews_"))
+        status, payload = results[name]
+        if status == "ok":
+            items, warn, kept, n_old, n_dup = payload
             write_json(path, {
                 "source": name,
                 "feed_url": url,
@@ -344,7 +345,8 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"       {name}: {warn}", file=sys.stderr)
             if name == "federal_register" and len(items) >= FR_FEED_CAP and n_old == 0:
                 print(f"       {name}: 피드 캡 {FR_FEED_CAP}건이 전부 시간창 안. 당일 문서가 잘렸을 수 있음", file=sys.stderr)
-        except Exception as e:  # 한 피드 실패가 나머지를 막지 않는다
+        else:
+            e = payload
             failed.append(name)
             if path.exists():
                 print(f"[fail] {name:<24} {e}  (기존 파일 유지: {rel})", file=sys.stderr)
@@ -354,6 +356,9 @@ def main(argv: list[str] | None = None) -> int:
                     "window_hours": args.hours, "count": 0, "error": str(e), "items": [],
                 })
                 print(f"[fail] {name:<24} {e}  -> {rel} (error 표시 파일)", file=sys.stderr)
+    for err in CONFIG_ERRORS:
+        print(f"[fail] companies.yaml {err}  (이 기업은 수집하지 않음)", file=sys.stderr)
+        failed.append("companies.yaml")
 
     if failed:
         print(f"{len(failed)}/{len(names)} failed: {', '.join(failed)}", file=sys.stderr)

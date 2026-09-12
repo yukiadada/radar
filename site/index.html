@@ -225,6 +225,7 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
   const fmtDate = s => { const [y, m, d] = s.split('-').map(Number); const w = '일월화수목금토'[new Date(y, m - 1, d).getDay()]; return `${y}년 ${m}월 ${d}일 ${w}요일`; };
   const pct = x => `${Math.round(x * 100)}%`;
   const list = (arr, n) => arr.slice(0, n).map(([k, v]) => `${esc(k)}(${v})`).join(', ') || '';
+  const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 
   const DIR = { '+': ['up', '▲', '유리'], '-': ['down', '▼', '불리'], '±': ['both', '◆', '양쪽'] };
   const dots = n => `<i aria-hidden="true">${[1, 2, 3].map(k => `<s${k <= n ? '' : ' class="off"'}></s>`).join('')}</i>`;
@@ -232,9 +233,11 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
   const dirBadge = v => { const d = DIR[String(v).trim()]; return d ? `<span class="dir ${d[0]}" title="방향 ${esc(v)}"><i>${d[1]}</i>${d[2]}</span>` : esc(v); };
   const confBadge = v => { const c = CONF[String(Number(v))]; return c ? `<span class="conf ${c[0]}" title="확신 ${esc(v)}">${dots(c[1])}${c[2]}</span>` : esc(v); };
   const stBadge = v => { const t = String(v).trim().toLowerCase(); return t === 'true' ? `<span class="st yes" title="문서로 남은 확정 사실">확정</span>` : t === 'false' ? `<span class="st no" title="발언·보도·조사 단계">미확정</span>` : esc(v); };
+  const growTag = g => `<span class="${g === '커짐' ? 'gs' : g === '작아짐' ? 'ss' : 'dim'}">${esc(g)}</span>`;
   const KEYS = `<p class="keys">구조적은 <span class="st yes">확정</span> 문서로 남은 것, <span class="st no">미확정</span> 발언·보도 단계. 방향은 그 섹터·티커에 <span class="dir up"><i>▲</i>유리</span> <span class="dir down"><i>▼</i>불리</span> <span class="dir both"><i>◆</i>양쪽</span>. 확신은 <span class="conf conf-low">${dots(1)}낮음 0.3</span> <span class="conf conf-mid">${dots(2)}보통 0.6</span> <span class="conf conf-high">${dots(3)}높음 0.8</span></p>`;
+  const DIRKEYS = `<p class="keys" style="margin:0 0 8px"><span class="dir up"><i>▲</i>유리</span> <span class="dir down"><i>▼</i>불리</span> <span class="dir both"><i>◆</i>양쪽</span></p>`;
 
-  /* 표의 방향·확신·구조적 열을 배지로 */
+  /* 표의 방향(또는 회사에)·확신·구조적 열을 배지로 */
   function decorateTables(root) {
     root.querySelectorAll('table').forEach(t => {
       const heads = [...t.querySelectorAll('thead th')].map(th => th.textContent.trim());
@@ -249,20 +252,30 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     });
   }
 
-  /* 브리프 마크다운을 ## 섹션으로 나눈다 */
+  /* 브리프: 본문은 briefs/<날짜>.md 를 볼 때만 받는다 (data.json 에는 메타만). 한 번 받은 것은 기억 */
+  const briefCache = {};
+  function fetchBrief(date) {
+    if (!briefCache[date]) briefCache[date] = fetch(`briefs/${date}.md`, { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.text(); });
+    return briefCache[date];
+  }
   function splitSections(text) {
     return text.split(/^## /m).slice(1).map(p => { const nl = p.indexOf('\n'); return { title: p.slice(0, nl).trim(), md: p.slice(nl + 1) }; });
   }
-
   /* 읽는 순서: 쉬운 말로 → 누가 유리하고 불리한가 → 오늘의 축 시그널 → 나머지 */
-  function renderBrief(container, b) {
-    const secs = splitSections(b.md);
+  function renderBrief(container, text) {
+    const secs = splitSections(text);
     const pick = t => { const i = secs.findIndex(x => x.title.startsWith(t)); return i >= 0 ? secs.splice(i, 1)[0] : null; };
     const easy = pick('쉬운 말로'), who = pick('누가 유리'), sig = pick('오늘의 축 시그널');
+    container.innerHTML = '';
     if (easy) { const p = document.createElement('section'); p.className = 'easy'; p.innerHTML = '<h2>쉬운 말로</h2>'; p.appendChild(md(easy.md)); container.appendChild(p); }
     if (who || sig) container.insertAdjacentHTML('beforeend', KEYS);
     for (const x of [who, sig, ...secs].filter(Boolean)) container.appendChild(md('## ' + x.title + '\n' + x.md));
     decorateTables(container);
+  }
+  function mountBrief(container, date) {
+    container.innerHTML = `<p class="loading">브리프 불러오는 중</p>`;
+    fetchBrief(date).then(text => { if (container.isConnected) renderBrief(container, text); })
+      .catch(e => { container.innerHTML = `<p class="empty">briefs/${esc(date)}.md 를 불러오지 못했습니다 (${esc(e.message)}).</p>`; });
   }
 
   function md(text) {
@@ -303,99 +316,100 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     return `<div class="tbl wide"><table><thead><tr><th>축</th><th class="num">건수</th><th class="num">비중</th><th class="num">커짐</th><th class="num">작아짐</th><th class="num">유보</th><th class="num">가중 커짐 / 작아짐</th><th class="num">섹터 유리/불리/양쪽</th><th class="num">평균 확신</th><th>상위 테마</th><th>상위 섹터</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
 
-  /* 대시보드 차트. 표준 SVG 를 직접 그린다. 폭은 컨테이너에 맞추고 창 크기가 바뀌면 다시 그린다 */
+  /* ---- 대시보드 차트. 표준 SVG 를 직접 그린다. 폭은 컨테이너에 맞추고 창 크기가 바뀌면 다시 그린다 ---- */
   const AXC = ['ax0', 'ax1', 'ax2', 'ax3'];
-  const GROW = /^(?:\[충돌:[^\]]*\]\s*)?(커짐|작아짐|유보)/;
-  const growOf = r => r.grow || ((r.note || '').match(GROW) || [])[1] || '미표기';
   const mdShort = d => { const [, m, dd] = d.split('-').map(Number); return `${m}/${dd}`; };
   const signed = v => (v > 0 ? '+' : '') + v;
-  function dateRange(from, to) { const out = []; for (let t = Date.parse(from + 'T00:00:00Z'); t <= Date.parse(to + 'T00:00:00Z'); t += 864e5) out.push(new Date(t).toISOString().slice(0, 10)); return out; }
-  function series(win) {
-    const days = dateRange(win.from, win.to);
-    const idx = Object.fromEntries(days.map((d, i) => [d, i]));
-    const per = D.axes.map(() => days.map(() => ({ n: 0, g: 0, s: 0 })));
-    for (const r of D.ledger) {
-      const i = idx[r.date], a = D.axes.indexOf(r.axis);
-      if (i == null || a < 0) continue;
-      const c = per[a][i], g = growOf(r); c.n++; if (g === '커짐') c.g++; else if (g === '작아짐') c.s++;
-    }
-    const cum = per.map(arr => { let v = 0; return arr.map(c => (v += c.g - c.s)); });
-    return { days, per, cum };
-  }
-  const legend = () => `<div class="leg">${D.axes.map((a, i) => `<span class="${AXC[i]}"><i></i>${esc(a)}</span>`).join('')}</div>`;
   const xStep = n => (n > 40 ? 14 : 7);
+  function dateRange(from, to) { const out = []; for (let t = Date.parse(from + 'T00:00:00Z'); t <= Date.parse(to + 'T00:00:00Z'); t += 864e5) out.push(new Date(t).toISOString().slice(0, 10)); return out; }
 
-  /* 누적 라인: 계열마다 values(누적값)와 marks(그날 사건 있음)를 받아 그린다. 선 끝에 이름과 값을 붙인다 */
-  function linesChart(el, days, ser, label) {
-    const W = Math.max(280, el.clientWidth || 440), H = 220, m = { l: 30, r: 84, t: 14, b: 26 };
-    const n = days.length, iw = W - m.l - m.r, ih = H - m.t - m.b;
-    const all = ser.flatMap(x => x.values);
-    const lo = Math.min(0, ...all), hi = Math.max(1, ...all);
-    const x = i => m.l + (n > 1 ? i / (n - 1) * iw : iw / 2), y = v => m.t + (hi - v) / (hi - lo) * ih;
+  /* 날짜 버킷: 창(from~to)의 날마다 계열별 셀을 만들고, 행마다 acc(cell, row) 로 누적한다. 축 추이·일별 막대·기업 추이가 같이 쓴다 */
+  function daily(rows, win, keys, keyOf, acc) {
+    const days = dateRange(win.from, win.to), idx = Object.fromEntries(days.map((d, i) => [d, i])), pos = Object.fromEntries(keys.map((k, i) => [k, i]));
+    const per = keys.map(() => days.map(() => ({ n: 0, v: 0, st: 0 })));
+    for (const r of rows) { const i = idx[r.date], k = pos[keyOf(r)]; if (i == null || k == null) continue; const c = per[k][i]; c.n++; if (r.structural) c.st++; acc(c, r); }
+    return { days, per };
+  }
+  const cumsum = arr => { let v = 0; return arr.map(c => (v += c.v)); };
+  const growDelta = r => (r.grow === '커짐' ? 1 : r.grow === '작아짐' ? -1 : 0);
+
+  /* 공통 프레임: svg 여는 태그, 가로 격자와 눈금, 날짜 눈금. 축 함수 x(i), y(v) 를 돌려준다 */
+  function chartFrame(el, { H, m, lo, hi, days, label, ySteps, fmtY, band }) {
+    const W = Math.max(280, el.clientWidth || 440), n = days.length, iw = W - m.l - m.r, ih = H - m.t - m.b;
+    const x = i => m.l + (band ? (i + 0.5) * (iw / n) : (n > 1 ? i / (n - 1) * iw : iw / 2)), y = v => m.t + (hi - v) / (hi - lo) * ih;
     let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${esc(label)}">`;
-    const step = Math.max(1, Math.ceil((hi - lo) / 5));
-    for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) s += `<line class="grid${v === 0 ? ' zero' : ''}" x1="${m.l}" x2="${W - m.r}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text class="tick" x="${m.l - 6}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end">${signed(v)}</text>`;
+    const step = Math.max(1, Math.ceil((hi - lo) / ySteps));
+    for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) s += `<line class="grid${v === 0 ? ' zero' : ''}" x1="${m.l}" x2="${W - m.r}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text class="tick" x="${m.l - 6}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end">${fmtY(v)}</text>`;
     for (let i = n - 1; i >= 0; i -= xStep(n)) s += `<text class="tick" x="${x(i).toFixed(1)}" y="${H - 8}" text-anchor="middle">${mdShort(days[i])}</text>`;
-    const ends = [];
+    return { W, H, m, iw, ih, x, y, open: s };
+  }
+
+  /* 누적 라인: 계열마다 values(누적값)·marks(그날 사건 있음)·titles. 선 끝에 이름과 값을 붙인다 */
+  function linesChart(el, days, ser, label) {
+    const all = ser.flatMap(x => x.values);
+    const f = chartFrame(el, { H: 220, m: { l: 30, r: 84, t: 14, b: 26 }, lo: Math.min(0, ...all), hi: Math.max(1, ...all), days, label, ySteps: 5, fmtY: signed });
+    let s = f.open; const n = days.length, ends = [];
     ser.forEach(sr => {
-      s += `<path class="ln ${sr.cls}"${sr.dash ? ` stroke-dasharray="${sr.dash}"` : ''} d="M${sr.values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('L')}"/>`;
-      sr.values.forEach((v, i) => { if (sr.marks[i]) s += `<circle class="pt ${sr.cls}" cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3.5"><title>${esc(sr.titles ? sr.titles[i] : `${days[i]} ${sr.name}: 누적 ${signed(v)}`)}</title></circle>`; });
-      ends.push({ cls: sr.cls, name: sr.name, v: sr.values[n - 1], y: y(sr.values[n - 1]) });
+      s += `<path class="ln ${sr.cls}"${sr.dash ? ` stroke-dasharray="${sr.dash}"` : ''} d="M${sr.values.map((v, i) => `${f.x(i).toFixed(1)},${f.y(v).toFixed(1)}`).join('L')}"/>`;
+      sr.values.forEach((v, i) => { if (sr.marks[i]) s += `<circle class="pt ${sr.cls}" cx="${f.x(i).toFixed(1)}" cy="${f.y(v).toFixed(1)}" r="3.5"><title>${esc(sr.titles[i])}</title></circle>`; });
+      ends.push({ cls: sr.cls, name: sr.name, v: sr.values[n - 1], y: f.y(sr.values[n - 1]) });
     });
     ends.sort((p, q) => p.y - q.y);
     for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 13) ends[i].y = ends[i - 1].y + 13;
-    for (let i = ends.length - 1; i >= 0; i--) { if (ends[i].y > H - m.b - 2) ends[i].y = H - m.b - 2; if (i < ends.length - 1 && ends[i + 1].y - ends[i].y < 13) ends[i].y = ends[i + 1].y - 13; }
-    for (const e of ends) s += `<text class="lab ${e.cls}" x="${W - m.r + 8}" y="${(e.y + 4).toFixed(1)}">${esc(e.name)} ${signed(e.v)}</text>`;
+    for (let i = ends.length - 1; i >= 0; i--) { if (ends[i].y > f.H - f.m.b - 2) ends[i].y = f.H - f.m.b - 2; if (i < ends.length - 1 && ends[i + 1].y - ends[i].y < 13) ends[i].y = ends[i + 1].y - 13; }
+    for (const e of ends) s += `<text class="lab ${e.cls}" x="${f.W - f.m.r + 8}" y="${(e.y + 4).toFixed(1)}">${esc(e.name)} ${signed(e.v)}</text>`;
+    el.innerHTML = s + `</svg>`;
+  }
+
+  /* 쌓은 막대: 날짜별 건수를 계열 색으로 쌓는다 */
+  function stackChart(el, days, ser, label) {
+    const tot = days.map((_, i) => ser.reduce((acc, x) => acc + x.counts[i], 0));
+    const f = chartFrame(el, { H: 180, m: { l: 26, r: 10, t: 12, b: 26 }, lo: 0, hi: Math.max(1, ...tot), days, label, ySteps: 4, fmtY: String, band: true });
+    let s = f.open; const bw = f.iw / days.length, gap = Math.min(3, bw * 0.3);
+    days.forEach((d, i) => {
+      let acc = 0; const parts = [];
+      ser.forEach(x => { const c = x.counts[i]; if (!c) return; s += `<rect class="bar ${x.cls}" x="${(f.m.l + i * bw + gap / 2).toFixed(1)}" y="${f.y(acc + c).toFixed(1)}" width="${Math.max(1, bw - gap).toFixed(1)}" height="${(f.y(acc) - f.y(acc + c)).toFixed(1)}"/>`; acc += c; parts.push(`${x.name} ${c}`); });
+      if (acc) s += `<rect class="hit" x="${(f.m.l + i * bw).toFixed(1)}" y="${f.m.t}" width="${bw.toFixed(1)}" height="${f.ih}"><title>${d}: ${parts.join(', ')} (총 ${acc}건)</title></rect>`;
+    });
     el.innerHTML = s + `</svg>`;
   }
 
   /* 축 추이: 축별 누적 (커짐 − 작아짐). 점은 그 날 시그널이 있던 곳 */
   function lineChart(el, win) {
-    const { days, per, cum } = series(win);
-    linesChart(el, days, D.axes.map((a, ai) => ({
-      name: a, cls: AXC[ai], values: cum[ai], marks: per[ai].map(c => c.n > 0),
-      titles: per[ai].map((c, i) => `${days[i]} ${a}: 커짐 ${c.g}, 작아짐 ${c.s}${c.n - c.g - c.s ? `, 유보·미표기 ${c.n - c.g - c.s}` : ''} (누적 ${signed(cum[ai][i])})`),
-    })), `축별 누적 커짐 빼기 작아짐 추이, 최근 ${win.days}일`);
+    const { days, per } = daily(D.ledger, win, D.axes, r => r.axis, (c, r) => { c.v += growDelta(r); c.g = (c.g || 0) + (r.grow === '커짐'); c.s = (c.s || 0) + (r.grow === '작아짐'); });
+    linesChart(el, days, D.axes.map((a, ai) => { const cum = cumsum(per[ai]); return {
+      name: a, cls: AXC[ai], values: cum, marks: per[ai].map(c => c.n > 0),
+      titles: per[ai].map((c, i) => `${days[i]} ${a}: 커짐 ${c.g || 0}, 작아짐 ${c.s || 0}${c.n - (c.g || 0) - (c.s || 0) ? `, 유보·미표기 ${c.n - (c.g || 0) - (c.s || 0)}` : ''} (누적 ${signed(cum[i])})`),
+    }; }), `축별 누적 커짐 빼기 작아짐 추이, 최근 ${win.days}일`);
   }
-
-  /* 쌓은 막대: 날짜별 건수를 계열(축 또는 기업) 색으로 쌓는다 */
-  function stackChart(el, days, ser, label) {
-    const W = Math.max(280, el.clientWidth || 440), H = 180, m = { l: 26, r: 10, t: 12, b: 26 };
-    const n = days.length, iw = W - m.l - m.r, ih = H - m.t - m.b;
-    const tot = days.map((_, i) => ser.reduce((acc, x) => acc + x.counts[i], 0)), hi = Math.max(1, ...tot);
-    const bw = iw / n, gap = Math.min(3, bw * 0.3), y = v => m.t + (hi - v) / hi * ih;
-    let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${esc(label)}">`;
-    const step = Math.max(1, Math.ceil(hi / 4));
-    for (let v = 0; v <= hi; v += step) s += `<line class="grid${v === 0 ? ' zero' : ''}" x1="${m.l}" x2="${W - m.r}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text class="tick" x="${m.l - 6}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end">${v}</text>`;
-    for (let i = n - 1; i >= 0; i -= xStep(n)) s += `<text class="tick" x="${(m.l + (i + 0.5) * bw).toFixed(1)}" y="${H - 8}" text-anchor="middle">${mdShort(days[i])}</text>`;
-    days.forEach((d, i) => {
-      let acc = 0; const parts = [];
-      ser.forEach(x => { const c = x.counts[i]; if (!c) return; s += `<rect class="bar ${x.cls}" x="${(m.l + i * bw + gap / 2).toFixed(1)}" y="${y(acc + c).toFixed(1)}" width="${Math.max(1, bw - gap).toFixed(1)}" height="${(y(acc) - y(acc + c)).toFixed(1)}"/>`; acc += c; parts.push(`${x.name} ${c}`); });
-      if (acc) s += `<rect class="hit" x="${(m.l + i * bw).toFixed(1)}" y="${m.t}" width="${bw.toFixed(1)}" height="${ih}"><title>${d}: ${parts.join(', ')} (총 ${acc}건)</title></rect>`;
-    });
-    el.innerHTML = s + `</svg>`;
-  }
+  /* 일별 시그널: 날짜별 건수를 축 색으로 쌓는다 */
   function dayChart(el, win) {
-    const { days, per } = series(win);
+    const { days, per } = daily(D.ledger, win, D.axes, r => r.axis, () => {});
     stackChart(el, days, D.axes.map((a, ai) => ({ name: a, cls: AXC[ai], counts: per[ai].map(c => c.n) })), `일별 구조적 시그널 건수, 최근 ${win.days}일`);
   }
-  const COC = ['ax3', 'ax1', 'ax2', 'ax0'];   // 기업 계열 색 (축 팔레트 재사용, 순서만 다르게)
   /* 기업별 누적 라인: metric 'count' = 관찰 건수 누적, 'net' = 회사에 유리(+1)·불리(−1) 누적. 가파를수록 최근에 뉴스가 몰린 기업 */
+  const COC = ['ax3', 'ax1', 'ax2', 'ax0'];                 // 기업 계열 색 (축 팔레트 재사용, 순서만 다르게)
+  const DASH = ['', '7 4', '2 4'], DASH_NAME = ['', ' (파선)', ' (점선)'];   // 같은 값으로 겹칠 때도 구분되게. 색과 선 모양은 각각 순환
+  const coCls = i => COC[i % COC.length], coDash = i => DASH[i % DASH.length], coDashName = i => DASH_NAME[i % DASH.length];
   function companyLines(el, cw) {
-    const C = D.companies, metric = el.dataset.metric || 'count';
-    const days = dateRange(cw.from, cw.to), idx = Object.fromEntries(days.map((d, i) => [d, i]));
-    const pos = Object.fromEntries(C.config.map((c, i) => [c.name, i]));
-    const DASH = ['', '7 4', '2 4'];   // 같은 값으로 겹칠 때도 구분되게 실선·파선·점선
-    const ser = C.config.map((c, i) => ({ name: c.name, cls: COC[i % COC.length], dash: DASH[i % DASH.length], daily: days.map(() => 0), n: days.map(() => 0), st: days.map(() => 0) }));
-    for (const r of C.rows) {
-      const i = idx[r.date], k = pos[r.company];
-      if (i == null || k == null) continue;
-      ser[k].n[i]++; if (r.structural) ser[k].st[i]++;
-      ser[k].daily[i] += metric === 'count' ? 1 : (r.direction === '+' ? 1 : r.direction === '-' ? -1 : 0);
-    }
-    ser.forEach(sr => { let v = 0; sr.values = sr.daily.map(d => (v += d)); sr.marks = sr.n.map(c => c > 0); sr.titles = sr.n.map((c, i) => `${days[i]} ${sr.name}: 관찰 ${c}건 (구조적 ${sr.st[i]}), 누적 ${signed(sr.values[i])}`); });
-    linesChart(el, days, ser, `${metric === 'count' ? '기업별 누적 관찰 건수' : '기업별 누적 유리 빼기 불리'}, 최근 ${cw.days}일`);
+    const C = D.companies, metric = el.dataset.metric || 'count', names = C.config.map(c => c.name);
+    const { days, per } = daily(C.rows, cw, names, r => r.company, (c, r) => { c.v += metric === 'count' ? 1 : (r.direction === '+' ? 1 : r.direction === '-' ? -1 : 0); });
+    linesChart(el, days, names.map((name, i) => { const cum = cumsum(per[i]); return {
+      name, cls: coCls(i), dash: coDash(i), values: cum, marks: per[i].map(c => c.n > 0),
+      titles: per[i].map((c, k) => `${days[k]} ${name}: 관찰 ${c.n}건 (구조적 ${c.st}), 누적 ${signed(cum[k])}`),
+    }; }), `${metric === 'count' ? '기업별 누적 관찰 건수' : '기업별 누적 유리 빼기 불리'}, 최근 ${cw.days}일`);
   }
+  const legend = items => `<div class="leg">${items.map(([name, cls, suffix]) => `<span class="${cls}"><i></i>${esc(name)}${suffix || ''}</span>`).join('')}</div>`;
+  const axisLegend = () => legend(D.axes.map((a, i) => [a, AXC[i]]));
+
+  /* 어느 화면이 어떤 창을 보고 있는지 하나만 기억한다. 창 크기가 바뀌면 같은 창으로 다시 그린다 */
+  let WIN = null;
+  const CHARTS = { line: lineChart, day: dayChart, 'co-line': companyLines };
+  function drawCharts() {
+    if (!WIN) return;
+    app.querySelectorAll('[data-chart]').forEach(el => { const fn = CHARTS[el.dataset.chart]; if (fn) fn(el, WIN); });
+  }
+  window.addEventListener('resize', debounce(drawCharts, 150));
 
   /* 티커 막대: 섹터(테마)별로 묶고 막대 색은 방향 */
   function tickerBars(win, limit) {
@@ -427,23 +441,18 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     return `<div class="panel full"><h3>논지 점검 <span class="dim">framework/thesis.md. 확인·반증은 최근 ${w.days}일 장부의 thesis 필드. 상태는 Ken 이 /review 로 바꿉니다</span></h3><div class="tbl"><table class="theses"><thead><tr><th>번호</th><th>논지</th><th>상태</th><th class="num">확인</th><th class="num">반증</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   }
 
-  let CUR = null, CURC = null;
-  function drawCharts() {
-    app.querySelectorAll('[data-chart]').forEach(el => {
-      const k = el.dataset.chart;
-      if (k === 'line' && CUR) lineChart(el, CUR); else if (k === 'day' && CUR) dayChart(el, CUR); else if (k === 'co-line' && CURC) companyLines(el, CURC);
-    });
-  }
+  /* 기간 전환 (30/90일) */
+  const segTabs = (base, days, note) => `<div class="seg" role="tablist" aria-label="기간">` + [30, 90].map(n => `<a role="tab" aria-selected="${n === days}" href="${base}/${n}">최근 ${n}일</a>`).join('') + `<span class="dim">${note}</span></div>`;
 
-  /* 기업 관찰: 기업 × 축 매트릭스, 기업별 추이, 기업별 최근 시그널 */
+  /* 기업 관찰: 기업 × 축 매트릭스, 기업별 누적 추이, 기업별 최근 시그널 */
   function companies(arg) {
     const C = D.companies;
     if (!C || !C.config.length) { app.innerHTML = `<p class="dateline">기업 관찰</p><p class="empty">framework/companies.yaml 이 없습니다.</p>`; return; }
     const days = arg === '90' ? 90 : 30, w = days === 90 ? C.w90 : C.w30;
-    CUR = null; CURC = w;
+    WIN = w;
     const cfg = Object.fromEntries(C.config.map(c => [c.name, c]));
     let h = `<p class="dateline">기업 관찰</p><p class="hero-sub">${C.config.map(c => esc(c.name)).join(' · ')}. 이 기업들의 뉴스가 네 축에 미치는 영향. "회사에" 유리·불리와 "축은" 커짐·작아짐을 따로 봅니다. 구조적(확정)과 미확정 보도를 함께 쌓고 구조적 건수는 괄호로 표시합니다.</p>`;
-    h += `<div class="seg" role="tablist" aria-label="기간">` + [30, 90].map(n => `<a role="tab" aria-selected="${n === days}" href="#/companies/${n}">최근 ${n}일</a>`).join('') + `<span class="dim">${w.from} ~ ${w.to}, ${w.total}건 (구조적 ${w.companies.reduce((a, c) => a + c.structural, 0)})</span></div>`;
+    h += segTabs('#/companies', days, `${w.from} ~ ${w.to}, ${w.total}건 (구조적 ${w.companies.reduce((a, c) => a + c.structural, 0)})${w.orphans ? `, 설정에 없는 기업 ${w.orphans}건 제외` : ''}`);
     if (!C.rows.length) h += `<p class="empty">아직 기업 관찰 기록이 없습니다. 다음 /brief 부터 쌓입니다.</p>`;
     const maxN = Math.max(1, ...w.companies.flatMap(c => c.axes.map(x => x.count)));
     const gsCell = x => [x.grow ? `<span class="gs">커짐 ${x.grow}</span>` : '', x.shrink ? `<span class="ss">작아짐 ${x.shrink}</span>` : '', x.hold ? `<span class="dim">유보 ${x.hold}</span>` : ''].filter(Boolean).join(' ') || '<span class="dim">–</span>';
@@ -453,10 +462,10 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
         `<td class="num"><b>${c.count}</b> <span class="dim">(${c.structural})</span><br><span class="small"><span class="dir up"><i>▲</i>${c.dir['+']}</span> <span class="dir down"><i>▼</i>${c.dir['-']}</span> <span class="dir both"><i>◆</i>${c.dir['±']}</span></span></td></tr>`).join('') + `</tbody></table></div><p class="keys" style="margin:8px 0 0">합계 칸의 ▲▼◆는 회사에 유리·불리·양쪽 건수</p></div>`;
     h += `<div class="panel full"><h3>어느 기업이 더 영향을 받는가 <span class="dim">누적 추이. 선이 가파를수록 최근 뉴스가 몰린 기업. 구조적·미확정 합산</span></h3>` +
       `<div class="seg mini" role="tablist" aria-label="지표"><button type="button" data-metric="count" aria-selected="true">관찰 건수 누적</button><button type="button" data-metric="net" aria-selected="false">회사에 유리 − 불리 누적</button></div>` +
-      `<div class="leg">${C.config.map((c, i) => `<span class="${COC[i % COC.length]}"><i></i>${esc(c.name)}${i === 1 ? ' (파선)' : i === 2 ? ' (점선)' : ''}</span>`).join('')}</div><div class="chart-box" data-chart="co-line" data-metric="count"></div></div>`;
+      legend(C.config.map((c, i) => [c.name, coCls(i), coDashName(i)])) + `<div class="chart-box" data-chart="co-line" data-metric="count"></div></div>`;
     h += C.config.map(c => {
       const cw = w.companies.find(x => x.name === c.name) || { count: 0, structural: 0, dir: { '+': 0, '-': 0, '±': 0 } };
-      const rows = C.rows.filter(r => r.company === c.name && r.date > w.from && r.date <= w.to).sort((a, b) => b.date.localeCompare(a.date) || b.line - a.line).slice(0, 10);
+      const rows = C.rows.filter(r => r.company === c.name && r.date >= w.from && r.date <= w.to).sort((a, b) => b.date.localeCompare(a.date) || b.line - a.line).slice(0, 10);
       return `<div class="panel"><h3>${esc(c.name)} <span class="dim">${(c.tickers || []).map(esc).join(', ') || '비상장'} · ${days}일 ${cw.count}건 (구조적 ${cw.structural}) · 회사에 <span class="dir up"><i>▲</i>${cw.dir['+']}</span> <span class="dir down"><i>▼</i>${cw.dir['-']}</span> <span class="dir both"><i>◆</i>${cw.dir['±']}</span></span></h3>` +
         (c.note ? `<p class="small dim" style="margin:0 0 8px">${esc(c.note)}</p>` : '') +
         (rows.length ? `<ul class="feed">` + rows.map(r => `<li><div class="meta"><span class="date">${r.date}</span><span class="axtag ${AXC[D.axes.indexOf(r.axis)]}">${esc(r.axis)}</span>${stBadge(r.structural)}${dirBadge(r.direction)}<span class="${r.grow === '커짐' ? 'gs' : r.grow === '작아짐' ? 'ss' : 'dim'}">축 ${esc(r.grow)}</span>${confBadge(r.confidence)}</div>${esc(r.fact)} <a href="${esc(r.source)}" target="_blank" rel="noopener">출처</a><br><span class="small dim">${esc(r.note)}</span></li>`).join('') + `</ul>` : `<p class="empty">이 기간에 기록 없음</p>`) + `</div>`;
@@ -464,13 +473,12 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     h += `</section>`;
     app.innerHTML = h;
     app.querySelectorAll('.seg.mini button').forEach(btn => btn.addEventListener('click', () => {
-      const box = app.querySelector('[data-chart="co-line"]'); box.dataset.metric = btn.dataset.metric;
+      app.querySelector('[data-chart="co-line"]').dataset.metric = btn.dataset.metric;
       btn.parentNode.querySelectorAll('button').forEach(x => x.setAttribute('aria-selected', String(x === btn)));
-      companyLines(box, CURC);
+      drawCharts();
     }));
     drawCharts();
   }
-  let rsz; window.addEventListener('resize', () => { clearTimeout(rsz); rsz = setTimeout(drawCharts, 150); });
 
   /* 티커 집계: 같은 섹터(테마)끼리 묶은 표 + 티커별 합계 */
   function tickerChip(t) {
@@ -498,10 +506,11 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     return `수집 ${names.length}개 소스${zero.length ? `, 0건 ${zero.join(', ')}` : ''}`;
   }
 
-  /* 화면 */
+  /* ---- 화면 ---- */
   function home() {
     const b = D.briefs[0];
     const w = D.trend.w30;
+    WIN = null;
     const bits = [`최근 30일 장부 ${w.total}건`, `전체 ${D.ledger.length}건`, rawLine(b ? b.date : D.today)].filter(Boolean);
     let h = `<p class="dateline">${fmtDate(D.today)}</p><p class="hero-sub">${bits.join(', ')}</p>`;
     h += scaleChart(w, `최근 30일, ${w.from}부터 ${w.to}까지`);
@@ -511,35 +520,36 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     else h += `<h2 class="sec">브리프</h2><p class="empty">아직 브리프가 없습니다.</p>`;
     if (D.briefs.length > 1) {
       h += `<h2 class="sec">지난 브리프</h2><ul class="plain">` + D.briefs.slice(1, 8).map(x =>
-        `<li><a href="#/brief/${x.date}">${x.date}</a> <span class="dim">구조적 ${x.structural}건, 논지 변화 ${esc(x.thesis)}</span></li>`).join('') + `</ul>`;
+        `<li><a href="#/brief/${x.date}">${x.date}</a> <span class="dim">구조적 ${x.structural}건, 논지 점검 ${esc(x.thesis)}</span></li>`).join('') + `</ul>`;
       if (D.briefs.length > 8) h += `<p class="dim" style="font-size:14px"><a href="#/briefs">전체 브리프 ${D.briefs.length}건</a></p>`;
     }
     app.innerHTML = h;
-    if (b) renderBrief(document.getElementById('brief'), b);
+    if (b) mountBrief(document.getElementById('brief'), b.date);
     animateBars();
   }
 
   function brief(date) {
     const i = D.briefs.findIndex(x => x.date === date);
     if (i < 0) { app.innerHTML = `<p class="empty">${esc(date)} 브리프가 없습니다. <a href="#/briefs">브리프 목록</a></p>`; return; }
+    WIN = null;
     const b = D.briefs[i], prev = D.briefs[i + 1], next = D.briefs[i - 1];
-    const meta = [`구조적 ${b.none_today ? '없음' : b.structural + '건'}`, `논지 변화 ${b.thesis}`, rawLine(b.date)].filter(Boolean).join(', ');
+    const meta = [`구조적 ${b.none_today ? '없음' : b.structural + '건'}`, `논지 점검 ${b.thesis}`, rawLine(b.date)].filter(Boolean).join(', ');
     app.innerHTML = `<p class="dateline">${fmtDate(b.date)} 브리프</p><p class="hero-sub">${esc(meta)}</p><div id="brief"></div>` +
       `<nav class="pager" aria-label="브리프 이동"><span>${prev ? `<a href="#/brief/${prev.date}">이전 ${prev.date}</a>` : ''}</span><span>${next ? `<a href="#/brief/${next.date}">다음 ${next.date}</a>` : ''}</span></nav>`;
-    renderBrief(document.getElementById('brief'), b);
+    mountBrief(document.getElementById('brief'), b.date);
   }
 
   function trend(arg) {
     const days = arg === '90' ? 90 : 30, t = D.trend, w = days === 90 ? t.w90 : t.w30;
-    CUR = w; CURC = null;
+    WIN = w;
     let h = `<p class="dateline">어느 축이 커지고 있는가</p><p class="hero-sub">기준일 ${D.today}, 장부 전체 ${D.ledger.length}건. 구조적 시그널만 셉니다.</p>`;
     if (!D.ledger.length) { app.innerHTML = h + `<p class="empty">장부가 비어 있습니다.</p>`; return; }
-    h += `<div class="seg" role="tablist" aria-label="기간">` + [30, 90].map(n => `<a role="tab" aria-selected="${n === days}" href="#/trend/${n}">최근 ${n}일</a>`).join('') + `<span class="dim">${w.from} ~ ${w.to}, ${w.total}건</span></div>`;
+    h += segTabs('#/trend', days, `${w.from} ~ ${w.to}, ${w.total}건`);
     h += `<section class="dash">` + kpis(w) +
-      `<div class="panel"><h3>축 추이 <span class="dim">누적 커짐 − 작아짐. 점은 시그널이 있던 날</span></h3>${legend()}<div class="chart-box" data-chart="line"></div></div>` +
+      `<div class="panel"><h3>축 추이 <span class="dim">누적 커짐 − 작아짐. 점은 시그널이 있던 날</span></h3>${axisLegend()}<div class="chart-box" data-chart="line"></div></div>` +
       `<div class="panel"><h3>축 저울 <span class="dim">커짐 vs 작아짐 건수</span></h3>${scaleChart(w)}</div>` +
-      `<div class="panel"><h3>일별 시그널 <span class="dim">축별로 쌓음</span></h3>${legend()}<div class="chart-box" data-chart="day"></div></div>` +
-      `<div class="panel"><h3>티커 집계 <span class="dim">같은 섹터끼리 묶음. 막대 색은 방향</span></h3><p class="keys" style="margin:0 0 8px"><span class="dir up"><i>▲</i>유리</span> <span class="dir down"><i>▼</i>불리</span> <span class="dir both"><i>◆</i>양쪽</span></p>${tickerBars(w)}</div>` +
+      `<div class="panel"><h3>일별 시그널 <span class="dim">축별로 쌓음</span></h3>${axisLegend()}<div class="chart-box" data-chart="day"></div></div>` +
+      `<div class="panel"><h3>티커 집계 <span class="dim">같은 섹터끼리 묶음. 막대 색은 방향</span></h3>${DIRKEYS}${tickerBars(w)}</div>` +
       thesisPanel(w) + `</section>`;
     h += `<h2 class="sec">축별 상세 <span class="dim">최근 ${days}일. 커짐/작아짐은 note 첫 단어, 유리/불리는 티커 기준</span></h2>` + axisTable(w);
     h += `<details class="more"><summary>티커 집계 표 (숫자 그대로)</summary>${tickerTable(w)}</details>`;
@@ -560,34 +570,38 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
   }
 
   function ledger() {
-    const rows = [...D.ledger].sort((a, b) => (b.date + b.line).localeCompare(a.date + a.line) || b.line - a.line);
+    WIN = null;
+    const rows = [...D.ledger].sort((a, b) => b.date.localeCompare(a.date) || b.line - a.line);
+    rows.forEach(r => { r._q = [r.theme, r.fact, r.note, r.sectors.join(' '), (r.thesis || []).join(' ')].join(' ').toLowerCase(); });
     app.innerHTML = `<p class="dateline">장부</p><p class="hero-sub">구조적 시그널만 쌓입니다. 한 줄이 한 사건, 추가만 하고 고치지 않습니다.</p>` +
       `<div class="filters"><label>축 <select id="f-axis"><option value="">전체</option>${D.axes.map(a => `<option>${a}</option>`).join('')}</select></label>` +
       `<label>기간 <select id="f-days"><option value="">전체</option><option value="30">최근 30일</option><option value="90">최근 90일</option></select></label>` +
       `<input type="search" id="f-q" placeholder="테마, 티커, 팩트 검색" aria-label="검색"><span class="count" id="f-count"></span></div>` + KEYS + `<div id="ledger-table"></div>`;
+    const meta = r => 'horizon' in r ? `${esc(r.horizon)} · 크기 ${esc(r.impact)} · ${esc(r.channel)}${(r.thesis || []).length ? ' · ' + r.thesis.map(esc).join(' ') : ''}${r.reverses ? ` · 번복 줄 ${r.reverses}` : ''}` : '–';
     const draw = () => {
       const ax = document.getElementById('f-axis').value, days = Number(document.getElementById('f-days').value), q = document.getElementById('f-q').value.trim().toLowerCase();
       const cut = days ? new Date(new Date(D.today).getTime() - days * 864e5).toISOString().slice(0, 10) : '';
-      const sel = rows.filter(r => (!ax || r.axis === ax) && (!cut || r.date > cut) && (!q || [r.theme, r.fact, r.note, r.sectors.join(' '), (r.thesis || []).join(' ')].join(' ').toLowerCase().includes(q)));
+      const sel = rows.filter(r => (!ax || r.axis === ax) && (!cut || r.date > cut) && (!q || r._q.includes(q)));
       document.getElementById('f-count').textContent = `${sel.length}건`;
-      const meta = r => 'horizon' in r ? `${esc(r.horizon)} · 크기 ${esc(r.impact)} · ${esc(r.channel)}${(r.thesis || []).length ? ' · ' + r.thesis.map(esc).join(' ') : ''}${r.reverses ? ` · 번복 줄 ${r.reverses}` : ''}` : '–';
       document.getElementById('ledger-table').innerHTML = sel.length ? `<div class="tbl wide"><table><thead><tr><th>날짜</th><th>축</th><th>테마</th><th class="fact">팩트</th><th>섹터</th><th>방향</th><th>확신</th><th>기간 · 크기 · 경로 · 논지</th><th class="note">해석</th></tr></thead><tbody>` +
         sel.map(r => `<tr><td class="date">${r.date}</td><td class="nowrap">${esc(r.axis)}</td><td class="nowrap">${esc(r.theme)}</td><td class="fact">${esc(r.fact)} <a href="${esc(r.source)}" target="_blank" rel="noopener">출처</a></td><td class="nowrap">${r.sectors.map(esc).join(', ')}</td><td>${dirBadge(r.direction)}</td><td>${confBadge(r.confidence)}</td><td class="small nowrap">${meta(r)}</td><td class="small note">${esc(r.note)}</td></tr>`).join('') +
         `</tbody></table></div>` : `<p class="empty">조건에 맞는 줄이 없습니다.</p>`;
     };
     ['f-axis', 'f-days'].forEach(id => document.getElementById(id).addEventListener('change', draw));
-    document.getElementById('f-q').addEventListener('input', draw);
+    document.getElementById('f-q').addEventListener('input', debounce(draw, 150));
     draw();
   }
 
   function briefs() {
+    WIN = null;
     app.innerHTML = `<p class="dateline">브리프</p><p class="hero-sub">${D.briefs.length}건</p>` + (D.briefs.length ?
-      `<div class="tbl"><table><thead><tr><th>날짜</th><th class="num">구조적 시그널</th><th>3~4년 논지 변화</th></tr></thead><tbody>` +
+      `<div class="tbl"><table><thead><tr><th>날짜</th><th class="num">구조적 시그널</th><th>논지 점검</th></tr></thead><tbody>` +
       D.briefs.map(b => `<tr><td class="date"><a href="#/brief/${b.date}">${b.date}</a></td><td class="num">${b.none_today ? '없음' : b.structural}</td><td>${esc(b.thesis)}</td></tr>`).join('') + `</tbody></table></div>` :
       `<p class="empty">아직 브리프가 없습니다.</p>`);
   }
 
   function framework() {
+    WIN = null;
     app.innerHTML = `<p class="dateline">판단 기준</p><p class="hero-sub">framework/thesis.md, axes.md, sector_map.yaml 그대로. Ken 이 고칩니다.</p><div id="thesis"></div><h2 class="sec">축 정의 <span class="dim">framework/axes.md</span></h2><div id="axes"></div><h2 class="sec">섹터 맵 <span class="dim">축, 테마, 티커 화이트리스트</span></h2><pre class="yaml">${esc(D.framework.sector_map)}</pre>`;
     if (D.framework.thesis_md) document.getElementById('thesis').appendChild(md(D.framework.thesis_md));
     document.getElementById('axes').appendChild(md(D.framework.axes_md));
@@ -608,7 +622,8 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     window.scrollTo(0, 0);
   }
 
-  fetch('data.json', { cache: 'no-store' }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(j => {
+  // no-cache: 매번 서버에 물어보되(ETag) 바뀌지 않았으면 304 로 캐시를 쓴다. no-store 는 매번 전부 다시 받는다
+  fetch('data.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(j => {
     D = j;
     document.getElementById('gen').textContent = `빌드 ${j.generated_at.replace('T', ' ').slice(0, 16)} KST`;
     route();

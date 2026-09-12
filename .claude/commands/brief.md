@@ -21,8 +21,8 @@ CLAUDE.md "워크플로 > /brief"를 실행한다. 아래 순서를 건너뛰지
 1. `raw/<날짜>/*.json`을 확인한다. 폴더가 없거나 json 파일이 0개면 아래 한 줄만 답하고 멈춘다. 실행 여부는 Ken이 정한다.
    > raw/<날짜>/ 없음. 먼저 `python3 fetch/fetch.py --date <날짜>` 실행이 필요합니다.
 
-   비대화형(클라우드 루틴)에서는 Actions 수집이 늦을 수 있으니 2분 간격으로 `git pull` 하며 최대 20분 기다린 뒤 그래도 없으면 멈춘다.
-2. 파일이 있으면 전부 읽는다. 구조는 `{source, feed_url, fetched_at, window_hours, count, items: [{title, link, published, summary}]}`. 파일이 9개 미만이거나(4축 소스 6개 + 기업 관찰 `gnews_co_*` 3개), count가 0이거나, `error` 필드가 있는(수집 실패) 소스가 있으면 기억해 두고 마지막 채팅 요약에 적는다(그 축은 입력이 없었다는 뜻).
+   비대화형(클라우드 루틴)에서는 GitHub MCP 도구(`actions_run_trigger` 의 `run_workflow`, owner yukiadada, repo radar, workflow_id fetch.yml, ref main)로 수집을 직접 실행하고 radar-raw 에서 15초 간격으로 `git pull --rebase` 하며 최대 10분 기다린다. 도구가 없으면 2분 간격으로 최대 20분 기다린 뒤 그래도 없으면 멈춘다. fetch.yml 은 04:30 과 05:15 KST 두 번 예약돼 있어 보통은 이미 있다.
+2. 파일이 있으면 전부 읽는다. 구조는 `{source, feed_url, fetched_at, window_hours, count, items: [{title, link, published, summary}]}`. 파일 수가 `python3 fetch/fetch.py --list` 가 출력하는 소스 수보다 적거나, count가 0이거나, `error` 필드가 있는(수집 실패) 소스가 있으면 기억해 두고 마지막 채팅 요약에 적는다(그 축은 입력이 없었다는 뜻).
 3. `briefs/<날짜>.md`가 이미 있으면 내용을 보여주고 덮어쓸지 Ken에게 묻는다. 답을 받기 전에는 덮어쓰지 않는다. Ken이 거부하면 거기서 멈춘다. 장부도 건드리지 않는다. 비대화형(클라우드 루틴)에서는 묻지 않고 "이미 있음"을 출력하고 멈춘다.
 
 ## 2. 분류와 후보 추출
@@ -52,7 +52,7 @@ CLAUDE.md "워크플로 > /brief"를 실행한다. 아래 순서를 건너뛰지
 - `structural`: axes.md 기준 그대로. true 후보는 2단계 확인 등급을 거친다(0.6 이상). false 는 헤드라인만으로도 되지만 source 는 raw 의 `link` 를 그대로 쓴다(URL 없는 팩트 금지는 여기도 같다).
 - `direction`: **회사에** + / - / ±. 축 기준이 아니다.
 - `note`: `커짐.` / `작아짐.` / `유보.` 로 시작한다(그 뉴스로 그 축이 커지는지). 뒤에 왜 그런지 한 줄. 매매 표현 금지.
-- `tickers`: companies.yaml 의 그 기업 tickers 만(SpaceX 는 `[]`). sector_map 밖 티커 금지.
+- `tickers`: companies.yaml 의 그 기업 tickers 만 (비상장이면 `[]`). companies.yaml 의 티커는 sector_map 에도 있어야 한다(규칙 4).
 - 확신(confidence)은 0.3 / 0.6 / 0.8. structural=true 면 0.6 이상.
 
 ## 3. structural 판정
@@ -84,242 +84,41 @@ CLAUDE.md "워크플로 > /brief"를 실행한다. 아래 순서를 건너뛰지
 - 두 축이 부딪힌 사건은 이긴 쪽 축 한 곳에만 올린다(axes.md "충돌 사건의 기록").
 - "사라", "팔아라", "지금이 기회" 류 매매 지시 표현 금지.
 
-## 5. 검증 + 30일 집계 (APPEND = False)
+## 5. 검증 + 30일 집계 (append 없이)
 
-아래 스크립트에 structural=true 시그널만 `ROWS`에 넣고 **`APPEND = False`인 채로** 실행한다. 검증과 30일 누적 계산만 하고 장부는 건드리지 않는다. 0개면 `ROWS = []`로 실행해서 집계만 받는다. 검증에 걸리면 시그널을 고쳐서 다시 실행한다.
-
-`skip 중복`이 찍힌 행은 이미 장부에 있는 사건이다. 표에는 남겨도 되지만 장부에는 안 올라간다. 마지막 채팅 요약에 적는다. `경고 유사 사건`이 찍히면 최근 7일 장부의 같은 테마 행과 팩트가 많이 겹치는 것이다. 같은 사건이면(출처 URL 이 달라도) 그 행을 ROWS 에서 빼고 다시 실행한다. 다른 사건이면 그대로 진행한다.
+structural=true 시그널을 JSON 배열로 `/tmp/rows.json` 에 쓰고(Write 도구. 레포 안에 두지 않는다) 아래를 **`--append` 없이** 실행한다. 검증과 30일 누적 계산만 하고 장부는 건드리지 않는다. 0개면 `[]` 로 실행해서 집계만 받는다. 검증에 걸리면 시그널을 고쳐서 다시 실행한다.
 
 ```bash
-python3 - <<'EOF'
-import json, re, sys, datetime, collections
-from pathlib import Path
-
-DATE = "<날짜>"
-APPEND = False   # 6단계에서 브리프를 쓴 뒤, 7단계에서 True 로 바꿔 같은 ROWS 로 다시 실행
-ROWS = [
-    # {"date": DATE, "axis": "정치권력", "theme": "관세/리쇼어링",
-    #  "fact": "한 문장. 출처에 있는 내용만.", "source": "https://...",
-    #  "structural": True, "sectors": ["XLI", "CAT"], "direction": "+", "confidence": 0.6,
-    #  "note": "커짐. 왜 구조적인지 한 줄.",
-    #  "horizon": "1년", "impact": 2, "channel": "실적", "thesis": ["T4+"], "reverses": None},
-]
-
-if not Path("CLAUDE.md").exists(): sys.exit("레포 루트에서 실행해야 한다")
-try: today = datetime.date.fromisoformat(DATE)
-except ValueError: sys.exit(f"DATE 가 YYYY-MM-DD 가 아님: {DATE!r} (치환 누락?)")
-AXES = ("정치권력", "기술권력", "자본권력", "코인")
-KEYS = ["date", "axis", "theme", "fact", "source", "structural", "sectors", "direction", "confidence", "note",
-        "horizon", "impact", "channel", "thesis", "reverses"]
-HORIZON, CHANNEL = ("분기", "1년", "다년"), ("실적", "멀티플", "수급")
-thesis_path = Path("framework/thesis.md")
-thesis_ids = set(re.findall(r"^## (T\d+)\b", thesis_path.read_text(encoding="utf-8"), re.M)) if thesis_path.exists() else set()
-
-# sector_map.yaml → {테마: (축, [티커])}. 주석은 먼저 지운다.
-themes, axis, theme, n_theme_lines = {}, None, None, 0
-for raw in Path("framework/sector_map.yaml").read_text(encoding="utf-8").split("\n"):
-    line = re.sub(r"\s#.*$|^#.*$", "", raw).rstrip()
-    if not line.strip(): continue
-    if re.match(r"^\S[^:]*:\s*$", line): axis, theme = line.strip()[:-1], None; continue
-    m = re.match(r"^  (\S[^:]*):\s*$", line)
-    if m: theme, n_theme_lines = m.group(1).strip(), n_theme_lines + 1; continue
-    m = re.match(r"^\s+tickers:\s*\[(.*)\]\s*$", line)
-    if m and theme and axis: themes[theme] = (axis, [t.strip().strip("'\"") for t in m.group(1).split(",") if t.strip()])
-assert {a for a, _ in themes.values()} == set(AXES), f"sector_map 축 파싱 실패: {sorted(a for a, _ in themes.values())}"
-assert len(themes) == n_theme_lines, f"테마 {n_theme_lines}개 중 {len(themes)}개만 파싱됨. sector_map.yaml 형식 확인"
-all_tickers = {t for _, ts in themes.values() for t in ts}
-assert all(re.fullmatch(r"[A-Z][A-Z0-9.\-]{0,6}", t) for t in all_tickers), f"티커 형식 이상: {sorted(all_tickers)}"
-print("sector_map:", ", ".join(f"{a} {sum(1 for x, _ in themes.values() if x == a)}테마" for a in AXES), f"/ 티커 {len(all_tickers)}개")
-
-ledger = Path("ledger/signals.jsonl")
-existing, by_line = [], {}
-if ledger.exists():
-    for n, l in enumerate(ledger.read_text(encoding="utf-8").split("\n"), 1):
-        if not l.strip(): continue
-        try: d = json.loads(l)
-        except json.JSONDecodeError as e: sys.exit(f"ledger {n}번째 줄 JSON 파싱 실패: {e}. 장부는 수정 금지. Ken 에게 알린다")
-        existing.append(d); by_line[n] = d
-seen = {(d["source"], d["theme"]): d["date"] for d in existing}
-recent = [d for d in existing if (today - datetime.timedelta(days=7)).isoformat() <= d["date"] <= DATE]
-if recent:
-    print(f"최근 7일 장부 {len(recent)}건 (같은 사건이면 올리지 않는다):")
-    for d in recent: print(f"  - {d['date']} [{d['axis']}/{d['theme']}] {d['fact'][:80]}")
-
-BAD = re.compile(r"사라(?![지진질져졌짐])|팔아라|지금이 기회|매수 추천|매도 추천|사야 한다|팔아야 한다")
-NOTE = re.compile(r"^(?:\[충돌: (정치권력|기술권력|자본권력|코인) vs (정치권력|기술권력|자본권력|코인)\] )?(커짐|작아짐|유보)(?![가-힣])")
-URL = re.compile(r"^https?://[^\s/]+\.[^\s/]+\S*$")
-errors, todo, skipped = [], [], []
-for i, r in enumerate(ROWS):
-    p = f"ROWS[{i}]"
-    if not isinstance(r, dict) or set(r) != set(KEYS):
-        errors.append(f"{p}: 키 구성이 스키마와 다름 {sorted(set(r) ^ set(KEYS)) if isinstance(r, dict) else type(r).__name__}"); continue
-    r = dict(r)
-    for k in ("date", "axis", "theme", "fact", "source", "note"):
-        r[k] = " ".join(str(r[k]).split())   # U+2028 등 줄바꿈류 문자 제거. 장부는 한 줄 = 한 JSON
-    if r["date"] != DATE: errors.append(f"{p}: date {r['date']!r} != DATE {DATE!r}")
-    if r["structural"] is not True: errors.append(f"{p}: structural=true 만 장부에 올림")
-    if r["axis"] not in AXES: errors.append(f"{p}: axis {r['axis']!r}")
-    if r["theme"] not in themes: errors.append(f"{p}: theme {r['theme']!r} 가 sector_map 에 없음")
-    elif themes[r["theme"]][0] != r["axis"]: errors.append(f"{p}: theme {r['theme']!r} 는 {themes[r['theme']][0]} 축")
-    s = r["sectors"]
-    if not isinstance(s, list) or not (1 <= len(s) <= 3) or len(set(s)) != len(s): errors.append(f"{p}: sectors 는 서로 다른 티커 1~3개")
-    else:
-        for t in s:
-            if t not in all_tickers: errors.append(f"{p}: 티커 {t} 가 sector_map 에 없음")
-            elif r["theme"] in themes and t not in themes[r["theme"]][1]: print(f"경고 {p}: 티커 {t} 는 테마 {r['theme']!r} 밖 (맵에는 있음). note 에 이유가 있어야 한다")
-    if r["direction"] not in ("+", "-", "±"): errors.append(f"{p}: direction 은 + / - / ±")
-    if r["confidence"] not in (0.3, 0.6, 0.8): errors.append(f"{p}: confidence 는 0.3 / 0.6 / 0.8")
-    if not URL.match(r["source"]): errors.append(f"{p}: source 가 URL 이 아님")
-    if not r["fact"]: errors.append(f"{p}: fact 비어 있음")
-    m = NOTE.match(r["note"])
-    if not m: errors.append(f"{p}: note 는 '[충돌: A vs B] '(선택) + '커짐.'|'작아짐.'|'유보.' 로 시작해야 함")
-    elif m.group(1) and (m.group(1) == m.group(2) or AXES.index(m.group(1)) > AXES.index(m.group(2))): errors.append(f"{p}: 충돌 태그는 서로 다른 축을 {' > '.join(AXES)} 순서로")
-    if BAD.search(r["fact"] + " " + r["note"]): errors.append(f"{p}: 매매 지시 표현 금지")
-    if r["horizon"] not in HORIZON: errors.append(f"{p}: horizon 은 분기 / 1년 / 다년")
-    if r["impact"] not in (1, 2, 3) or isinstance(r["impact"], bool): errors.append(f"{p}: impact 는 1 / 2 / 3")
-    if r["channel"] not in CHANNEL: errors.append(f"{p}: channel 은 실적 / 멀티플 / 수급")
-    th = r["thesis"]
-    if not isinstance(th, list) or any(not (isinstance(t, str) and re.fullmatch(r"T\d+[+-]", t) and t[:-1] in thesis_ids) for t in th) or len(set(th)) != len(th):
-        errors.append(f"{p}: thesis 는 ['T1+', 'T3-'] 형식, 번호는 framework/thesis.md 에 있는 것만 {sorted(thesis_ids)}")
-    rv = r["reverses"]
-    if rv is not None:
-        if isinstance(rv, bool) or not isinstance(rv, int) or rv not in by_line: errors.append(f"{p}: reverses 는 장부의 기존 줄 번호(있는 줄: {sorted(by_line)[:3]}…{max(by_line, default=0)}) 또는 None")
-        else:
-            prev = by_line[rv]
-            print(f"번복 {p}: {rv}번 줄 [{prev['axis']}/{prev['theme']}] {prev['fact'][:70]}" + ("" if prev["theme"] == r["theme"] else f"  경고: 테마가 다름 ({prev['theme']} vs {r['theme']})"))
-    grams = lambda t: {t[i:i + 2] for t in [re.sub(r"[^가-힣a-z0-9]", "", t.lower())] for i in range(len(t) - 1)}
-    g = grams(r["fact"])
-    for d in recent:
-        if d["theme"] == r["theme"] and d["source"] != r["source"]:
-            h = grams(d["fact"]); j = len(g & h) / max(1, len(g | h))
-            if j >= 0.35: print(f"경고 유사 사건 {p}: {d['date']} 장부 행과 팩트 겹침 {j:.2f}. 같은 사건이면 ROWS 에서 뺀다: {d['fact'][:70]}")
-    key = (r["source"], r["theme"])
-    if key in seen: skipped.append(f"{p}: 이미 {seen[key]} 에 기록됨 ({r['theme']}, {r['source'][:70]})"); continue
-    seen[key] = DATE
-    todo.append({k: r[k] for k in KEYS})
-for s in skipped: print("skip 중복:", s)
-if errors: print("검증 실패. append 안 함:\n  " + "\n  ".join(errors)); sys.exit(1)
-
-if APPEND and todo:
-    ledger.parent.mkdir(exist_ok=True)
-    need_nl = ledger.exists() and ledger.stat().st_size > 0 and not ledger.read_bytes().endswith(b"\n")
-    with open(ledger, "a", encoding="utf-8") as f:
-        if need_nl: f.write("\n")
-        for r in todo: f.write(json.dumps(r, ensure_ascii=False) + "\n")
-    tail = [l for l in ledger.read_text(encoding="utf-8").split("\n") if l.strip()][-len(todo):]
-    assert [json.loads(l) for l in tail] == todo, "append 검증 실패"
-    print(f"appended {len(todo)} (ledger 총 {len(existing) + len(todo)}줄)")
-elif APPEND: print("appended 0")
-else: print(f"검증 통과 {len(todo)}건 (APPEND=False, 장부에는 아직 안 씀)")
-
-cut = today - datetime.timedelta(days=30)
-c = collections.defaultdict(collections.Counter)
-for d in existing + todo:
-    try: dd = datetime.date.fromisoformat(d["date"])
-    except ValueError: continue
-    if cut < dd <= today: c[d["axis"]][d["direction"]] += 1
-print("\n30일 누적")
-for a in AXES:
-    print(f"- {a}: {sum(c[a].values())}건 (+{c[a]['+']} / -{c[a]['-']} / ±{c[a]['±']})")
-EOF
+python3 fetch/ledger.py --ledger signals --date <날짜> --rows /tmp/rows.json
 ```
 
-## 5b. 기업 관찰 검증 + 30일 집계 (COMPANY_APPEND = False)
+행 하나의 형식 (JSON. `true`/`false`/`null`, 한국어 그대로):
 
-2b 의 후보를 `COMPANY_ROWS` 에 넣고 **`COMPANY_APPEND = False`인 채로** 실행한다. 0건이면 `COMPANY_ROWS = []` 로 실행해 집계만 받는다. 검증에 걸리면 고쳐서 다시 실행한다. `skip 중복`은 이미 장부에 있는 (기업, 출처) 조합이다.
+```json
+[
+  {"date": "<날짜>", "axis": "정치권력", "theme": "관세/리쇼어링",
+   "fact": "한 문장. 출처에 있는 내용만.", "source": "https://...",
+   "structural": true, "sectors": ["XLI", "CAT"], "direction": "+", "confidence": 0.6,
+   "note": "커짐. 왜 구조적인지 한 줄.",
+   "horizon": "1년", "impact": 2, "channel": "실적", "thesis": ["T4+"], "reverses": null}
+]
+```
+
+`skip 중복`이 찍힌 행은 이미 장부에 있는 사건이다. 표에는 남겨도 되지만 장부에는 안 올라간다. 마지막 채팅 요약에 적는다. `경고 유사 사건`이 찍히면 최근 7일 장부의 같은 테마 행과 팩트가 많이 겹치는 것이다. 같은 사건이면(출처 URL 이 달라도) 그 행을 빼고 다시 실행한다. 다른 사건이면 그대로 진행한다. `번복` 이 찍히면 참조한 줄이 맞는지 확인한다.
+
+## 5b. 기업 관찰 검증 + 30일 집계 (append 없이)
+
+2b 의 후보를 `/tmp/company_rows.json` 에 쓰고 **`--append` 없이** 실행한다. 0건이면 `[]` 로 실행해 집계만 받는다. 검증에 걸리면 고쳐서 다시 실행한다. `skip 중복`은 이미 장부에 있는 (기업, 출처) 조합이다. 하루 최대 3건은 이미 기록된 행까지 합쳐 센다.
 
 ```bash
-python3 - <<'EOF'
-import json, re, sys, datetime
-from pathlib import Path
+python3 fetch/ledger.py --ledger companies --date <날짜> --rows /tmp/company_rows.json
+```
 
-DATE = "<날짜>"
-COMPANY_APPEND = False   # 6단계에서 브리프를 쓴 뒤, 7단계에서 True 로 바꿔 같은 COMPANY_ROWS 로 다시 실행
-COMPANY_ROWS = [
-    # {"date": DATE, "company": "Google", "axis": "정치권력", "fact": "한 문장. 출처에 있는 내용만.", "source": "https://...",
-    #  "structural": False, "direction": "-", "confidence": 0.3, "note": "커짐. 왜 그런지 한 줄.", "tickers": ["GOOGL"]},
+```json
+[
+  {"date": "<날짜>", "company": "Google", "axis": "정치권력", "fact": "한 문장. 출처에 있는 내용만.", "source": "https://...",
+   "structural": false, "direction": "-", "confidence": 0.3, "note": "커짐. 왜 그런지 한 줄.", "tickers": ["GOOGL"]}
 ]
-
-if not Path("CLAUDE.md").exists(): sys.exit("레포 루트에서 실행해야 한다")
-try: today = datetime.date.fromisoformat(DATE)
-except ValueError: sys.exit(f"DATE 가 YYYY-MM-DD 가 아님: {DATE!r} (치환 누락?)")
-AXES = ("정치권력", "기술권력", "자본권력", "코인")
-KEYS = ["date", "company", "axis", "fact", "source", "structural", "direction", "confidence", "note", "tickers"]
-
-comp, name = {}, None   # companies.yaml → {기업: [티커]}
-for raw in Path("framework/companies.yaml").read_text(encoding="utf-8").split("\n"):
-    line = re.sub(r"\s#.*$|^#.*$", "", raw).rstrip()
-    if not line.strip(): continue
-    m = re.match(r"^(\S[^:]*):\s*$", line)
-    if m: name = m.group(1).strip(); comp[name] = []; continue
-    m = re.match(r"^\s+tickers:\s*\[(.*)\]\s*$", line)
-    if m and name: comp[name] = [t.strip().strip("'\"") for t in m.group(1).split(",") if t.strip()]
-assert comp, "companies.yaml 파싱 실패"
-all_tickers = set()
-for line in Path("framework/sector_map.yaml").read_text(encoding="utf-8").split("\n"):
-    m = re.match(r"^\s+tickers:\s*\[(.*?)\]", re.sub(r"\s#.*$|^#.*$", "", line))
-    if m: all_tickers.update(t.strip().strip("'\"") for t in m.group(1).split(",") if t.strip())
-
-ledger = Path("ledger/companies.jsonl")
-existing = []
-if ledger.exists():
-    for n, l in enumerate(ledger.read_text(encoding="utf-8").split("\n"), 1):
-        if not l.strip(): continue
-        try: existing.append(json.loads(l))
-        except json.JSONDecodeError as e: sys.exit(f"companies.jsonl {n}번째 줄 JSON 파싱 실패: {e}. 수정 금지. Ken 에게 알린다")
-seen = {(d["company"], d["source"]): d["date"] for d in existing}
-
-BAD = re.compile(r"사라(?![지진질져졌짐])|팔아라|지금이 기회|매수 추천|매도 추천|사야 한다|팔아야 한다")
-NOTE = re.compile(r"^(커짐|작아짐|유보)(?![가-힣])")
-URL = re.compile(r"^https?://[^\s/]+\.[^\s/]+\S*$")
-errors, todo, skipped, per_co = [], [], [], {}
-for i, r in enumerate(COMPANY_ROWS):
-    p = f"COMPANY_ROWS[{i}]"
-    if not isinstance(r, dict) or set(r) != set(KEYS):
-        errors.append(f"{p}: 키 구성이 스키마와 다름 {sorted(set(r) ^ set(KEYS)) if isinstance(r, dict) else type(r).__name__}"); continue
-    r = dict(r)
-    for k in ("date", "company", "axis", "fact", "source", "note"): r[k] = " ".join(str(r[k]).split())
-    if r["date"] != DATE: errors.append(f"{p}: date {r['date']!r} != DATE {DATE!r}")
-    if r["company"] not in comp: errors.append(f"{p}: company 는 companies.yaml 의 {sorted(comp)} 중 하나")
-    if r["axis"] not in AXES: errors.append(f"{p}: axis {r['axis']!r}")
-    if r["structural"] not in (True, False) or not isinstance(r["structural"], bool): errors.append(f"{p}: structural 은 True/False")
-    if r["direction"] not in ("+", "-", "±"): errors.append(f"{p}: direction 은 회사 기준 + / - / ±")
-    if r["confidence"] not in (0.3, 0.6, 0.8): errors.append(f"{p}: confidence 는 0.3 / 0.6 / 0.8")
-    elif r["structural"] is True and r["confidence"] < 0.6: errors.append(f"{p}: structural=true 는 확인 등급을 거쳐 0.6 이상")
-    if not URL.match(r["source"]): errors.append(f"{p}: source 가 URL 이 아님")
-    if not r["fact"]: errors.append(f"{p}: fact 비어 있음")
-    if not NOTE.match(r["note"]): errors.append(f"{p}: note 는 '커짐.'|'작아짐.'|'유보.' 로 시작해야 함")
-    t = r["tickers"]
-    if not isinstance(t, list) or len(set(t)) != len(t) or any(x not in all_tickers or x not in comp.get(r["company"], []) for x in t):
-        errors.append(f"{p}: tickers 는 companies.yaml 의 그 기업 티커만 ({comp.get(r['company'])})")
-    if BAD.search(r["fact"] + " " + r["note"]): errors.append(f"{p}: 매매 지시 표현 금지")
-    per_co[r["company"]] = per_co.get(r["company"], 0) + 1
-    if per_co[r["company"]] > 3: errors.append(f"{p}: {r['company']} 는 하루 최대 3건")
-    key = (r["company"], r["source"])
-    if key in seen: skipped.append(f"{p}: 이미 {seen[key]} 에 기록됨 ({r['company']}, {r['source'][:70]})"); continue
-    seen[key] = DATE
-    todo.append({k: r[k] for k in KEYS})
-for s in skipped: print("skip 중복:", s)
-if errors: print("기업 관찰 검증 실패. append 안 함:\n  " + "\n  ".join(errors)); sys.exit(1)
-
-if COMPANY_APPEND and todo:
-    ledger.parent.mkdir(exist_ok=True)
-    need_nl = ledger.exists() and ledger.stat().st_size > 0 and not ledger.read_bytes().endswith(b"\n")
-    with open(ledger, "a", encoding="utf-8") as f:
-        if need_nl: f.write("\n")
-        for r in todo: f.write(json.dumps(r, ensure_ascii=False) + "\n")
-    tail = [l for l in ledger.read_text(encoding="utf-8").split("\n") if l.strip()][-len(todo):]
-    assert [json.loads(l) for l in tail] == todo, "append 검증 실패"
-    print(f"companies appended {len(todo)} (companies.jsonl 총 {len(existing) + len(todo)}줄)")
-elif COMPANY_APPEND: print("companies appended 0")
-else: print(f"기업 관찰 검증 통과 {len(todo)}건 (COMPANY_APPEND=False, 장부에는 아직 안 씀)")
-
-cut = today - datetime.timedelta(days=30)
-print("\n기업 관찰 30일 누적 (구조적/전체)")
-for c in comp:
-    rows = [d for d in existing + todo if d["company"] == c and cut < datetime.date.fromisoformat(d["date"]) <= today]
-    print(f"- {c}: {sum(1 for d in rows if d['structural'])}/{len(rows)}건. " + ", ".join(f"{a} {sum(1 for d in rows if d['axis'] == a)}" for a in AXES))
-EOF
 ```
 
 ## 6. 브리프 작성
@@ -374,22 +173,26 @@ EOF
 
 템플릿 사용 규칙:
 - `오늘 구조적 시그널 없음` 줄은 structural=true가 0개일 때만 쓴다. 있으면 그 줄을 지운다.
-- 표 아래 "해석" 불릿은 표의 행마다 하나씩. 팩트 셀에 해석을 섞지 않기 위한 자리다(CLAUDE.md 규칙 2). structural=true 행은 불릿 끝에 `(기간 · 크기 · 경로 · 논지)` 를 괄호로 붙인다. 장부의 horizon·impact·channel·thesis 와 같은 값. 번복 행이면 `번복: 줄 n` 도 붙인다.
+- 표 아래 "해석" 불릿은 표의 행마다 하나씩. 팩트 셀에 해석을 섞지 않기 위한 자리다(CLAUDE.md 규칙 2). structural=true 행은 불릿 끝에 `(기간 · 크기 · 경로 · 논지)` 를 괄호로 붙인다. rows.json 의 horizon·impact·channel·thesis 와 같은 값. 번복 행이면 `번복: 줄 n` 도 붙인다.
 - "쉬운 말로"는 표의 행마다 하나씩, 무슨 일 / 왜 중요 / 누가 이득·손해 세 줄. 중학생이 읽는다고 생각하고 쓴다. 관세, ETF, 연준, 반독점 같은 용어는 처음 나올 때 괄호로 한 줄 풀이. 숫자는 출처 그대로 쓰고 환율 환산 같은 추정은 만들지 않는다.
 - "누가 유리하고 불리한가"는 시그널 표에 나온 티커만, 방향과 확신은 시그널 표와 같은 값. "무엇"은 티커의 쉬운 이름, "왜"는 한 줄. 매매 지시 표현 금지는 여기도 같다.
-- "기업 관찰" 표는 5b 의 COMPANY_ROWS 와 같은 값(기업, 축, 팩트, 구조적, 회사에=direction, 확신, 축은=note 첫 단어). 행이 없는 기업은 표 아래 "해당 없음: 기업명" 한 줄. 세 기업 모두 없으면 표 대신 "해당 없음: SpaceX, Google, Microsoft".
+- "기업 관찰" 표는 5b 의 company_rows.json 과 같은 값(기업, 축, 팩트, 구조적, 회사에=direction, 확신, 축은=note 첫 단어). 행이 없는 기업은 표 아래 "해당 없음: 기업명" 한 줄. 세 기업 모두 없으면 표 대신 "해당 없음: SpaceX, Google, Microsoft".
 - "버린 뉴스"는 축에 걸릴 듯했지만 버린 것만 최대 10줄. 이유 예: 발언만 있고 문서 없음 / 제안 단계 / 4축 어디에도 안 걸림 / 가격 등락 자체 / 같은 사건 중복 / 구조적이나 맵 영향 없음.
 - "논지 점검"은 thesis.md 번호로 쓴다. 오늘 시그널의 thesis 값을 모아 `T4+ 확인: 한 줄` 식으로 논지마다 한 줄. 없으면 "해당 없음". 논지 문장 자체는 고치지 않는다(Ken 이 /review 로 바꾼다).
 - "맵 수정 제안" 섹션은 제안이 있을 때만 쓴다. 없으면 섹션 자체를 생략한다.
 - 한국어. 티커·기관명은 영문 그대로. 형용사를 줄이고 숫자와 출처로 말한다. 팩트 셀에는 출처 URL 링크를 반드시 넣는다. 미국 시장 영향 기준. 한국 시장은 부수적으로만.
 
-## 7. 장부 append (APPEND = True)
+## 7. 장부 append (--append)
 
-브리프 파일을 쓴 다음, 5단계와 **같은 ROWS를 바꾸지 않고** `APPEND = True`로만 바꿔 같은 스크립트를 다시 실행한다. 출력에 `appended n`과 5단계와 같은 30일 누적 숫자가 나와야 한다. 다르면 멈추고 Ken에게 알린다.
-같은 방법으로 5b 스크립트를 **같은 COMPANY_ROWS 로** `COMPANY_APPEND = True` 로 다시 실행한다. `ledger/companies.jsonl` 도 이 스크립트로만 쓴다.
+브리프 파일을 쓴 다음, 5단계와 **같은 rows.json 을 바꾸지 않고** `--append` 를 붙여 다시 실행한다. 출력에 `appended n`과 5단계와 같은 30일 누적 숫자가 나와야 한다. 다르면 멈추고 Ken에게 알린다. 5b 도 같은 방법으로 `--append` 를 붙여 다시 실행한다.
+
+```bash
+python3 fetch/ledger.py --ledger signals   --date <날짜> --rows /tmp/rows.json --append
+python3 fetch/ledger.py --ledger companies --date <날짜> --rows /tmp/company_rows.json --append
+```
 
 장부 규칙:
-- `ledger/signals.jsonl`(5단계)과 `ledger/companies.jsonl`(5b단계)에 쓰는 유일한 수단은 각 스크립트다. Edit/Write 도구, Bash 리다이렉션(`>`, `>>`), `sed`, `tee`, 별도 python 등 다른 어떤 방법으로도 쓰지 않는다.
+- `ledger/signals.jsonl` 과 `ledger/companies.jsonl` 에 쓰는 유일한 수단은 `fetch/ledger.py --append` 다. Edit/Write 도구, Bash 리다이렉션(`>`, `>>`), `sed`, `tee`, 별도 python 등 다른 어떤 방법으로도 쓰지 않는다. rows 파일은 레포 밖(/tmp)에 두고 커밋하지 않는다.
 - 기존 줄은 어떤 이유로도 수정·삭제하지 않는다. 잘못 올라간 줄이 있으면 Ken에게 알리고 그대로 둔다.
 - 검증에 하나라도 걸리면 아무것도 append되지 않는다.
 
@@ -397,6 +200,6 @@ EOF
 
 - 표를 축·팩트 한 줄·구조적·티커로 요약해 보여준다.
 - "장부 추가 n건", "중복으로 건너뜀 n건", "논지 점검: 해당 없음 / T번호 확인·반증", 번복 행이 있으면 어느 줄을 뒤집었는지.
-- 수집 현황: 소스 6개 중 파일이 없거나 count 0인 소스가 있으면 이름을 적는다.
+- 수집 현황: `python3 fetch/fetch.py --list` 의 소스 중 파일이 없거나 count 0 이거나 error 필드가 있는 소스가 있으면 이름을 적는다.
 - "기업 관찰 n건(구조적 m건)", 기업별 한 줄.
 - 만든 파일 경로: `briefs/<날짜>.md`, 그리고 append가 있었으면 `ledger/signals.jsonl`, `ledger/companies.jsonl`.

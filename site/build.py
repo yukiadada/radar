@@ -4,7 +4,8 @@
   python3 site/build.py                     → site/out/index.html, site/out/data.json
   python3 site/build.py --date 2026-09-10   기준일 지정 (기본: 오늘, Asia/Seoul)
 
-표준 라이브러리만 쓴다. .github/workflows/pages.yml 이 main 에 push 될 때마다 실행해 GitHub Pages 로 올린다.
+표준 라이브러리만 쓴다 (framework/*.yaml 은 fetch/config.py 로 읽는다). .github/workflows/pages.yml 이 main 에 push 될 때마다 실행해 GitHub Pages 로 올린다.
+브리프 본문은 site/out/briefs/<날짜>.md 로 따로 내보내고 data.json 에는 메타만 둔다 (페이지가 보는 브리프만 받도록).
 집계 규칙은 .claude/commands/trend.md 의 스크립트와 같다 (30/90일 창, 30일 버킷, note 첫 단어 커짐/작아짐/유보, [충돌: A vs B], 티커 횟수를 섹터(테마)별로 묶기).
 """
 from __future__ import annotations
@@ -20,9 +21,11 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "fetch"))
+from config import AXES, load_companies  # noqa: E402
+
 SITE = ROOT / "site"
 OUT = SITE / "out"
-AXES = ("정치권력", "기술권력", "자본권력", "코인")
 GROW = re.compile(r"^(?:\[충돌:[^\]]*\]\s*)?(커짐|작아짐|유보)")
 CONF = re.compile(r"\[충돌:\s*(\S+)\s+vs\s+(\S+)\s*\]", re.I)
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -66,27 +69,35 @@ def d(s: str) -> datetime.date:
     return datetime.date.fromisoformat(s)
 
 
-def load_ledger() -> list[dict]:
+def grow(r: dict) -> str:
+    m = GROW.match(r.get("note", ""))
+    return m.group(1) if m else "미표기"
+
+
+def load_jsonl(path: Path) -> list[dict]:
+    """장부 한 줄 = JSON 하나. line(줄 번호)과 grow(note 첫 단어)를 붙인다. data.json 전용 파생 필드이며 장부 파일은 건드리지 않는다."""
     rows: list[dict] = []
-    p = ROOT / "ledger/signals.jsonl"
-    if not p.exists():
+    if not path.exists():
         return rows
-    for n, line in enumerate(p.read_text(encoding="utf-8").split("\n"), 1):
+    for n, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
         if not line.strip():
             continue
         try:
             r = json.loads(line)
             d(r["date"])
         except Exception as e:  # 장부는 수정 금지. 빌드만 멈춘다
-            sys.exit(f"ledger {n}번째 줄 파싱 실패: {e}")
+            sys.exit(f"{path.name} {n}번째 줄 파싱 실패: {e}")
         r["line"] = n
+        r["grow"] = grow(r)
         rows.append(r)
     return rows
 
 
-def grow(r: dict) -> str:
-    m = GROW.match(r.get("note", ""))
-    return m.group(1) if m else "미표기"
+def in_window(rows: list[dict], today: datetime.date, days: int) -> tuple[list[dict], dict]:
+    """최근 days 일 창: cut < date <= today. from 은 cut+1 (포함), to 는 today (포함)."""
+    cut = today - datetime.timedelta(days=days)
+    w = [r for r in rows if cut < d(r["date"]) <= today]
+    return w, {"days": days, "from": (cut + datetime.timedelta(days=1)).isoformat(), "to": today.isoformat()}
 
 
 def pair(m: re.Match) -> str:
@@ -94,8 +105,7 @@ def pair(m: re.Match) -> str:
 
 
 def window(rows: list[dict], today: datetime.date, days: int) -> dict:
-    cut = today - datetime.timedelta(days=days)
-    w = [r for r in rows if cut < d(r["date"]) <= today]
+    w, span = in_window(rows, today, days)
     axes = []
     for a in AXES:
         s = [r for r in w if r["axis"] == a]
@@ -114,12 +124,10 @@ def window(rows: list[dict], today: datetime.date, days: int) -> dict:
     hits = [(r, pair(m)) for r in w if (m := CONF.search(r.get("note", "")))]
     pairs = collections.Counter(p for _, p in hits)
     return {
-        "days": days, "from": (cut + datetime.timedelta(days=1)).isoformat(), "to": today.isoformat(),
+        **span,
         "total": len(w), "axes": axes,
         "tickers": tickers(w),
         "thesis": thesis_counts(w),
-        "reversals": [{"line": r["line"], "date": r["date"], "axis": r["axis"], "theme": r["theme"], "reverses": r["reverses"], "fact": r["fact"]}
-                      for r in w if r.get("reverses")],
         "conflicts": {
             "total": len(hits),
             "pairs": [{"pair": p, "count": c} for p, c in pairs.most_common()],
@@ -174,53 +182,32 @@ def buckets(rows: list[dict], today: datetime.date) -> list[dict]:
     return out
 
 
-def load_companies_cfg() -> list[dict]:
-    """framework/companies.yaml → [{name, source, query, tickers, note}]. 최소 파서."""
-    p = ROOT / "framework/companies.yaml"
-    out: list[dict] = []
-    if not p.exists():
-        return out
-    cur = None
-    for raw in p.read_text(encoding="utf-8").split("\n"):
-        line = re.sub(r"\s#.*$|^#.*$", "", raw).rstrip()
-        if not line.strip():
-            continue
-        m = re.match(r"^(\S[^:]*):\s*$", line)
-        if m:
-            cur = {"name": m.group(1).strip(), "source": "", "query": "", "tickers": [], "note": ""}
-            out.append(cur)
-            continue
-        m = re.match(r"^\s+(source|query|tickers|note):\s*(.*?)\s*$", line)
-        if m and cur is not None:
-            k, v = m.groups()
-            cur[k] = [t.strip().strip("'\"") for t in v.strip("[]").split(",") if t.strip()] if k == "tickers" else v
+def companies_cfg() -> list[dict]:
+    """framework/companies.yaml. 항목 오류는 경고만 하고 그 기업은 뺀다."""
+    try:
+        cfg = load_companies()
+    except ValueError as e:
+        print(f"경고 companies.yaml: {e}", file=sys.stderr)
+        return []
+    out = []
+    for c in cfg:
+        if c["error"]:
+            print(f"경고 companies.yaml {c['name']}: {c['error']} (사이트에서 제외)", file=sys.stderr)
+        else:
+            out.append({k: c[k] for k in ("name", "tickers", "note")})
     return out
 
 
-def load_company_rows() -> list[dict]:
-    rows: list[dict] = []
-    p = ROOT / "ledger/companies.jsonl"
-    if not p.exists():
-        return rows
-    for n, line in enumerate(p.read_text(encoding="utf-8").split("\n"), 1):
-        if not line.strip():
-            continue
-        try:
-            r = json.loads(line)
-            d(r["date"])
-        except Exception as e:
-            sys.exit(f"companies.jsonl {n}번째 줄 파싱 실패: {e}")
-        r["line"] = n
-        r["grow"] = grow(r)
-        rows.append(r)
-    return rows
-
-
 def companies_data(cfg: list[dict], rows: list[dict], today: datetime.date) -> dict:
-    """기업 × 축 매트릭스 (30/90일). count 는 전체, structural 은 true 만, grow/shrink 는 note 첫 단어."""
+    """기업 × 축 매트릭스 (30/90일). count 는 전체, structural 은 true 만, grow/shrink 는 note 첫 단어.
+    설정에 없는 기업의 행은 orphans 로 따로 세고 화면 합계에서 뺀다."""
+    names = {c["name"] for c in cfg}
+    orphans = sorted({r.get("company", "?") for r in rows if r.get("company") not in names})
+    if orphans:
+        print(f"경고 companies.jsonl: companies.yaml 에 없는 기업 {orphans} 의 행은 매트릭스에 나오지 않음", file=sys.stderr)
+
     def win(days: int) -> dict:
-        cut = today - datetime.timedelta(days=days)
-        w = [r for r in rows if cut < d(r["date"]) <= today]
+        w, span = in_window(rows, today, days)
         out = []
         for c in cfg:
             cr = [r for r in w if r.get("company") == c["name"]]
@@ -233,8 +220,8 @@ def companies_data(cfg: list[dict], rows: list[dict], today: datetime.date) -> d
             dc = collections.Counter(r.get("direction") for r in cr)
             out.append({"name": c["name"], "count": len(cr), "structural": sum(1 for r in cr if r.get("structural") is True),
                         "dir": {"+": dc["+"], "-": dc["-"], "±": dc["±"]}, "axes": cells})
-        return {"days": days, "from": (cut + datetime.timedelta(days=1)).isoformat(), "to": today.isoformat(), "total": len(w), "companies": out}
-    return {"config": cfg, "rows": rows, "w30": win(30), "w90": win(90)}
+        return {**span, "total": sum(c["count"] for c in out), "orphans": sum(1 for r in w if r.get("company") not in names), "companies": out}
+    return {"config": cfg, "rows": rows, "orphans": orphans, "w30": win(30), "w90": win(90)}
 
 
 def load_briefs() -> list[dict]:
@@ -243,7 +230,9 @@ def load_briefs() -> list[dict]:
         if not DATE_RE.match(p.stem):
             continue
         md = p.read_text(encoding="utf-8")
-        structural = sum(1 for l in md.split("\n") if l.startswith("|") and re.search(r"\|\s*true\s*\|", l))
+        # 구조적 건수는 "오늘의 축 시그널" 섹션의 표만 센다. "기업 관찰" 표에도 구조적 열이 있어 전체를 세면 부풀려진다
+        sec = re.search(r"^## 오늘의 축 시그널[^\n]*\n(.*?)(?=^## |\Z)", md, re.M | re.S)
+        structural = sum(1 for l in (sec.group(1) if sec else "").split("\n") if l.startswith("|") and re.search(r"\|\s*true\s*\|", l))
         m = re.search(r"^## (?:3~4년 논지 변화\?|논지 점검)[^\n]*\n+([^\n]+)", md, re.M)
         thesis = m.group(1).strip() if m else "확인 안 됨"
         out.append({"date": p.stem, "md": md, "structural": structural, "thesis": thesis,
@@ -275,14 +264,12 @@ def main(argv=None) -> int:
     now = datetime.datetime.now(ZoneInfo("Asia/Seoul"))
     today = d(args.date) if args.date else now.date()
 
-    rows = load_ledger()
-    for r in rows:
-        r["grow"] = grow(r)  # data.json 전용 파생 필드. 장부 파일은 건드리지 않는다
+    rows = load_jsonl(ROOT / "ledger/signals.jsonl")
     briefs = load_briefs()
     data = {
         "generated_at": now.replace(microsecond=0).isoformat(),
         "today": today.isoformat(),
-        "briefs": briefs,
+        "briefs": [{k: v for k, v in b.items() if k != "md"} for b in briefs],
         "ledger": rows,
         "trend": {"w30": window(rows, today, 30), "w90": window(rows, today, 90), "buckets": buckets(rows, today)},
         "framework": {
@@ -293,10 +280,13 @@ def main(argv=None) -> int:
         "raw": load_raw(),
         "axes": list(AXES),
         "theses": load_theses(),
-        "companies": companies_data(load_companies_cfg(), load_company_rows(), today),
+        "companies": companies_data(companies_cfg(), load_jsonl(ROOT / "ledger/companies.jsonl"), today),
     }
 
     OUT.mkdir(parents=True, exist_ok=True)
+    (OUT / "briefs").mkdir(exist_ok=True)
+    for b in briefs:
+        (OUT / "briefs" / f"{b['date']}.md").write_text(b["md"], encoding="utf-8")
     (OUT / "data.json").write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     shutil.copyfile(SITE / "index.html", OUT / "index.html")
     (OUT / ".nojekyll").write_text("", encoding="utf-8")
