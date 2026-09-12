@@ -61,6 +61,24 @@ for days in (30, 90):
         conf = f"{sum(r['confidence'] for r in s) / len(s):.2f}" if s else "-"
         miss = f" (미표기 {g['미표기']})" if g["미표기"] else ""
         print(f"| {a} | {len(s)} | {pct(len(s), len(w))} | {g['커짐']} | {g['작아짐']} | {g['유보']}{miss} | {dc['+']}/{dc['-']}/{dc['±']} | {conf} | {fmt(th, 3)} | {fmt(sc, 5)} |")
+    # 티커 집계: 같은 섹터(테마)끼리 묶는다. 한 시그널에 같은 티커가 두 번 있어도 1회. 방향은 그 시그널의 direction
+    sec, tot, themes_of = {}, {}, collections.defaultdict(collections.Counter)
+    for r in w:
+        s = sec.setdefault((r["axis"], r["theme"]), [0, {}]); s[0] += 1
+        for t in dict.fromkeys(r.get("sectors", [])):
+            for slot in (s[1].setdefault(t, collections.Counter()), tot.setdefault(t, collections.Counter())):
+                slot["n"] += 1; slot[r.get("direction", "?")] += 1
+            themes_of[t][r["theme"]] += 1
+    print(f"\n### 티커 집계 (최근 {days}일, 같은 섹터끼리 묶음. 한 시그널에 같은 티커는 1회)")
+    print("| 축 | 섹터(테마) | 시그널 | 티커: 횟수 (+/-/±) |")
+    print("|---|---|---|---|")
+    for (a, th), (n, tk) in sorted(sec.items(), key=lambda x: (-x[1][0], -sum(c["n"] for c in x[1][1].values()), AXES.index(x[0][0]) if x[0][0] in AXES else 99, x[0][1])):
+        cell = ", ".join(f"{t} {c['n']} ({c['+']}/{c['-']}/{c['±']})" for t, c in sorted(tk.items(), key=lambda x: (-x[1]["n"], x[0])))
+        print(f"| {a} | {th} | {n} | {cell or '-'} |")
+    if not sec: print("| - | - | 0 | - |")
+    print("- 티커별 합계 (섹터 무관): " + (", ".join(f"{t}({c['n']})" for t, c in sorted(tot.items(), key=lambda x: (-x[1]["n"], x[0]))) or "없음"))
+    multi = [(t, list(c)) for t, c in themes_of.items() if len(c) > 1]
+    if multi: print("- 두 섹터 이상에서 나온 티커: " + ", ".join(f"{t} ({', '.join(ths)})" for t, ths in sorted(multi)))
 
 lines30 = {r["_line"] for r in windows[30]}
 hits = [(r, pair(m)) for r in windows[90] if (m := CONF.search(r.get("note", "")))]
@@ -112,6 +130,7 @@ EOF
 - 어느 축이든 표본이 3건 미만이면 그 축은 "표본 부족"이라고 쓰고 방향을 단정하지 않는다.
 - 축 간 충돌: 스크립트가 `← 반복`으로 표시한 조합(90일 2건 이상)은 별도 항목으로 쓴다. 누가 이겼는지는 각 note에 적힌 내용만 인용한다. 추정하지 않는다.
 - 자주 등장하는 섹터는 축별 상위 섹터 열을 그대로 옮긴다.
+- 티커 집계 표는 스크립트 출력을 그대로 옮긴다. "두 섹터 이상에서 나온 티커"가 있으면 그 티커가 어느 섹터들에서 나왔는지 한 줄로 밝힌다. 횟수는 언급 횟수이지 강도가 아니다.
 - 맵 수정 제안 등장 횟수는 대문자 토큰 집계라서 티커가 아닌 것이 섞인다. 티커로 보이는 것만 남기고 3회 이상이면 Ken에게 추가 검토를 제안한다.
 - 매매 표현 금지. 영향은 "~라는 가설"로 쓴다. 미국 시장 기준.
 
@@ -121,10 +140,10 @@ EOF
 # 트렌드 (기준일 <기준일>)
 
 ## 최근 30일
-(스크립트 표 그대로)
+(스크립트 표 그대로. 축 표 다음에 "티커 집계" 표와 티커별 합계 줄)
 
 ## 최근 90일
-(스크립트 표 그대로)
+(스크립트 표 그대로. 위와 같은 구성)
 
 ## 30일 단위 추이
 (스크립트 표 그대로)

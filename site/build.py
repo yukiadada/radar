@@ -5,7 +5,7 @@
   python3 site/build.py --date 2026-09-10   기준일 지정 (기본: 오늘, Asia/Seoul)
 
 표준 라이브러리만 쓴다. .github/workflows/pages.yml 이 main 에 push 될 때마다 실행해 GitHub Pages 로 올린다.
-집계 규칙은 .claude/commands/trend.md 의 스크립트와 같다 (30/90일 창, 30일 버킷, note 첫 단어 커짐/작아짐/유보, [충돌: A vs B]).
+집계 규칙은 .claude/commands/trend.md 의 스크립트와 같다 (30/90일 창, 30일 버킷, note 첫 단어 커짐/작아짐/유보, [충돌: A vs B], 티커 횟수를 섹터(테마)별로 묶기).
 """
 from __future__ import annotations
 
@@ -80,6 +80,7 @@ def window(rows: list[dict], today: datetime.date, days: int) -> dict:
     return {
         "days": days, "from": (cut + datetime.timedelta(days=1)).isoformat(), "to": today.isoformat(),
         "total": len(w), "axes": axes,
+        "tickers": tickers(w),
         "conflicts": {
             "total": len(hits),
             "pairs": [{"pair": p, "count": c} for p, c in pairs.most_common()],
@@ -88,6 +89,36 @@ def window(rows: list[dict], today: datetime.date, days: int) -> dict:
                      for r, p in sorted(hits, key=lambda x: x[0]["date"])],
         },
     }
+
+
+def _slot(t: str) -> dict:
+    return {"ticker": t, "n": 0, "dir": {"+": 0, "-": 0, "±": 0}}
+
+
+def tickers(w: list[dict]) -> dict:
+    """시그널에 언급된 티커 횟수. 같은 섹터(테마)끼리 묶고 티커별 합계도 따로 낸다.
+    한 시그널에 같은 티커가 두 번 있어도 1회. 방향은 그 시그널의 direction 을 티커마다 센다."""
+    sectors: dict[tuple, dict] = {}
+    totals: dict[str, dict] = {}
+    themes_of: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
+    for r in w:
+        s = sectors.setdefault((r["axis"], r["theme"]), {"axis": r["axis"], "theme": r["theme"], "signals": 0, "mentions": 0, "tickers": {}})
+        s["signals"] += 1
+        for t in dict.fromkeys(r.get("sectors", [])):
+            for slot in (s["tickers"].setdefault(t, _slot(t)), totals.setdefault(t, _slot(t))):
+                slot["n"] += 1
+                if r.get("direction") in slot["dir"]:
+                    slot["dir"][r["direction"]] += 1
+            s["mentions"] += 1
+            themes_of[t][r["theme"]] += 1
+    by_n = lambda x: (-x["n"], x["ticker"])
+    by_sector = sorted(sectors.values(), key=lambda s: (-s["signals"], -s["mentions"], AXES.index(s["axis"]) if s["axis"] in AXES else 99, s["theme"]))
+    for s in by_sector:
+        s["tickers"] = sorted(s["tickers"].values(), key=by_n)
+    by_ticker = sorted(totals.values(), key=by_n)
+    for t in by_ticker:
+        t["themes"] = [th for th, _ in themes_of[t["ticker"]].most_common()]
+    return {"by_sector": by_sector, "by_ticker": by_ticker}
 
 
 def buckets(rows: list[dict], today: datetime.date) -> list[dict]:

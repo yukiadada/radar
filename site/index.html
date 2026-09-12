@@ -125,6 +125,17 @@ input[type=search]{min-width:200px}
 .st.yes{background:var(--ink);color:var(--ground);border-color:var(--ink)}
 .st.no{color:var(--ink2)}
 .md table td{vertical-align:top}
+/* 티커 집계 */
+h3.sub{font-size:14px;font-weight:600;margin:24px 0 8px}
+h3.sub .dim{font-weight:400;font-size:13px}
+.chips{display:flex;flex-wrap:wrap;gap:6px 8px;margin:0}
+.chip{display:inline-flex;align-items:center;gap:7px;padding:2px 10px;border:1px solid var(--hair);border-radius:999px;font-size:13px;font-weight:500;white-space:nowrap;background:var(--ground)}
+.chip b{font-weight:600;font-variant-numeric:tabular-nums}
+.chip .dir{font-size:12px;font-weight:400;color:var(--ink2);gap:2px}
+.chip .dir i{width:auto}
+table.tickers{min-width:600px}
+td.chips-cell{padding-top:6px;padding-bottom:6px}
+p.multi{font-size:13px;color:var(--ink2);margin:8px 0 0}
 pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.6;background:var(--wash);padding:16px 18px;border-radius:8px;overflow-x:auto;color:var(--ink)}
 </style>
 </head>
@@ -196,7 +207,9 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
   function md(text) {
     const el = document.createElement('div');
     el.className = 'md';
-    el.innerHTML = marked.parse(text, { gfm: true, breaks: false });
+    // 브리프는 "3.50~3.75%", "9/15~16" 처럼 물결표를 범위로 쓴다. GFM 은 ~ 두 개를 취소선으로 읽으므로 코드 스팬 밖의 ~ 를 엔티티로 바꾼다
+    const safe = text.split(/(`[^`]*`)/).map((seg, i) => i % 2 ? seg : seg.replace(/~/g, '&#126;')).join('');
+    el.innerHTML = marked.parse(safe, { gfm: true, breaks: false });
     el.querySelectorAll('table').forEach(t => { const w = document.createElement('div'); w.className = 'tbl'; t.parentNode.insertBefore(w, t); w.appendChild(t); });
     el.querySelectorAll('a[href^="http"]').forEach(a => { a.target = '_blank'; a.rel = 'noopener'; });
     return el;
@@ -228,6 +241,24 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     return `<div class="tbl wide"><table><thead><tr><th>축</th><th class="num">건수</th><th class="num">비중</th><th class="num">커짐</th><th class="num">작아짐</th><th class="num">유보</th><th class="num">섹터 유리/불리/양쪽</th><th class="num">평균 확신</th><th>상위 테마</th><th>상위 섹터</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
 
+  /* 티커 집계: 같은 섹터(테마)끼리 묶은 표 + 티커별 합계 */
+  function tickerChip(t) {
+    const dirs = Object.entries(t.dir).filter(([, n]) => n).map(([k, n]) => { const d = DIR[k]; return `<span class="dir ${d[0]}" title="${d[2]} ${n}건"><i>${d[1]}</i>${n}</span>`; }).join('');
+    return `<span class="chip" title="${esc(t.ticker)} 언급 ${t.n}회">${esc(t.ticker)} <b>${t.n}</b>${dirs}</span>`;
+  }
+  function tickerTable(win, limit) {
+    const tk = win.tickers;
+    if (!tk || !tk.by_ticker.length) return `<p class="empty">언급된 티커가 없습니다.</p>`;
+    const secs = limit ? tk.by_sector.slice(0, limit) : tk.by_sector;
+    let h = `<div class="tbl"><table class="tickers"><thead><tr><th>축</th><th>섹터 (테마)</th><th class="num">시그널</th><th>티커, 언급 횟수, 방향</th></tr></thead><tbody>` +
+      secs.map(s => `<tr><td class="nowrap">${esc(s.axis)}</td><td class="nowrap">${esc(s.theme)}</td><td class="num">${s.signals}</td><td class="chips-cell"><div class="chips">${s.tickers.map(tickerChip).join('')}</div></td></tr>`).join('') + `</tbody></table></div>`;
+    if (limit && tk.by_sector.length > limit) h += `<p class="multi">섹터 ${tk.by_sector.length - limit}개 더 있음. <a href="#/trend">트렌드</a>에서 전체</p>`;
+    h += `<h3 class="sub">티커별 합계 <span class="dim">섹터 무관, 많이 나온 순</span></h3><div class="chips">${tk.by_ticker.slice(0, 20).map(tickerChip).join('')}</div>`;
+    const multi = tk.by_ticker.filter(t => t.themes.length > 1);
+    if (multi.length) h += `<p class="multi">두 섹터 이상에서 나온 티커: ${multi.map(t => `${esc(t.ticker)} (${t.themes.map(esc).join(', ')})`).join(', ')}</p>`;
+    return h;
+  }
+
   function rawLine(date) {
     const day = D.raw[date];
     if (!day) return '';
@@ -244,6 +275,7 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     let h = `<p class="dateline">${fmtDate(D.today)}</p><p class="hero-sub">${bits.join(', ')}</p>`;
     h += scaleChart(w, `최근 30일, ${w.from}부터 ${w.to}까지`);
     if (!D.ledger.length) h += `<p class="empty">장부가 비어 있습니다. /brief 를 실행하고 push 하면 여기에 쌓입니다.</p>`;
+    if (w.tickers && w.tickers.by_ticker.length) h += `<h2 class="sec">30일 티커 집계 <span class="dim">시그널에서 언급된 횟수, 같은 섹터끼리 묶음</span></h2>` + tickerTable(w, 6);
     if (b) h += `<h2 class="sec">${b.date === D.today ? '오늘의 브리프' : '최근 브리프'} <span class="dim">${b.date}</span></h2><div id="brief"></div>`;
     else h += `<h2 class="sec">브리프</h2><p class="empty">아직 브리프가 없습니다.</p>`;
     if (D.briefs.length > 1) {
@@ -274,6 +306,7 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
       h += `<h2 class="sec">최근 ${w.days}일 <span class="dim">${w.from}부터 ${w.to}까지, ${w.total}건</span></h2>`;
       h += scaleChart(w, `최근 ${w.days}일`);
       h += axisTable(w);
+      h += `<h3 class="sub">티커 집계 <span class="dim">같은 섹터(테마)끼리 묶음. 한 시그널에 같은 티커는 1회, 방향은 그 시그널의 방향</span></h3>` + tickerTable(w);
     }
     h += `<h2 class="sec">30일 단위 추이 <span class="dim">최근에서 과거로, 건수 (커짐/작아짐)</span></h2><div class="tbl"><table><thead><tr><th>축</th>` +
       t.buckets.map(b => `<th class="num">${b.label}<br><span class="dim">${b.from} ~ ${b.to}</span></th>`).join('') + `</tr></thead><tbody>` +
