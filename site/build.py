@@ -174,6 +174,8 @@ def main(argv=None) -> int:
     today = d(args.date) if args.date else now.date()
 
     rows = load_ledger()
+    for r in rows:
+        r["grow"] = grow(r)  # data.json 전용 파생 필드. 장부 파일은 건드리지 않는다
     briefs = load_briefs()
     data = {
         "generated_at": now.replace(microsecond=0).isoformat(),
