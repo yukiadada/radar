@@ -170,7 +170,6 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 
 **미완료 항목:**
 - 9/13 06:20 KST 루틴이 새 절차(fetch/ledger.py --append, 기업 관찰 2b/5b)로 사람 개입 없이 끝나는지 확인. 루틴 로그 claude.ai/code/routines/trig_01564MDnvQH3DtPRvCiqfaDY
-- SpaceX 상장(SPCX) 반영: companies.yaml 티커와 sector_map.yaml "우주/위성 [SPCX]" 테마는 Ken 확인 필요. 원치 않으면 되돌림
 - 첫 /review 는 10월 초 (9월 backdrop.md 행 + 확인 대기 점검). thesis.md 상태 변경은 Ken 승인 후에만
 - Ken: claude.ai/code Default 환경 네트워크 접근 확대 (WebFetch EGRESS_BLOCKED 해제 시 1차 출처 본문 확인 가능)
 - 9/11 장부 4번째 줄은 구 규칙(검색 교차만으로 0.6). 1~6번 줄에는 새 필드 없음. append only 라 유지
