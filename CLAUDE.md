@@ -13,7 +13,7 @@
 
 1. 모든 뉴스는 `framework/axes.md`의 4축 중 하나로 분류한다. 어느 축에도 안 걸리면 버린다.
 2. 팩트 / 해석 / 영향 섹터를 항상 분리해서 쓴다. 섞지 않는다.
-3. 모든 시그널에 `structural: true|false` 태그를 단다. **장부(`ledger/`)에는 structural=true만 올린다.**
+3. 모든 시그널에 `structural: true|false` 태그를 단다. **4축 장부(`ledger/signals.jsonl`)에는 structural=true만 올린다.** 기업 관찰 장부(`ledger/companies.jsonl`)는 예외로 false 도 태그를 달아 올리되, 집계는 true 를 따로 센다.
 4. 영향 티커는 `framework/sector_map.yaml`에 있는 것만 인용한다. 목록에 없는 티커가 필요하면 브리프 하단 "맵 수정 제안"에만 적고 장부에는 넣지 않는다.
 5. 출처 URL이 없는 팩트는 쓰지 않는다. 기억이나 추정으로 팩트를 만들지 않는다.
 6. "사라", "팔아라", "지금이 기회" 류 표현 금지. 영향은 항상 "가설"로 서술한다.
@@ -28,10 +28,12 @@ framework/axes.md          4축 정의, "커진다/작아진다" 판단 기준
 framework/sector_map.yaml  축 → 테마 → ETF/티커 매핑 (Ken이 큐레이션)
 framework/thesis.md        3~5년 논지 T1… 와 확인·반증 신호 (Ken이 큐레이션. /review 가 상태 변경 제안)
 framework/backdrop.md      월 1회 배경 지표 (실질금리·신용·EPS·P/E). /review 가 출처와 함께 채움
+framework/companies.yaml   기업 관찰 대상 (SpaceX·Google·Microsoft)의 검색어·티커 (Ken이 큐레이션)
 fetch/                     수집 스크립트 (python)
 raw/YYYY-MM-DD/            당일 수집 원문. 비공개 저장소 radar-raw 에만 커밋 (여기서는 git 미추적)
 briefs/YYYY-MM-DD.md       일간 브리프
 ledger/signals.jsonl       구조적 시그널 누적 장부 (append only, 수정 금지)
+ledger/companies.jsonl     기업 관찰 장부. 기업 뉴스가 4축에 미치는 영향 (append only, structural 태그로 true/false 둘 다)
 .claude/commands/          /brief, /trend, /review
 logs/                      세션 로그 (/save 가 만듦, git 미추적)
 site/                      웹페이지. build.py 가 briefs·ledger·framework 를 site/out/ 로 빌드, index.html 이 렌더
@@ -49,6 +51,7 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 4. `briefs/오늘.md` 작성 (아래 템플릿).
 5. structural=true 시그널만 `ledger/signals.jsonl`에 append.
 6. "논지 점검" 섹션: 오늘 시그널이 `framework/thesis.md`의 어느 논지를 확인·반증하는지 번호로 한 줄씩. 대부분 "해당 없음"이어야 정상. 논지 자체는 고치지 않는다. (템플릿 순서상 "맵 수정 제안"이 그 뒤에 온다)
+7. 기업 관찰: `framework/companies.yaml`의 기업마다 4축에 영향을 주는 뉴스를 하루 최대 3건 골라 "기업 관찰" 표에 쓰고 `ledger/companies.jsonl`에 append. 방향은 회사 기준, 커짐/작아짐은 축 기준.
 
 ### /trend (주 1회 또는 요청 시)
 1. `ledger/signals.jsonl`에서 최근 30일 / 90일을 읽는다.
@@ -98,6 +101,17 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 - `reverses`: 이전 시그널을 뒤집는 행이면 그 줄 번호, 아니면 null. 장부는 수정하지 않으므로 번복은 새 행으로 남긴다.
 - 2026-09-12 이전 줄에는 뒤의 다섯 필드가 없다. 집계는 없는 값을 "미표기"로 다루고 가중 1로 센다.
 
+## 기업 관찰 스키마 (ledger/companies.jsonl 한 줄)
+
+```json
+{"date": "2026-09-13", "company": "Google", "axis": "정치권력", "fact": "한 문장. 출처에 있는 내용만.", "source": "https://...", "structural": false, "direction": "-", "confidence": 0.3, "note": "커짐. 왜 그런지 한 줄.", "tickers": ["GOOGL"]}
+```
+
+- `company`: companies.yaml 의 키. `axis`: 그 뉴스가 건드리는 축 하나.
+- `direction`: **회사에** + / - / ±. `note` 첫 단어 커짐/작아짐/유보는 **그 축**이 그 뉴스로 커지는지.
+- `tickers`: companies.yaml 의 그 기업 티커만. SpaceX 는 비상장이라 `[]`.
+- 기업당 하루 최대 3건. 중복 키는 (company, source).
+
 ## 일간 브리프 템플릿
 
 ```markdown
@@ -118,6 +132,12 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 ## 누가 유리하고 불리한가
 | 티커 | 무엇 | 방향 | 확신 | 왜 |
 |---|---|---|---|---|
+
+## 기업 관찰 (SpaceX · Google · Microsoft)
+| 기업 | 축 | 팩트 (출처) | 구조적 | 회사에 | 확신 | 축은 |
+|---|---|---|---|---|---|---|
+
+해당 없음: (뉴스 없는 기업)
 
 ## 버린 뉴스 (한 줄씩, 왜 버렸는지)
 

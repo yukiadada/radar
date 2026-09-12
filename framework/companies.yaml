@@ -1,0 +1,18 @@
+# 기업 관찰 대상. 이 기업들의 뉴스가 4축(정치권력·기술권력·자본권력·코인)에 미치는 영향을 기업 단위로 본다. Ken 이 큐레이션.
+# source 는 fetch.py 가 만드는 raw 파일 이름(gnews_ 로 시작해야 제목 중복 제거가 걸린다), query 는 Google News 검색어.
+# tickers 는 sector_map.yaml 에 있는 것만. 비상장이면 [].
+SpaceX:
+  source: gnews_co_spacex
+  query: SpaceX OR Starlink
+  tickers: []
+  note: 비상장. 정부 계약·규제·행정부와의 관계(정치권력), 위성·발사·AI 인프라(기술권력), 사모 밸류에이션·IPO·텐더(자본권력), 재무제표 코인 보유(코인)
+Google:
+  source: gnews_co_google
+  query: Google OR Alphabet
+  tickers: [GOOGL]
+  note: 반독점·규제(정치권력), capex·AI 모델·클라우드(기술권력), 회사채·자사주·밸류에이션(자본권력), 클라우드 블록체인·스테이블코인 결제(코인)
+Microsoft:
+  source: gnews_co_microsoft
+  query: Microsoft
+  tickers: [MSFT]
+  note: 정부 클라우드·EU 규제(정치권력), OpenAI·capex·Copilot(기술권력), 회사채·배당·밸류에이션(자본권력), 주주 코인 보유 안건·결제(코인)

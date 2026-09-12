@@ -174,6 +174,69 @@ def buckets(rows: list[dict], today: datetime.date) -> list[dict]:
     return out
 
 
+def load_companies_cfg() -> list[dict]:
+    """framework/companies.yaml → [{name, source, query, tickers, note}]. 최소 파서."""
+    p = ROOT / "framework/companies.yaml"
+    out: list[dict] = []
+    if not p.exists():
+        return out
+    cur = None
+    for raw in p.read_text(encoding="utf-8").split("\n"):
+        line = re.sub(r"\s#.*$|^#.*$", "", raw).rstrip()
+        if not line.strip():
+            continue
+        m = re.match(r"^(\S[^:]*):\s*$", line)
+        if m:
+            cur = {"name": m.group(1).strip(), "source": "", "query": "", "tickers": [], "note": ""}
+            out.append(cur)
+            continue
+        m = re.match(r"^\s+(source|query|tickers|note):\s*(.*?)\s*$", line)
+        if m and cur is not None:
+            k, v = m.groups()
+            cur[k] = [t.strip().strip("'\"") for t in v.strip("[]").split(",") if t.strip()] if k == "tickers" else v
+    return out
+
+
+def load_company_rows() -> list[dict]:
+    rows: list[dict] = []
+    p = ROOT / "ledger/companies.jsonl"
+    if not p.exists():
+        return rows
+    for n, line in enumerate(p.read_text(encoding="utf-8").split("\n"), 1):
+        if not line.strip():
+            continue
+        try:
+            r = json.loads(line)
+            d(r["date"])
+        except Exception as e:
+            sys.exit(f"companies.jsonl {n}번째 줄 파싱 실패: {e}")
+        r["line"] = n
+        r["grow"] = grow(r)
+        rows.append(r)
+    return rows
+
+
+def companies_data(cfg: list[dict], rows: list[dict], today: datetime.date) -> dict:
+    """기업 × 축 매트릭스 (30/90일). count 는 전체, structural 은 true 만, grow/shrink 는 note 첫 단어."""
+    def win(days: int) -> dict:
+        cut = today - datetime.timedelta(days=days)
+        w = [r for r in rows if cut < d(r["date"]) <= today]
+        out = []
+        for c in cfg:
+            cr = [r for r in w if r.get("company") == c["name"]]
+            cells = []
+            for a in AXES:
+                s = [r for r in cr if r.get("axis") == a]
+                g = collections.Counter(grow(r) for r in s)
+                cells.append({"axis": a, "count": len(s), "structural": sum(1 for r in s if r.get("structural") is True),
+                              "grow": g["커짐"], "shrink": g["작아짐"], "hold": g["유보"]})
+            dc = collections.Counter(r.get("direction") for r in cr)
+            out.append({"name": c["name"], "count": len(cr), "structural": sum(1 for r in cr if r.get("structural") is True),
+                        "dir": {"+": dc["+"], "-": dc["-"], "±": dc["±"]}, "axes": cells})
+        return {"days": days, "from": (cut + datetime.timedelta(days=1)).isoformat(), "to": today.isoformat(), "total": len(w), "companies": out}
+    return {"config": cfg, "rows": rows, "w30": win(30), "w90": win(90)}
+
+
 def load_briefs() -> list[dict]:
     out = []
     for p in sorted((ROOT / "briefs").glob("*.md"), reverse=True):
@@ -230,13 +293,14 @@ def main(argv=None) -> int:
         "raw": load_raw(),
         "axes": list(AXES),
         "theses": load_theses(),
+        "companies": companies_data(load_companies_cfg(), load_company_rows(), today),
     }
 
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "data.json").write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     shutil.copyfile(SITE / "index.html", OUT / "index.html")
     (OUT / ".nojekyll").write_text("", encoding="utf-8")
-    print(f"built site/out: briefs {len(briefs)}, ledger {len(rows)}, today {today}, "
+    print(f"built site/out: briefs {len(briefs)}, ledger {len(rows)}, companies {len(data['companies']['rows'])}, today {today}, "
           f"30d {data['trend']['w30']['total']} / 90d {data['trend']['w90']['total']}")
     return 0
 

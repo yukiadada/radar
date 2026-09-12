@@ -8,6 +8,7 @@
   gnews_fed_rate            Google News RSS 검색 "Fed rate"
   gnews_big_tech_antitrust  Google News RSS 검색 "Big Tech antitrust"
   gnews_bitcoin_etf         Google News RSS 검색 "bitcoin ETF"
+  gnews_co_*                framework/companies.yaml 의 기업별 Google News RSS 검색 (SpaceX, Google, Microsoft)
 
 출력: raw/YYYY-MM-DD/{source}.json
   {
@@ -72,6 +73,39 @@ GNEWS_QUERIES = {
     "gnews_big_tech_antitrust": "Big Tech antitrust",
     "gnews_bitcoin_etf": "bitcoin ETF",
 }
+COMPANIES_YAML = Path(__file__).resolve().parent.parent / "framework/companies.yaml"
+
+
+def company_queries() -> dict[str, str]:
+    """framework/companies.yaml 의 source/query 쌍. 최소 파서(최상위 키, 들여쓰기 키: 값). 파일이 없으면 빈 dict."""
+    out: dict[str, str] = {}
+    if not COMPANIES_YAML.exists():
+        return out
+    src = query = None
+    for raw in COMPANIES_YAML.read_text(encoding="utf-8").split("\n"):
+        line = re.sub(r"\s#.*$|^#.*$", "", raw).rstrip()
+        if not line.strip():
+            continue
+        if re.match(r"^\S", line):
+            if src and query:
+                out[src] = query
+            src = query = None
+            continue
+        m = re.match(r"^\s+(source|query):\s*(.+?)\s*$", line)
+        if m:
+            if m.group(1) == "source":
+                src = m.group(2)
+            else:
+                query = m.group(2)
+    if src and query:
+        out[src] = query
+    bad = [k for k in out if not re.fullmatch(r"gnews_co_[a-z0-9_]+", k)]
+    if bad:
+        raise SystemExit(f"companies.yaml source 이름은 gnews_co_<이름> 형식이어야 한다: {bad}")
+    return out
+
+
+GNEWS_QUERIES.update(company_queries())
 SOURCE_NAMES = ["federal_register", "fed_press", *GNEWS_QUERIES]
 FR_FEED_CAP = 200
 
