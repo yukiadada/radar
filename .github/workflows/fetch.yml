@@ -1,12 +1,13 @@
 name: Fetch raw feeds
 
-# 매일 05:30 KST(20:30 UTC)에 6개 소스를 수집해 비공개 저장소 radar-raw 의 raw/<KST 날짜>/ 에 커밋한다.
-# 06:20 KST 클라우드 루틴이 그 커밋을 읽어 브리프를 쓴다. 정각(:00)은 GitHub 스케줄 지연이 잦아 30분 앞에 둔다.
+# 매일 04:30 KST(19:30 UTC) 예약으로 6개 소스를 수집해 비공개 저장소 radar-raw 의 raw/<KST 날짜>/ 에 커밋한다.
+# GitHub 예약 실행은 1~2시간 늦거나 빠질 수 있다(9/12 첫 실행이 2시간 11분 지연). 그래서 06:20 KST 클라우드 루틴은
+# raw 가 없으면 이 워크플로를 workflow_dispatch 로 직접 실행하고 기다린다. 예약은 백업이다.
 # 공개 저장소(여기)에는 raw 를 남기지 않는다. radar-raw 의 오늘 폴더를 먼저 받아 그 위에서 fetch.py 를 실행하므로
 # 같은 날 다시 돌려도 실패한 소스는 이전 정상 파일이 유지된다.
 on:
   schedule:
-    - cron: "30 20 * * *"
+    - cron: "30 19 * * *"
   workflow_dispatch:
 
 permissions:
