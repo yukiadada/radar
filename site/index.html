@@ -132,6 +132,9 @@ input[type=search]{min-width:200px}
 .seg a{padding:4px 13px;border:1px solid var(--hair);border-radius:999px;text-decoration:none;color:var(--ink2)}
 .seg a[aria-selected=true]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
 .seg .dim{margin-left:4px;font-size:13px}
+.seg.mini{margin:0 0 8px}
+.seg button{font:inherit;font-size:12.5px;padding:2px 11px;border:1px solid var(--hair);border-radius:999px;background:transparent;color:var(--ink2);cursor:pointer}
+.seg button[aria-selected=true]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
 .dash{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0 0}
 .dash .full{grid-column:1/-1}
 .panel{border:1px solid var(--hair);border-radius:12px;padding:14px 16px 12px;background:var(--panel);min-width:0}
@@ -322,27 +325,37 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
   const legend = () => `<div class="leg">${D.axes.map((a, i) => `<span class="${AXC[i]}"><i></i>${esc(a)}</span>`).join('')}</div>`;
   const xStep = n => (n > 40 ? 14 : 7);
 
-  /* 축 추이: 축별 누적 (커짐 − 작아짐). 점은 그 날 시그널이 있던 곳 */
-  function lineChart(el, win) {
+  /* 누적 라인: 계열마다 values(누적값)와 marks(그날 사건 있음)를 받아 그린다. 선 끝에 이름과 값을 붙인다 */
+  function linesChart(el, days, ser, label) {
     const W = Math.max(280, el.clientWidth || 440), H = 220, m = { l: 30, r: 84, t: 14, b: 26 };
-    const { days, per, cum } = series(win), n = days.length, iw = W - m.l - m.r, ih = H - m.t - m.b;
-    const lo = Math.min(0, ...cum.flat()), hi = Math.max(1, ...cum.flat());
+    const n = days.length, iw = W - m.l - m.r, ih = H - m.t - m.b;
+    const all = ser.flatMap(x => x.values);
+    const lo = Math.min(0, ...all), hi = Math.max(1, ...all);
     const x = i => m.l + (n > 1 ? i / (n - 1) * iw : iw / 2), y = v => m.t + (hi - v) / (hi - lo) * ih;
-    let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="축별 누적 커짐 빼기 작아짐 추이, 최근 ${win.days}일">`;
+    let s = `<svg class="chart" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${esc(label)}">`;
     const step = Math.max(1, Math.ceil((hi - lo) / 5));
     for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) s += `<line class="grid${v === 0 ? ' zero' : ''}" x1="${m.l}" x2="${W - m.r}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/><text class="tick" x="${m.l - 6}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end">${signed(v)}</text>`;
     for (let i = n - 1; i >= 0; i -= xStep(n)) s += `<text class="tick" x="${x(i).toFixed(1)}" y="${H - 8}" text-anchor="middle">${mdShort(days[i])}</text>`;
     const ends = [];
-    D.axes.forEach((a, ai) => {
-      s += `<path class="ln ${AXC[ai]}" d="M${cum[ai].map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('L')}"/>`;
-      per[ai].forEach((c, i) => { if (c.n) s += `<circle class="pt ${AXC[ai]}" cx="${x(i).toFixed(1)}" cy="${y(cum[ai][i]).toFixed(1)}" r="3.5"><title>${days[i]} ${esc(a)}: 커짐 ${c.g}, 작아짐 ${c.s}${c.n - c.g - c.s ? `, 유보·미표기 ${c.n - c.g - c.s}` : ''} (누적 ${signed(cum[ai][i])})</title></circle>`; });
-      ends.push({ ai, a, v: cum[ai][n - 1], y: y(cum[ai][n - 1]) });
+    ser.forEach(sr => {
+      s += `<path class="ln ${sr.cls}"${sr.dash ? ` stroke-dasharray="${sr.dash}"` : ''} d="M${sr.values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('L')}"/>`;
+      sr.values.forEach((v, i) => { if (sr.marks[i]) s += `<circle class="pt ${sr.cls}" cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3.5"><title>${esc(sr.titles ? sr.titles[i] : `${days[i]} ${sr.name}: 누적 ${signed(v)}`)}</title></circle>`; });
+      ends.push({ cls: sr.cls, name: sr.name, v: sr.values[n - 1], y: y(sr.values[n - 1]) });
     });
     ends.sort((p, q) => p.y - q.y);
     for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 13) ends[i].y = ends[i - 1].y + 13;
     for (let i = ends.length - 1; i >= 0; i--) { if (ends[i].y > H - m.b - 2) ends[i].y = H - m.b - 2; if (i < ends.length - 1 && ends[i + 1].y - ends[i].y < 13) ends[i].y = ends[i + 1].y - 13; }
-    for (const e of ends) s += `<text class="lab ${AXC[e.ai]}" x="${W - m.r + 8}" y="${(e.y + 4).toFixed(1)}">${esc(e.a)} ${signed(e.v)}</text>`;
+    for (const e of ends) s += `<text class="lab ${e.cls}" x="${W - m.r + 8}" y="${(e.y + 4).toFixed(1)}">${esc(e.name)} ${signed(e.v)}</text>`;
     el.innerHTML = s + `</svg>`;
+  }
+
+  /* 축 추이: 축별 누적 (커짐 − 작아짐). 점은 그 날 시그널이 있던 곳 */
+  function lineChart(el, win) {
+    const { days, per, cum } = series(win);
+    linesChart(el, days, D.axes.map((a, ai) => ({
+      name: a, cls: AXC[ai], values: cum[ai], marks: per[ai].map(c => c.n > 0),
+      titles: per[ai].map((c, i) => `${days[i]} ${a}: 커짐 ${c.g}, 작아짐 ${c.s}${c.n - c.g - c.s ? `, 유보·미표기 ${c.n - c.g - c.s}` : ''} (누적 ${signed(cum[ai][i])})`),
+    })), `축별 누적 커짐 빼기 작아짐 추이, 최근 ${win.days}일`);
   }
 
   /* 쌓은 막대: 날짜별 건수를 계열(축 또는 기업) 색으로 쌓는다 */
@@ -367,12 +380,21 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     stackChart(el, days, D.axes.map((a, ai) => ({ name: a, cls: AXC[ai], counts: per[ai].map(c => c.n) })), `일별 구조적 시그널 건수, 최근 ${win.days}일`);
   }
   const COC = ['ax3', 'ax1', 'ax2', 'ax0'];   // 기업 계열 색 (축 팔레트 재사용, 순서만 다르게)
-  function companyChart(el, cw) {
-    const C = D.companies, days = dateRange(cw.from, cw.to), idx = Object.fromEntries(days.map((d, i) => [d, i]));
-    const ser = C.config.map((c, i) => ({ name: c.name, cls: COC[i % COC.length], counts: days.map(() => 0) }));
+  /* 기업별 누적 라인: metric 'count' = 관찰 건수 누적, 'net' = 회사에 유리(+1)·불리(−1) 누적. 가파를수록 최근에 뉴스가 몰린 기업 */
+  function companyLines(el, cw) {
+    const C = D.companies, metric = el.dataset.metric || 'count';
+    const days = dateRange(cw.from, cw.to), idx = Object.fromEntries(days.map((d, i) => [d, i]));
     const pos = Object.fromEntries(C.config.map((c, i) => [c.name, i]));
-    for (const r of C.rows) { const i = idx[r.date], k = pos[r.company]; if (i != null && k != null) ser[k].counts[i]++; }
-    stackChart(el, days, ser, `기업별 일별 관찰 건수, 최근 ${cw.days}일`);
+    const DASH = ['', '7 4', '2 4'];   // 같은 값으로 겹칠 때도 구분되게 실선·파선·점선
+    const ser = C.config.map((c, i) => ({ name: c.name, cls: COC[i % COC.length], dash: DASH[i % DASH.length], daily: days.map(() => 0), n: days.map(() => 0), st: days.map(() => 0) }));
+    for (const r of C.rows) {
+      const i = idx[r.date], k = pos[r.company];
+      if (i == null || k == null) continue;
+      ser[k].n[i]++; if (r.structural) ser[k].st[i]++;
+      ser[k].daily[i] += metric === 'count' ? 1 : (r.direction === '+' ? 1 : r.direction === '-' ? -1 : 0);
+    }
+    ser.forEach(sr => { let v = 0; sr.values = sr.daily.map(d => (v += d)); sr.marks = sr.n.map(c => c > 0); sr.titles = sr.n.map((c, i) => `${days[i]} ${sr.name}: 관찰 ${c}건 (구조적 ${sr.st[i]}), 누적 ${signed(sr.values[i])}`); });
+    linesChart(el, days, ser, `${metric === 'count' ? '기업별 누적 관찰 건수' : '기업별 누적 유리 빼기 불리'}, 최근 ${cw.days}일`);
   }
 
   /* 티커 막대: 섹터(테마)별로 묶고 막대 색은 방향 */
@@ -409,7 +431,7 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
   function drawCharts() {
     app.querySelectorAll('[data-chart]').forEach(el => {
       const k = el.dataset.chart;
-      if (k === 'line' && CUR) lineChart(el, CUR); else if (k === 'day' && CUR) dayChart(el, CUR); else if (k === 'co-day' && CURC) companyChart(el, CURC);
+      if (k === 'line' && CUR) lineChart(el, CUR); else if (k === 'day' && CUR) dayChart(el, CUR); else if (k === 'co-line' && CURC) companyLines(el, CURC);
     });
   }
 
@@ -429,7 +451,9 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
       w.companies.map(c => `<tr><td class="nowrap"><b>${esc(c.name)}</b><br><span class="dim small">${(cfg[c.name].tickers || []).map(esc).join(', ') || '비상장'}</span></td>` +
         c.axes.map((x, i) => `<td class="cell ${AXC[i]}" style="--a:${(x.count ? x.count / maxN * 0.4 + 0.1 : 0).toFixed(2)}"><b>${x.count}</b> <span class="dim">(${x.structural})</span><br><span class="small">${gsCell(x)}</span></td>`).join('') +
         `<td class="num"><b>${c.count}</b> <span class="dim">(${c.structural})</span><br><span class="small"><span class="dir up"><i>▲</i>${c.dir['+']}</span> <span class="dir down"><i>▼</i>${c.dir['-']}</span> <span class="dir both"><i>◆</i>${c.dir['±']}</span></span></td></tr>`).join('') + `</tbody></table></div><p class="keys" style="margin:8px 0 0">합계 칸의 ▲▼◆는 회사에 유리·불리·양쪽 건수</p></div>`;
-    h += `<div class="panel full"><h3>기업별 일별 관찰 <span class="dim">구조적·미확정 합산</span></h3><div class="leg">${C.config.map((c, i) => `<span class="${COC[i % COC.length]}"><i></i>${esc(c.name)}</span>`).join('')}</div><div class="chart-box" data-chart="co-day"></div></div>`;
+    h += `<div class="panel full"><h3>어느 기업이 더 영향을 받는가 <span class="dim">누적 추이. 선이 가파를수록 최근 뉴스가 몰린 기업. 구조적·미확정 합산</span></h3>` +
+      `<div class="seg mini" role="tablist" aria-label="지표"><button type="button" data-metric="count" aria-selected="true">관찰 건수 누적</button><button type="button" data-metric="net" aria-selected="false">회사에 유리 − 불리 누적</button></div>` +
+      `<div class="leg">${C.config.map((c, i) => `<span class="${COC[i % COC.length]}"><i></i>${esc(c.name)}${i === 1 ? ' (파선)' : i === 2 ? ' (점선)' : ''}</span>`).join('')}</div><div class="chart-box" data-chart="co-line" data-metric="count"></div></div>`;
     h += C.config.map(c => {
       const cw = w.companies.find(x => x.name === c.name) || { count: 0, structural: 0, dir: { '+': 0, '-': 0, '±': 0 } };
       const rows = C.rows.filter(r => r.company === c.name && r.date > w.from && r.date <= w.to).sort((a, b) => b.date.localeCompare(a.date) || b.line - a.line).slice(0, 10);
@@ -439,6 +463,11 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     }).join('');
     h += `</section>`;
     app.innerHTML = h;
+    app.querySelectorAll('.seg.mini button').forEach(btn => btn.addEventListener('click', () => {
+      const box = app.querySelector('[data-chart="co-line"]'); box.dataset.metric = btn.dataset.metric;
+      btn.parentNode.querySelectorAll('button').forEach(x => x.setAttribute('aria-selected', String(x === btn)));
+      companyLines(box, CURC);
+    }));
     drawCharts();
   }
   let rsz; window.addEventListener('resize', () => { clearTimeout(rsz); rsz = setTimeout(drawCharts, 150); });
