@@ -143,16 +143,16 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 
 ## 현재 상태
 
-> /save 자동 업데이트 — 2026-09-11 10:49
+> /save 자동 업데이트 — 2026-09-12 15:37
 
 **브랜치:** main
-**마지막 커밋:** b2f82cb 코드리뷰 반영: 수집 재실행 안전화, TZ 고정, 확인 등급 규칙 단일화, gn_decode 견고화, 워크플로 정리
+**마지막 커밋:** 9d76197 thesis.md: 논지 T1~T5 와 섹터맵 변경 Ken 승인 (2026-09-12)
 
 **미완료 항목:**
-- 9/12 05:30 Actions 수집 → 06:20 루틴 첫 완전 자동 실행 확인. 없으면 루틴 로그(claude.ai/code/routines/trig_01564MDnvQH3DtPRvCiqfaDY)와 Actions 로그 확인
+- 9/13 06:20 KST 루틴이 사람 개입 없이 끝나는지, 새 스키마(horizon·impact·channel·thesis·reverses)로 장부에 올라가는지 확인. 루틴 로그 claude.ai/code/routines/trig_01564MDnvQH3DtPRvCiqfaDY
+- 첫 /review 는 10월 초 (9월 backdrop.md 행 + 확인 대기 점검). thesis.md 상태 변경은 Ken 승인 후에만
 - Ken: claude.ai/code Default 환경 네트워크 접근 확대 (WebFetch EGRESS_BLOCKED 해제 시 1차 출처 본문 확인 가능)
-- gn_decode.py 실제 디코딩은 Google 429 로 미검증. `python3 fetch/gn_decode.py --raw <날짜> gnews_tariff 0` 로 확인
-- 9/11 장부 4번째 줄은 구 규칙(검색 교차만으로 0.6). append only 라 유지
+- 9/11 장부 4번째 줄은 구 규칙(검색 교차만으로 0.6). 2026-09-12 이전 6줄에는 새 필드 없음. append only 라 유지
 - 로컬 작업 전 `git pull`. 로컬 /brief 는 `python3 fetch/fetch.py` 로 raw/ 생성(미추적)
 - 루틴 사용량 매일 누적(실행당 opus-5 약 8분). 부담되면 sonnet-5 로 변경
 - 저장소: https://github.com/yukiadada/radar (public), https://github.com/yukiadada/radar-raw (private, raw). 사이트 https://yukiadada.github.io/radar/
