@@ -4,8 +4,8 @@
 SpaceX:
   source: gnews_co_spacex
   query: SpaceX OR Starlink
-  tickers: []
-  note: 비상장. 정부 계약·규제·행정부와의 관계(정치권력), 위성·발사·AI 인프라(기술권력), 사모 밸류에이션·IPO·텐더(자본권력), 재무제표 코인 보유(코인)
+  tickers: [SPCX]
+  note: 2026-06-12 Nasdaq 상장(SPCX). 정부 계약·규제·행정부와의 관계(정치권력), 위성·발사·궤도 AI 컴퓨트(기술권력), 락업 해제·대형 운용사 지분·밸류에이션(자본권력), 재무제표 코인 보유(코인)
 Google:
   source: gnews_co_google
   query: Google OR Alphabet
