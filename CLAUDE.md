@@ -26,11 +26,13 @@
 CLAUDE.md                  이 파일. 프레임워크와 규칙
 framework/axes.md          4축 정의, "커진다/작아진다" 판단 기준
 framework/sector_map.yaml  축 → 테마 → ETF/티커 매핑 (Ken이 큐레이션)
+framework/thesis.md        3~5년 논지 T1… 와 확인·반증 신호 (Ken이 큐레이션. /review 가 상태 변경 제안)
+framework/backdrop.md      월 1회 배경 지표 (실질금리·신용·EPS·P/E). /review 가 출처와 함께 채움
 fetch/                     수집 스크립트 (python)
 raw/YYYY-MM-DD/            당일 수집 원문. 비공개 저장소 radar-raw 에만 커밋 (여기서는 git 미추적)
 briefs/YYYY-MM-DD.md       일간 브리프
 ledger/signals.jsonl       구조적 시그널 누적 장부 (append only, 수정 금지)
-.claude/commands/          /brief, /trend
+.claude/commands/          /brief, /trend, /review
 logs/                      세션 로그 (/save 가 만듦, git 미추적)
 site/                      웹페이지. build.py 가 briefs·ledger·framework 를 site/out/ 로 빌드, index.html 이 렌더
 .github/workflows/         fetch.yml 수집, pages.yml 사이트 빌드·배포
@@ -43,16 +45,23 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 ### /brief (매일)
 1. `raw/오늘/` 전체를 읽는다. 없으면 `fetch/` 스크립트 실행을 먼저 제안한다.
 2. 4축으로 분류 → 축별 후보 시그널 추출.
-3. 각 후보에 structural 판정. 기준은 `framework/axes.md` 참고.
+3. 각 후보에 structural 판정. 기준은 `framework/axes.md` 참고. 함께 horizon(분기/1년/다년)·impact(1~3)·channel(실적/멀티플/수급)을 정한다 (axes.md "공통 규칙").
 4. `briefs/오늘.md` 작성 (아래 템플릿).
 5. structural=true 시그널만 `ledger/signals.jsonl`에 append.
-6. "3~4년 논지 변화?" 섹션에 한 줄. 대부분 "없음"이어야 정상. (템플릿 순서상 "맵 수정 제안"이 그 뒤에 온다)
+6. "논지 점검" 섹션: 오늘 시그널이 `framework/thesis.md`의 어느 논지를 확인·반증하는지 번호로 한 줄씩. 대부분 "해당 없음"이어야 정상. 논지 자체는 고치지 않는다. (템플릿 순서상 "맵 수정 제안"이 그 뒤에 온다)
 
 ### /trend (주 1회 또는 요청 시)
 1. `ledger/signals.jsonl`에서 최근 30일 / 90일을 읽는다.
 2. 축별 시그널 수, 방향(+/-) 비율, 자주 등장하는 섹터를 집계한다. 시그널에 언급된 티커는 횟수를 세고 같은 섹터(테마)끼리 묶는다.
-3. "어느 축이 커지고 있는가"를 집계 숫자 근거로 한 문단 서술한다.
-4. 축 간 충돌(예: 정치권력 vs 자본권력)이 반복되면 별도로 표시한다.
+3. impact × horizon(분기 1, 1년 2, 다년 3) 가중 집계를 건수와 나란히 본다. 건수는 관심도이지 크기가 아니다.
+4. "어느 축이 커지고 있는가"를 집계 숫자 근거로 한 문단 서술한다.
+5. 축 간 충돌(예: 정치권력 vs 자본권력)이 반복되면 별도로 표시한다.
+6. 논지별 증거(`thesis` 필드의 확인/반증 건수), 번복 행(`reverses`), 확인 대기(30일 넘은 커짐 시그널)를 표시한다.
+
+### /review (월 1회)
+1. `framework/backdrop.md`에 이달 배경 지표를 출처 URL과 함께 한 행 추가한다.
+2. 확인 대기 시그널의 예상 결과가 실제로 나타났는지 확인한다. 뒤집혔으면 반대 방향 행을 /brief 로 올리자고 제안한다 (`reverses`에 이전 줄 번호).
+3. `framework/thesis.md` 상태 변경을 제안한다. Ken 이 승인해야 고친다.
 
 ## 시그널 스키마 (ledger/signals.jsonl 한 줄)
 
@@ -67,7 +76,12 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
   "sectors": ["XLI", "PWR"],
   "direction": "+",
   "confidence": 0.6,
-  "note": "해석. 왜 구조적인지 한 줄."
+  "note": "해석. 왜 구조적인지 한 줄.",
+  "horizon": "1년",
+  "impact": 2,
+  "channel": "실적",
+  "thesis": ["T4+"],
+  "reverses": null
 }
 ```
 
@@ -76,7 +90,13 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 - `direction`: 해당 섹터에 + / - / ± (양방향·불확실). 섹터 기준이지 축 기준이 아니다.
 - `note`: `커짐.` / `작아짐.` / `유보.` 중 하나로 시작한다 (그 축이 커지는지). 그 뒤에 왜 구조적인지 한 줄. /trend가 이 첫 단어를 집계한다.
 - 축 간 충돌이면 note 맨 앞에 `[충돌: A vs B] `를 붙이고 그 뒤에 커짐/작아짐/유보를 잇는다. A, B는 서로 다른 축, 순서는 정치권력 > 기술권력 > 자본권력 > 코인. 예: `[충돌: 정치권력 vs 자본권력] 유보. 인하 압박 vs 동결, 9/16 FOMC가 판정.`
-- `confidence`: 0.3 낮음 / 0.6 보통 / 0.8 높음. 0.9 이상은 쓰지 않는다.
+- `confidence`: 0.3 낮음 / 0.6 보통 / 0.8 높음. 0.9 이상은 쓰지 않는다. "사실이 맞는가"의 확신이지 중요도가 아니다.
+- `horizon`: 분기 | 1년 | 다년. axes.md "지속성 사다리"로 정한다.
+- `impact`: 1 단일 기업·좁은 규칙 / 2 산업·테마 / 3 시장 전체 또는 논지 직결.
+- `channel`: 실적 | 멀티플 | 수급. 권력 변화가 시장에 닿는 길 하나.
+- `thesis`: thesis.md 번호 + 방향. `T1+` 확인, `T1-` 반증. 해당 없으면 `[]`.
+- `reverses`: 이전 시그널을 뒤집는 행이면 그 줄 번호, 아니면 null. 장부는 수정하지 않으므로 번복은 새 행으로 남긴다.
+- 2026-09-12 이전 줄에는 뒤의 다섯 필드가 없다. 집계는 없는 값을 "미표기"로 다루고 가중 1로 센다.
 
 ## 일간 브리프 템플릿
 
@@ -107,8 +127,8 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 - 자본권력: n건 (+x / -y / ±z)
 - 코인: n건 (+x / -y / ±z)
 
-## 3~4년 논지 변화?
-없음 / 있음 — 있으면 한 문단
+## 논지 점검
+해당 없음 / T번호 확인·반증: 한 줄씩
 
 ## 맵 수정 제안 (있을 때만)
 ```

@@ -282,8 +282,9 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
   function axisTable(win) {
     const rows = win.axes.map(a => `<tr><td class="nowrap">${a.axis}</td><td class="num">${a.count}</td><td class="num">${win.total ? pct(a.share) : '–'}</td>` +
       `<td class="num">${a.grow}</td><td class="num">${a.shrink}</td><td class="num">${a.hold}${a.untagged ? ` <span class="dim">(미표기 ${a.untagged})</span>` : ''}</td>` +
+      `<td class="num">${a.wgrow ?? '–'} / ${a.wshrink ?? '–'}${a.unweighted ? ` <span class="dim">(옛 줄 ${a.unweighted})</span>` : ''}</td>` +
       `<td class="num">${a.dir['+']}/${a.dir['-']}/${a.dir['±']}</td><td class="num">${a.avg_conf ?? '–'}</td><td class="small">${list(a.themes, 3) || '–'}</td><td class="small">${list(a.sectors, 5) || '–'}</td></tr>`).join('');
-    return `<div class="tbl wide"><table><thead><tr><th>축</th><th class="num">건수</th><th class="num">비중</th><th class="num">커짐</th><th class="num">작아짐</th><th class="num">유보</th><th class="num">섹터 유리/불리/양쪽</th><th class="num">평균 확신</th><th>상위 테마</th><th>상위 섹터</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    return `<div class="tbl wide"><table><thead><tr><th>축</th><th class="num">건수</th><th class="num">비중</th><th class="num">커짐</th><th class="num">작아짐</th><th class="num">유보</th><th class="num">가중 커짐 / 작아짐</th><th class="num">섹터 유리/불리/양쪽</th><th class="num">평균 확신</th><th>상위 테마</th><th>상위 섹터</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
 
   /* 대시보드 차트. 표준 SVG 를 직접 그린다. 폭은 컨테이너에 맞추고 창 크기가 바뀌면 다시 그린다 */
@@ -366,8 +367,17 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     const top = Math.max(0, ...w.axes.map(a => a.count)), tops = top ? w.axes.filter(a => a.count === top).map(a => a.axis) : [];
     const tk = w.tickers && w.tickers.by_ticker[0];
     const tile = (v, l, cls) => `<div class="kpi"><b${cls ? ` class="${cls}"` : ''}>${v}</b><span>${l}</span></div>`;
-    return `<div class="kpis full">` + tile(w.total, `최근 ${w.days}일 구조적 시그널`) + tile(`<em class="g">${g}</em> / <em class="s">${sh}</em>`, '커짐 / 작아짐 (note 첫 단어)') +
+    const wg = w.axes.reduce((a, x) => a + (x.wgrow || 0), 0), ws = w.axes.reduce((a, x) => a + (x.wshrink || 0), 0);
+    return `<div class="kpis full">` + tile(w.total, `최근 ${w.days}일 구조적 시그널`) + tile(`<em class="g">${g}</em> / <em class="s">${sh}</em> <small>가중 ${wg} / ${ws}</small>`, '커짐 / 작아짐 (건수, 가중은 크기×기간)') +
       tile(tops.length ? tops.map(esc).join(' · ') : '–', '가장 활발한 축', 'txt') + tile(tk ? `${esc(tk.ticker)} <small>${tk.n}회</small>` : '–', '최다 언급 티커', 'txt') + `</div>`;
+  }
+
+  /* 논지 점검: thesis.md 의 논지별 확인·반증 건수 */
+  function thesisPanel(w) {
+    if (!D.theses || !D.theses.length) return '';
+    const byId = Object.fromEntries((w.thesis || []).map(t => [t.id, t]));
+    const rows = D.theses.map(t => { const c = byId[t.id] || { confirm: 0, refute: 0 }; return `<tr><td class="nowrap">${esc(t.id)}</td><td>${esc(t.title)}</td><td class="nowrap small">${esc(t.status)}</td><td class="num"><span class="dir up"><i>▲</i>${c.confirm}</span></td><td class="num"><span class="dir down"><i>▼</i>${c.refute}</span></td></tr>`; }).join('');
+    return `<div class="panel full"><h3>논지 점검 <span class="dim">framework/thesis.md. 확인·반증은 최근 ${w.days}일 장부의 thesis 필드. 상태는 Ken 이 /review 로 바꿉니다</span></h3><div class="tbl"><table class="theses"><thead><tr><th>번호</th><th>논지</th><th>상태</th><th class="num">확인</th><th class="num">반증</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   }
 
   let CUR = null;
@@ -445,7 +455,7 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
       `<div class="panel"><h3>축 저울 <span class="dim">커짐 vs 작아짐 건수</span></h3>${scaleChart(w)}</div>` +
       `<div class="panel"><h3>일별 시그널 <span class="dim">축별로 쌓음</span></h3>${legend()}<div class="chart-box" data-chart="day"></div></div>` +
       `<div class="panel"><h3>티커 집계 <span class="dim">같은 섹터끼리 묶음. 막대 색은 방향</span></h3><p class="keys" style="margin:0 0 8px"><span class="dir up"><i>▲</i>유리</span> <span class="dir down"><i>▼</i>불리</span> <span class="dir both"><i>◆</i>양쪽</span></p>${tickerBars(w)}</div>` +
-      `</section>`;
+      thesisPanel(w) + `</section>`;
     h += `<h2 class="sec">축별 상세 <span class="dim">최근 ${days}일. 커짐/작아짐은 note 첫 단어, 유리/불리는 티커 기준</span></h2>` + axisTable(w);
     h += `<details class="more"><summary>티커 집계 표 (숫자 그대로)</summary>${tickerTable(w)}</details>`;
     h += `<h2 class="sec">30일 단위 추이 <span class="dim">최근에서 과거로, 건수 (커짐/작아짐)</span></h2><div class="tbl"><table><thead><tr><th>축</th>` +
@@ -473,10 +483,11 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     const draw = () => {
       const ax = document.getElementById('f-axis').value, days = Number(document.getElementById('f-days').value), q = document.getElementById('f-q').value.trim().toLowerCase();
       const cut = days ? new Date(new Date(D.today).getTime() - days * 864e5).toISOString().slice(0, 10) : '';
-      const sel = rows.filter(r => (!ax || r.axis === ax) && (!cut || r.date > cut) && (!q || [r.theme, r.fact, r.note, r.sectors.join(' ')].join(' ').toLowerCase().includes(q)));
+      const sel = rows.filter(r => (!ax || r.axis === ax) && (!cut || r.date > cut) && (!q || [r.theme, r.fact, r.note, r.sectors.join(' '), (r.thesis || []).join(' ')].join(' ').toLowerCase().includes(q)));
       document.getElementById('f-count').textContent = `${sel.length}건`;
-      document.getElementById('ledger-table').innerHTML = sel.length ? `<div class="tbl wide"><table><thead><tr><th>날짜</th><th>축</th><th>테마</th><th class="fact">팩트</th><th>섹터</th><th>방향</th><th>확신</th><th class="note">해석</th></tr></thead><tbody>` +
-        sel.map(r => `<tr><td class="date">${r.date}</td><td class="nowrap">${esc(r.axis)}</td><td class="nowrap">${esc(r.theme)}</td><td class="fact">${esc(r.fact)} <a href="${esc(r.source)}" target="_blank" rel="noopener">출처</a></td><td class="nowrap">${r.sectors.map(esc).join(', ')}</td><td>${dirBadge(r.direction)}</td><td>${confBadge(r.confidence)}</td><td class="small note">${esc(r.note)}</td></tr>`).join('') +
+      const meta = r => 'horizon' in r ? `${esc(r.horizon)} · 크기 ${esc(r.impact)} · ${esc(r.channel)}${(r.thesis || []).length ? ' · ' + r.thesis.map(esc).join(' ') : ''}${r.reverses ? ` · 번복 줄 ${r.reverses}` : ''}` : '–';
+      document.getElementById('ledger-table').innerHTML = sel.length ? `<div class="tbl wide"><table><thead><tr><th>날짜</th><th>축</th><th>테마</th><th class="fact">팩트</th><th>섹터</th><th>방향</th><th>확신</th><th>기간 · 크기 · 경로 · 논지</th><th class="note">해석</th></tr></thead><tbody>` +
+        sel.map(r => `<tr><td class="date">${r.date}</td><td class="nowrap">${esc(r.axis)}</td><td class="nowrap">${esc(r.theme)}</td><td class="fact">${esc(r.fact)} <a href="${esc(r.source)}" target="_blank" rel="noopener">출처</a></td><td class="nowrap">${r.sectors.map(esc).join(', ')}</td><td>${dirBadge(r.direction)}</td><td>${confBadge(r.confidence)}</td><td class="small nowrap">${meta(r)}</td><td class="small note">${esc(r.note)}</td></tr>`).join('') +
         `</tbody></table></div>` : `<p class="empty">조건에 맞는 줄이 없습니다.</p>`;
     };
     ['f-axis', 'f-days'].forEach(id => document.getElementById(id).addEventListener('change', draw));
@@ -492,7 +503,8 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
   }
 
   function framework() {
-    app.innerHTML = `<p class="dateline">판단 기준</p><p class="hero-sub">framework/axes.md 와 framework/sector_map.yaml 그대로. Ken 이 고칩니다.</p><div id="axes"></div><h2 class="sec">섹터 맵 <span class="dim">축, 테마, 티커 화이트리스트</span></h2><pre class="yaml">${esc(D.framework.sector_map)}</pre>`;
+    app.innerHTML = `<p class="dateline">판단 기준</p><p class="hero-sub">framework/thesis.md, axes.md, sector_map.yaml 그대로. Ken 이 고칩니다.</p><div id="thesis"></div><h2 class="sec">축 정의 <span class="dim">framework/axes.md</span></h2><div id="axes"></div><h2 class="sec">섹터 맵 <span class="dim">축, 테마, 티커 화이트리스트</span></h2><pre class="yaml">${esc(D.framework.sector_map)}</pre>`;
+    if (D.framework.thesis_md) document.getElementById('thesis').appendChild(md(D.framework.thesis_md));
     document.getElementById('axes').appendChild(md(D.framework.axes_md));
   }
 

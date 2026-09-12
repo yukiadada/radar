@@ -26,6 +26,40 @@ AXES = ("정치권력", "기술권력", "자본권력", "코인")
 GROW = re.compile(r"^(?:\[충돌:[^\]]*\]\s*)?(커짐|작아짐|유보)")
 CONF = re.compile(r"\[충돌:\s*(\S+)\s+vs\s+(\S+)\s*\]", re.I)
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+THESIS_RE = re.compile(r"^## (T\d+)\s+(.+?)\s*$", re.M)
+THESIS_TAG = re.compile(r"^(T\d+)([+-])$")
+HW = {"분기": 1, "1년": 2, "다년": 3}  # impact × horizon 가중. 필드 없는 옛 줄은 1
+
+
+def weight(r: dict) -> int:
+    imp = r.get("impact")
+    return (imp if isinstance(imp, int) and not isinstance(imp, bool) else 1) * HW.get(r.get("horizon"), 1)
+
+
+def load_theses() -> list[dict]:
+    p = ROOT / "framework/thesis.md"
+    if not p.exists():
+        return []
+    md = p.read_text(encoding="utf-8")
+    heads = list(THESIS_RE.finditer(md))
+    out = []
+    for i, m in enumerate(heads):
+        block = md[m.end(): heads[i + 1].start() if i + 1 < len(heads) else len(md)]
+        st = re.search(r"^- 상태:\s*(.+?)\s*$", block, re.M)
+        chk = re.search(r"^- 마지막 검토:\s*(.+?)\s*$", block, re.M)
+        out.append({"id": m.group(1), "title": m.group(2), "status": st.group(1) if st else "미표기",
+                    "reviewed": chk.group(1) if chk else ""})
+    return out
+
+
+def thesis_counts(w: list[dict]) -> list[dict]:
+    ev: dict[str, list[int]] = collections.defaultdict(lambda: [0, 0])
+    for r in w:
+        for x in r.get("thesis") or []:
+            m = THESIS_TAG.match(str(x))
+            if m:
+                ev[m.group(1)][0 if m.group(2) == "+" else 1] += 1
+    return [{"id": k, "confirm": v[0], "refute": v[1]} for k, v in sorted(ev.items(), key=lambda x: int(x[0][1:]))]
 
 
 def d(s: str) -> datetime.date:
@@ -70,6 +104,8 @@ def window(rows: list[dict], today: datetime.date, days: int) -> dict:
         axes.append({
             "axis": a, "count": len(s), "share": round(len(s) / len(w), 3) if w else 0,
             "grow": g["커짐"], "shrink": g["작아짐"], "hold": g["유보"], "untagged": g["미표기"],
+            "wgrow": sum(weight(r) for r in s if grow(r) == "커짐"), "wshrink": sum(weight(r) for r in s if grow(r) == "작아짐"),
+            "unweighted": sum(1 for r in s if "horizon" not in r),
             "dir": {"+": dc["+"], "-": dc["-"], "±": dc["±"]},
             "avg_conf": round(sum(r["confidence"] for r in s) / len(s), 2) if s else None,
             "themes": collections.Counter(r["theme"] for r in s).most_common(3),
@@ -81,6 +117,9 @@ def window(rows: list[dict], today: datetime.date, days: int) -> dict:
         "days": days, "from": (cut + datetime.timedelta(days=1)).isoformat(), "to": today.isoformat(),
         "total": len(w), "axes": axes,
         "tickers": tickers(w),
+        "thesis": thesis_counts(w),
+        "reversals": [{"line": r["line"], "date": r["date"], "axis": r["axis"], "theme": r["theme"], "reverses": r["reverses"], "fact": r["fact"]}
+                      for r in w if r.get("reverses")],
         "conflicts": {
             "total": len(hits),
             "pairs": [{"pair": p, "count": c} for p, c in pairs.most_common()],
@@ -142,7 +181,7 @@ def load_briefs() -> list[dict]:
             continue
         md = p.read_text(encoding="utf-8")
         structural = sum(1 for l in md.split("\n") if l.startswith("|") and re.search(r"\|\s*true\s*\|", l))
-        m = re.search(r"^## 3~4년 논지 변화\?\s*\n+([^\n]+)", md, re.M)
+        m = re.search(r"^## (?:3~4년 논지 변화\?|논지 점검)[^\n]*\n+([^\n]+)", md, re.M)
         thesis = m.group(1).strip() if m else "확인 안 됨"
         out.append({"date": p.stem, "md": md, "structural": structural, "thesis": thesis,
                     "none_today": "오늘 구조적 시그널 없음" in md})
@@ -186,9 +225,11 @@ def main(argv=None) -> int:
         "framework": {
             "axes_md": (ROOT / "framework/axes.md").read_text(encoding="utf-8"),
             "sector_map": (ROOT / "framework/sector_map.yaml").read_text(encoding="utf-8"),
+            "thesis_md": (ROOT / "framework/thesis.md").read_text(encoding="utf-8") if (ROOT / "framework/thesis.md").exists() else "",
         },
         "raw": load_raw(),
         "axes": list(AXES),
+        "theses": load_theses(),
     }
 
     OUT.mkdir(parents=True, exist_ok=True)

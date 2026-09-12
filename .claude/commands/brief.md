@@ -12,7 +12,7 @@ CLAUDE.md "워크플로 > /brief"를 실행한다. 아래 순서를 건너뛰지
 
 ## 0. 규칙 로드
 
-1. `CLAUDE.md`, `framework/axes.md`, `framework/sector_map.yaml` 세 파일을 전부 읽는다. 매번 읽는다. 기억으로 대체하지 않는다.
+1. `CLAUDE.md`, `framework/axes.md`, `framework/sector_map.yaml`, `framework/thesis.md` 네 파일을 전부 읽는다. 매번 읽는다. 기억으로 대체하지 않는다. thesis.md 는 참조만 하고 고치지 않는다.
 2. sector_map.yaml에서 축 → 테마 키 → 티커 목록을 뽑아 둔다. 이 목록 밖의 테마 키와 티커는 브리프 표와 장부 어디에도 쓰지 않는다. 예외는 "맵 수정 제안" 섹션뿐이다.
 3. `tail -n 40 ledger/signals.jsonl`로 최근 장부를 본다. 이미 기록된 사건은 출처 URL이 달라도 다시 올리지 않는다. 같은 사건의 후속 문서(예: 발표 → Federal Register 게재)는 새 시그널이다.
 
@@ -51,7 +51,13 @@ CLAUDE.md "워크플로 > /brief"를 실행한다. 아래 순서를 건너뛰지
   - false: 발언·트윗·인터뷰·"검토 중", 루머·애널리스트 추정·데모, 일간·주간 자금흐름·연준 위원 개별 발언, 가격 등락 자체·유명인 발언.
   - 제안 단계(NPRM, proposed rule, 의견 요청, 법안 발의)는 false다. 확정(final rule, 서명, 통과, 판결)만 true다.
   - 확정 문서라도 sector_map 테마의 티커에 직접 영향이 없으면 표와 장부에 올리지 않는다. "버린 뉴스"에 "구조적이나 맵 영향 없음"으로 적는다.
-- 확신(confidence)은 0.3 / 0.6 / 0.8 중 하나. 0.9 이상은 쓰지 않는다.
+- 확신(confidence)은 0.3 / 0.6 / 0.8 중 하나. 0.9 이상은 쓰지 않는다. 사실 확실성이지 중요도가 아니다.
+- structural=true 행에는 axes.md "공통 규칙"대로 네 가지를 더 정한다.
+  - `horizon`: 지속성 사다리. 법률·대법원 판결 → 다년. 최종 규칙·행정명령·포고·체결 계약·FOMC 결정 → 1년. 운영 규칙·지침·분기 가이던스·월 단위 자금흐름 → 분기.
+  - `impact`: 1 단일 기업·좁은 규칙 / 2 산업·테마 / 3 시장 전체 또는 thesis.md 논지에 직접 닿는 것.
+  - `channel`: 실적 / 멀티플 / 수급 중 하나. 권력 변화가 시장에 닿는 길.
+  - `thesis`: thesis.md 의 논지 번호에 방향을 붙인다. `T2+` 확인, `T2-` 반증. 닿는 논지가 없으면 `[]`. 억지로 붙이지 않는다.
+  - `reverses`: 최근 장부의 시그널을 뒤집는 사건(철회·취소·파기·폐지)이면 그 줄 번호(`tail` 출력이나 `grep -n` 으로 확인), 아니면 `None`. 방향과 note 첫 단어는 뒤집힌 뒤의 상태로 쓴다.
 - 방향(direction)은 **해당 섹터·티커** 기준 `+` / `-` / `±`. 축이 커지는지와는 다른 값이다.
 - 축이 커지는지는 note의 첫 단어로 적는다: `커짐.` / `작아짐.` / `유보.` 그 뒤에 왜 구조적인지 한 줄. /trend가 이 단어를 집계한다.
 - note 끝에는 확인 등급 접미어(` 확인: 검색 교차`)만 붙을 수 있다. 실행 환경 얘기(차단, 도구 이름 등)는 note 에 쓰지 않는다. 그런 메모는 브리프 해석 아래 "확인 방법 메모"에만.
@@ -63,7 +69,8 @@ CLAUDE.md "워크플로 > /brief"를 실행한다. 아래 순서를 건너뛰지
 - structural=true가 0개면 표 아래에 `오늘 구조적 시그널 없음` 한 줄을 쓴다.
 - theme는 sector_map.yaml의 테마 키와 글자 단위로 같아야 한다. 티커는 시그널당 서로 다른 것 최대 3개, sector_map에 있는 것만. 원칙적으로 그 테마의 tickers에서 고르고, 다른 테마의 티커를 쓸 때는 note에 이유를 적는다.
 - 맵에 없는 티커가 필요하면 "맵 수정 제안"에만 적고 표와 장부에는 넣지 않는다.
-- 은행·운용사가 코인 상품 회사를 인수하거나 코인 상품을 내는 사건은 코인 축 "커짐"(axes "은행이 코인 사업 진입")이고, 테마는 상품 종류에 맞춘다(ETF 관련이면 현물 ETF).
+- 은행·운용사가 코인 상품 회사를 인수하거나 코인 상품을 내는 사건은 코인 축 "커짐"(axes "은행이 코인 사업 진입")이고, 테마는 상품 종류에 맞춘다(ETF 관련이면 현물 ETF). note 에 "자본권력 흡수"라고 적고 자본권력에는 올리지 않는다.
+- 두 축이 부딪힌 사건은 이긴 쪽 축 한 곳에만 올린다(axes.md "충돌 사건의 기록").
 - "사라", "팔아라", "지금이 기회" 류 매매 지시 표현 금지.
 
 ## 5. 검증 + 30일 집계 (APPEND = False)
@@ -82,15 +89,20 @@ APPEND = False   # 6단계에서 브리프를 쓴 뒤, 7단계에서 True 로 �
 ROWS = [
     # {"date": DATE, "axis": "정치권력", "theme": "관세/리쇼어링",
     #  "fact": "한 문장. 출처에 있는 내용만.", "source": "https://...",
-    #  "structural": True, "sectors": ["XLI", "PWR"], "direction": "+", "confidence": 0.6,
-    #  "note": "커짐. 왜 구조적인지 한 줄."},
+    #  "structural": True, "sectors": ["XLI", "CAT"], "direction": "+", "confidence": 0.6,
+    #  "note": "커짐. 왜 구조적인지 한 줄.",
+    #  "horizon": "1년", "impact": 2, "channel": "실적", "thesis": ["T4+"], "reverses": None},
 ]
 
 if not Path("CLAUDE.md").exists(): sys.exit("레포 루트에서 실행해야 한다")
 try: today = datetime.date.fromisoformat(DATE)
 except ValueError: sys.exit(f"DATE 가 YYYY-MM-DD 가 아님: {DATE!r} (치환 누락?)")
 AXES = ("정치권력", "기술권력", "자본권력", "코인")
-KEYS = ["date", "axis", "theme", "fact", "source", "structural", "sectors", "direction", "confidence", "note"]
+KEYS = ["date", "axis", "theme", "fact", "source", "structural", "sectors", "direction", "confidence", "note",
+        "horizon", "impact", "channel", "thesis", "reverses"]
+HORIZON, CHANNEL = ("분기", "1년", "다년"), ("실적", "멀티플", "수급")
+thesis_path = Path("framework/thesis.md")
+thesis_ids = set(re.findall(r"^## (T\d+)\b", thesis_path.read_text(encoding="utf-8"), re.M)) if thesis_path.exists() else set()
 
 # sector_map.yaml → {테마: (축, [티커])}. 주석은 먼저 지운다.
 themes, axis, theme, n_theme_lines = {}, None, None, 0
@@ -109,12 +121,13 @@ assert all(re.fullmatch(r"[A-Z][A-Z0-9.\-]{0,6}", t) for t in all_tickers), f"�
 print("sector_map:", ", ".join(f"{a} {sum(1 for x, _ in themes.values() if x == a)}테마" for a in AXES), f"/ 티커 {len(all_tickers)}개")
 
 ledger = Path("ledger/signals.jsonl")
-existing = []
+existing, by_line = [], {}
 if ledger.exists():
     for n, l in enumerate(ledger.read_text(encoding="utf-8").split("\n"), 1):
         if not l.strip(): continue
-        try: existing.append(json.loads(l))
+        try: d = json.loads(l)
         except json.JSONDecodeError as e: sys.exit(f"ledger {n}번째 줄 JSON 파싱 실패: {e}. 장부는 수정 금지. Ken 에게 알린다")
+        existing.append(d); by_line[n] = d
 seen = {(d["source"], d["theme"]): d["date"] for d in existing}
 recent = [d for d in existing if (today - datetime.timedelta(days=7)).isoformat() <= d["date"] <= DATE]
 if recent:
@@ -151,6 +164,18 @@ for i, r in enumerate(ROWS):
     if not m: errors.append(f"{p}: note 는 '[충돌: A vs B] '(선택) + '커짐.'|'작아짐.'|'유보.' 로 시작해야 함")
     elif m.group(1) and (m.group(1) == m.group(2) or AXES.index(m.group(1)) > AXES.index(m.group(2))): errors.append(f"{p}: 충돌 태그는 서로 다른 축을 {' > '.join(AXES)} 순서로")
     if BAD.search(r["fact"] + " " + r["note"]): errors.append(f"{p}: 매매 지시 표현 금지")
+    if r["horizon"] not in HORIZON: errors.append(f"{p}: horizon 은 분기 / 1년 / 다년")
+    if r["impact"] not in (1, 2, 3) or isinstance(r["impact"], bool): errors.append(f"{p}: impact 는 1 / 2 / 3")
+    if r["channel"] not in CHANNEL: errors.append(f"{p}: channel 은 실적 / 멀티플 / 수급")
+    th = r["thesis"]
+    if not isinstance(th, list) or any(not (isinstance(t, str) and re.fullmatch(r"T\d+[+-]", t) and t[:-1] in thesis_ids) for t in th) or len(set(th)) != len(th):
+        errors.append(f"{p}: thesis 는 ['T1+', 'T3-'] 형식, 번호는 framework/thesis.md 에 있는 것만 {sorted(thesis_ids)}")
+    rv = r["reverses"]
+    if rv is not None:
+        if isinstance(rv, bool) or not isinstance(rv, int) or rv not in by_line: errors.append(f"{p}: reverses 는 장부의 기존 줄 번호(있는 줄: {sorted(by_line)[:3]}…{max(by_line, default=0)}) 또는 None")
+        else:
+            prev = by_line[rv]
+            print(f"번복 {p}: {rv}번 줄 [{prev['axis']}/{prev['theme']}] {prev['fact'][:70]}" + ("" if prev["theme"] == r["theme"] else f"  경고: 테마가 다름 ({prev['theme']} vs {r['theme']})"))
     grams = lambda t: {t[i:i + 2] for t in [re.sub(r"[^가-힣a-z0-9]", "", t.lower())] for i in range(len(t) - 1)}
     g = grams(r["fact"])
     for d in recent:
@@ -198,11 +223,11 @@ EOF
 ## 오늘의 축 시그널
 | 축 | 팩트 (출처) | 구조적 | 영향 섹터·티커 | 방향 | 확신 |
 |---|---|---|---|---|---|
-| 정치권력 | 한 문장. 9/8 10:00 ET (23:00 KST). ([출처](https://...)) | true | 관세/리쇼어링 · XLI, PWR | + | 0.6 |
+| 정치권력 | 한 문장. 9/8 10:00 ET (23:00 KST). ([출처](https://...)) | true | 관세/리쇼어링 · XLI, CAT | + | 0.6 |
 
 오늘 구조적 시그널 없음
 
-- 해석 (정치권력/관세/리쇼어링): 한 줄. 커짐/작아짐과 그 이유. 영향은 가설로.
+- 해석 (정치권력/관세/리쇼어링): 한 줄. 커짐/작아짐과 그 이유. 영향은 가설로. (기간 1년 · 크기 2 · 경로 실적 · 논지 T4+)
 
 ## 쉬운 말로
 - **캐나다 관세**
@@ -224,8 +249,8 @@ EOF
 - 자본권력: n건 (+x / -y / ±z)
 - 코인: n건 (+x / -y / ±z)
 
-## 3~4년 논지 변화?
-없음
+## 논지 점검
+해당 없음
 
 ## 맵 수정 제안 (있을 때만)
 - 티커 — 왜 필요한지 한 줄
@@ -233,11 +258,11 @@ EOF
 
 템플릿 사용 규칙:
 - `오늘 구조적 시그널 없음` 줄은 structural=true가 0개일 때만 쓴다. 있으면 그 줄을 지운다.
-- 표 아래 "해석" 불릿은 표의 행마다 하나씩. 팩트 셀에 해석을 섞지 않기 위한 자리다(CLAUDE.md 규칙 2).
+- 표 아래 "해석" 불릿은 표의 행마다 하나씩. 팩트 셀에 해석을 섞지 않기 위한 자리다(CLAUDE.md 규칙 2). structural=true 행은 불릿 끝에 `(기간 · 크기 · 경로 · 논지)` 를 괄호로 붙인다. 장부의 horizon·impact·channel·thesis 와 같은 값. 번복 행이면 `번복: 줄 n` 도 붙인다.
 - "쉬운 말로"는 표의 행마다 하나씩, 무슨 일 / 왜 중요 / 누가 이득·손해 세 줄. 중학생이 읽는다고 생각하고 쓴다. 관세, ETF, 연준, 반독점 같은 용어는 처음 나올 때 괄호로 한 줄 풀이. 숫자는 출처 그대로 쓰고 환율 환산 같은 추정은 만들지 않는다.
 - "누가 유리하고 불리한가"는 시그널 표에 나온 티커만, 방향과 확신은 시그널 표와 같은 값. "무엇"은 티커의 쉬운 이름, "왜"는 한 줄. 매매 지시 표현 금지는 여기도 같다.
 - "버린 뉴스"는 축에 걸릴 듯했지만 버린 것만 최대 10줄. 이유 예: 발언만 있고 문서 없음 / 제안 단계 / 4축 어디에도 안 걸림 / 가격 등락 자체 / 같은 사건 중복 / 구조적이나 맵 영향 없음.
-- "3~4년 논지 변화?"는 대부분 "없음"이다. "있음"이면 한 문단으로 무엇이 바뀌었는지 쓴다.
+- "논지 점검"은 thesis.md 번호로 쓴다. 오늘 시그널의 thesis 값을 모아 `T4+ 확인: 한 줄` 식으로 논지마다 한 줄. 없으면 "해당 없음". 논지 문장 자체는 고치지 않는다(Ken 이 /review 로 바꾼다).
 - "맵 수정 제안" 섹션은 제안이 있을 때만 쓴다. 없으면 섹션 자체를 생략한다.
 - 한국어. 티커·기관명은 영문 그대로. 형용사를 줄이고 숫자와 출처로 말한다. 팩트 셀에는 출처 URL 링크를 반드시 넣는다. 미국 시장 영향 기준. 한국 시장은 부수적으로만.
 
@@ -253,6 +278,6 @@ EOF
 ## 8. 마무리 (채팅 출력)
 
 - 표를 축·팩트 한 줄·구조적·티커로 요약해 보여준다.
-- "장부 추가 n건", "중복으로 건너뜀 n건", "3~4년 논지 변화: 없음/있음".
+- "장부 추가 n건", "중복으로 건너뜀 n건", "논지 점검: 해당 없음 / T번호 확인·반증", 번복 행이 있으면 어느 줄을 뒤집었는지.
 - 수집 현황: 소스 6개 중 파일이 없거나 count 0인 소스가 있으면 이름을 적는다.
 - 만든 파일 경로: `briefs/<날짜>.md`, 그리고 append가 있었으면 `ledger/signals.jsonl`.

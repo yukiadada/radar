@@ -45,6 +45,8 @@ def pair(m):
 def fmt(counter, k): return ", ".join(f"{a}({b})" for a, b in counter.most_common(k)) or "-"
 def pct(n, d): return f"{100 * n / d:.0f}%" if d else "-"
 
+tp = Path("framework/thesis.md")
+TITLES = dict(re.findall(r"^## (T\d+)\s+(.+?)\s*$", tp.read_text(encoding="utf-8"), re.M)) if tp.exists() else {}
 windows = {}
 for days in (30, 90):
     cut = today - datetime.timedelta(days=days)
@@ -79,6 +81,25 @@ for days in (30, 90):
     print("- 티커별 합계 (섹터 무관): " + (", ".join(f"{t}({c['n']})" for t, c in sorted(tot.items(), key=lambda x: (-x[1]["n"], x[0]))) or "없음"))
     multi = [(t, list(c)) for t, c in themes_of.items() if len(c) > 1]
     if multi: print("- 두 섹터 이상에서 나온 티커: " + ", ".join(f"{t} ({', '.join(ths)})" for t, ths in sorted(multi)))
+    # 가중 집계: impact × horizon(분기 1, 1년 2, 다년 3). 필드가 없는 옛 줄은 가중 1
+    HW = {"분기": 1, "1년": 2, "다년": 3}
+    wt = lambda r: (r.get("impact") if isinstance(r.get("impact"), int) else 1) * HW.get(r.get("horizon"), 1)
+    print(f"\n### 가중 집계 (최근 {days}일, impact × horizon. 필드 없는 옛 줄은 가중 1)")
+    print("| 축 | 커짐 가중 | 작아짐 가중 | 유보 가중 | 필드 없는 줄 |")
+    print("|---|---|---|---|---|")
+    for a in AXES:
+        s = [r for r in w if r["axis"] == a]
+        g = {k: sum(wt(r) for r in s if grow(r) == k) for k in ("커짐", "작아짐", "유보")}
+        print(f"| {a} | {g['커짐']} | {g['작아짐']} | {g['유보']} | {sum(1 for r in s if 'horizon' not in r)} |")
+    # 논지별 증거: thesis 필드 T1+ / T1-
+    ev = collections.defaultdict(lambda: [0, 0])
+    for r in w:
+        for x in r.get("thesis") or []:
+            m = re.fullmatch(r"(T\d+)([+-])", x)
+            if m: ev[m.group(1)][0 if m.group(2) == "+" else 1] += 1
+    print(f"\n### 논지별 증거 (최근 {days}일, thesis 필드)")
+    for tid, (c, f) in sorted(ev.items(), key=lambda x: int(x[0][1:])): print(f"- {tid} {TITLES.get(tid, '')}: 확인 {c}건 / 반증 {f}건")
+    if not ev: print("- 없음 (thesis 필드가 있는 줄 없음)")
 
 lines30 = {r["_line"] for r in windows[30]}
 hits = [(r, pair(m)) for r in windows[90] if (m := CONF.search(r.get("note", "")))]
@@ -101,6 +122,17 @@ for a in AXES:
         g = collections.Counter(grow(r) for r in s)
         cells.append(f"{len(s)} ({g['커짐']}/{g['작아짐']})")
     print(f"| {a} | " + " | ".join(cells) + " |")
+
+print("\n## 번복 행 (reverses)")
+rev = [r for r in rows if r.get("reverses")]
+for r in rev: print(f"- {r['date']} [{r['axis']}/{r['theme']}] 줄 {r['_line']} 이 줄 {r['reverses']} 을 뒤집음: {r['fact'][:80]}")
+if not rev: print("- 없음")
+reversed_lines = {r["reverses"] for r in rev}
+cut30 = today - datetime.timedelta(days=30)
+print("\n## 확인 대기 (30일 넘은 커짐, horizon 1년 이상, 번복 없음. /review 에서 예상 결과를 확인한다)")
+wait = [r for r in windows[90] if r["_d"] <= cut30 and grow(r) == "커짐" and r.get("horizon", "1년") != "분기" and r["_line"] not in reversed_lines]
+for r in wait: print(f"- 줄 {r['_line']} {r['date']} [{r['axis']}/{r['theme']}] {r['fact'][:80]}")
+if not wait: print("- 없음")
 
 # 맵 수정 제안 반복 횟수 (sector_map.yaml 사용 규칙: 3회 이상 반복 등장할 때만 추가 검토)
 all_tickers = set()
@@ -131,6 +163,9 @@ EOF
 - 축 간 충돌: 스크립트가 `← 반복`으로 표시한 조합(90일 2건 이상)은 별도 항목으로 쓴다. 누가 이겼는지는 각 note에 적힌 내용만 인용한다. 추정하지 않는다.
 - 자주 등장하는 섹터는 축별 상위 섹터 열을 그대로 옮긴다.
 - 티커 집계 표는 스크립트 출력을 그대로 옮긴다. "두 섹터 이상에서 나온 티커"가 있으면 그 티커가 어느 섹터들에서 나왔는지 한 줄로 밝힌다. 횟수는 언급 횟수이지 강도가 아니다.
+- 가중 집계가 건수와 다른 그림을 보이면(건수는 많은데 가중은 작거나 그 반대) 그 점을 한 줄로 밝힌다. 축 판단은 건수와 가중을 같이 보고, 둘이 어긋나면 "유보"로 쓴다.
+- 논지별 증거는 thesis.md 번호와 제목으로 쓴다. 확인·반증 건수만 옮기고 상태 변경은 제안하지 않는다(그건 /review).
+- 소스 편향을 밝힌다: 정치권력은 federal_register·gnews_tariff, 자본권력은 fed_press·gnews_fed_rate, 기술권력은 gnews_big_tech_antitrust, 코인은 gnews_bitcoin_etf 가 입력이다. 기술·자본 축의 분기 자료(실적 가이던스, SEP, QRA, 13F)는 파이프라인에 없어 건수가 적게 나온다. 축 간 건수 차이를 그대로 힘의 차이로 읽지 않는다.
 - 맵 수정 제안 등장 횟수는 대문자 토큰 집계라서 티커가 아닌 것이 섞인다. 티커로 보이는 것만 남기고 3회 이상이면 Ken에게 추가 검토를 제안한다.
 - 매매 표현 금지. 영향은 "~라는 가설"로 쓴다. 미국 시장 기준.
 
@@ -153,6 +188,12 @@ EOF
 
 ## 축 간 충돌
 없음 / 조합별 90일·30일 건수와 각 건의 결과
+
+## 논지별 증거
+T번호 제목: 확인 n / 반증 m (30일, 90일)
+
+## 번복과 확인 대기
+(스크립트 출력 그대로)
 
 ## 맵 수정 제안 반복
 없음 / 티커별 횟수
