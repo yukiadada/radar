@@ -165,10 +165,10 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 
 ## 현재 상태
 
-> /save 자동 업데이트 — 2026-09-16 00:18
+> /save 자동 업데이트 — 2026-09-16 00:26
 
 **브랜치:** main
-**마지막 커밋:** 972aa9b 섹터 탭·홈 한눈에·브리프 카드: 장부의 유리·불리를 섹터·티커별 점수(방향×크기×기간)로 합친 섹터 보드, 수집 헤드라인 키워드로 세는 관심 테마(fetch/scoring.py, sector_map 
+**마지막 커밋:** aa5a8d5 섹터 탭: 유리·불리 막대 캡션을 풀어 씀
 
 **미완료 항목:**
 - 9/16 06:20 KST 루틴 확인 (팩트 첫 문장 40자 규칙, "## 기업 관찰" 제목, BITO 관찰). 루틴 로그 claude.ai/code/routines/trig_01564MDnvQH3DtPRvCiqfaDY
