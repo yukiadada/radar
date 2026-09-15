@@ -25,11 +25,11 @@
 ```
 CLAUDE.md                  이 파일. 프레임워크와 규칙
 framework/axes.md          4축 정의, "커진다/작아진다" 판단 기준
-framework/sector_map.yaml  축 → 테마 → ETF/티커 매핑 (Ken이 큐레이션)
+framework/sector_map.yaml  축 → 테마 → ETF/티커 매핑과 테마별 헤드라인 keywords (Ken이 큐레이션)
 framework/thesis.md        3~5년 논지 T1… 와 확인·반증 신호 (Ken이 큐레이션. /review 가 상태 변경 제안)
 framework/backdrop.md      월 1회 배경 지표 (실질금리·신용·EPS·P/E). /review 가 출처와 함께 채움
-framework/companies.yaml   기업 관찰 대상 (SpaceX·Google·Microsoft)의 검색어·티커 (Ken이 큐레이션)
-fetch/                     fetch.py 수집, ledger.py 장부 검증·추가(장부에 쓰는 유일한 수단), config.py framework/*.yaml 파서, gn_decode.py
+framework/companies.yaml   기업 관찰 대상(현재 SpaceX·BITO·Microsoft)의 검색어·티커 (Ken이 큐레이션)
+fetch/                     fetch.py 수집, ledger.py 장부 검증·추가(장부에 쓰는 유일한 수단), config.py framework/*.yaml 파서, scoring.py 섹터 보드·관심 테마 계산, gn_decode.py
 raw/YYYY-MM-DD/            당일 수집 원문. 비공개 저장소 radar-raw 에만 커밋 (여기서는 git 미추적)
 briefs/YYYY-MM-DD.md       일간 브리프
 ledger/signals.jsonl       구조적 시그널 누적 장부 (append only, 수정 금지)
@@ -60,6 +60,7 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 4. "어느 축이 커지고 있는가"를 집계 숫자 근거로 한 문단 서술한다.
 5. 축 간 충돌(예: 정치권력 vs 자본권력)이 반복되면 별도로 표시한다.
 6. 논지별 증거(`thesis` 필드의 확인/반증 건수), 번복 행(`reverses`), 확인 대기(30일 넘은 커짐 시그널)를 표시한다.
+7. 섹터 보드: 4축 시그널과 기업 관찰의 방향을 섹터(테마)·티커별로 합친 점수(방향 × 크기 × 기간. 기업 관찰은 구조적 1, 미확정 0.5)로 "유리 신호가 쌓이는 섹터 / 불리 / 엇갈림 / 신호 없음"을 낸다. 관심 테마는 수집 헤드라인에서 sector_map 의 keywords 가 나온 건수(기업 검색어 소스 제외)다. 둘 다 사이트 "섹터" 탭과 같다. 점수는 근거의 누적이지 수익률 예측이 아니다.
 
 ### /review (월 1회)
 1. `framework/backdrop.md`에 이달 배경 지표를 출처 URL과 함께 한 행 추가한다.
@@ -133,7 +134,7 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 | 티커 | 무엇 | 방향 | 확신 | 왜 |
 |---|---|---|---|---|
 
-## 기업 관찰 (SpaceX · Google · Microsoft)
+## 기업 관찰
 | 기업 | 축 | 팩트 (출처) | 구조적 | 회사에 | 확신 | 축은 |
 |---|---|---|---|---|---|---|
 
@@ -158,6 +159,7 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 - 한국어. 티커·기관명은 영문 그대로.
 - 시간은 미국 동부 기준(ET)으로 표기하고 KST를 괄호로 덧붙인다.
 - 형용사 줄이고 숫자와 출처로 말한다.
+- 시그널 표의 팩트 셀은 첫 문장을 40자 안팎으로 "누가 무엇을 했다"로 쓴다. 문서 번호·조항·시각·세부 숫자는 두 번째 문장부터. 사이트가 첫 문장을 카드 제목으로 쓴다.
 - 모르면 "확인 안 됨"이라고 쓴다.
 - "쉬운 말로"와 "누가 유리하고 불리한가"는 중학생 기준으로 쓴다. 관세, ETF, 연준, 반독점 같은 용어는 처음 나올 때 괄호로 한 줄 풀이. 환율 환산 같은 추정 숫자는 만들지 않는다.
 

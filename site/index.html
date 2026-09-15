@@ -185,6 +185,39 @@ ul.feed li{padding:9px 0;border-bottom:1px solid var(--hair2);font-size:14px;lin
 ul.feed li:last-child{border-bottom:0}
 ul.feed .date{font-variant-numeric:tabular-nums;color:var(--ink2);font-size:13px;margin-right:4px}
 ul.feed .meta{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin-bottom:2px}
+/* 한눈에 (홈) */
+.glance{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:18px 0 6px}
+.gl{border:1px solid var(--hair);border-radius:12px;padding:12px 14px;background:var(--panel);min-width:0}
+.gl h3{font-size:13.5px;font-weight:600;margin:0 0 6px;display:flex;justify-content:space-between;gap:8px}
+.gl h3 a{font-weight:400;text-decoration:none}
+.gl ol{margin:0;padding-left:20px;font-size:14px;line-height:1.75}
+@media (max-width:640px){.glance{grid-template-columns:1fr}}
+/* 시그널 카드 (브리프) */
+.sigs{display:grid;grid-template-columns:1fr;gap:12px;margin:6px 0 18px}
+.sig{border:1px solid var(--hair);border-radius:12px;padding:14px 16px;background:var(--panel)}
+.sig header{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin-bottom:4px}
+.sig h3{font-family:var(--sans);font-size:17px;font-weight:600;margin:2px 0 8px;line-height:1.4}
+.sig p{margin:0 0 6px;font-family:var(--serif);font-size:15.5px;line-height:1.75}
+.sig p b{font-family:var(--sans);font-weight:600;margin-right:4px;font-size:14px}
+.sig .chips{margin:6px 0 2px}
+.sig details{margin-top:8px;font-size:13.5px}.sig summary{cursor:pointer;color:var(--ink2)}
+.sig details p{font-size:14px;font-family:var(--sans)}
+/* 섹터 보드 */
+.dv{display:flex;flex-direction:column;gap:7px}
+.dvrow{display:grid;grid-template-columns:minmax(150px,1.2fr) 2fr 52px 96px;align-items:center;gap:8px;font-size:13.5px}
+.dvlab{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dvtrack{display:grid;grid-template-columns:1fr 1fr;height:14px}
+.dvneg{display:flex;justify-content:flex-end;border-right:1px solid var(--hair)}.dvneg i{display:block;height:100%;background:var(--shrink);border-radius:3px 0 0 3px}
+.dvpos i{display:block;height:100%;background:var(--grow);border-radius:0 3px 3px 0}
+.dvval{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.dvn{white-space:nowrap}
+.dash.inner{margin:0}
+.att{display:flex;flex-direction:column;gap:6px}
+.attrow{display:grid;grid-template-columns:minmax(150px,1.2fr) 2fr 110px;align-items:center;gap:8px;font-size:13.5px}
+.attlab{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.atttrack{height:12px;background:var(--wash);border-radius:3px;overflow:hidden}.atttrack i{display:block;height:100%;background:var(--c);border-radius:3px}
+.attval{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+@media (max-width:560px){.dvrow{grid-template-columns:1fr 1.3fr 44px 76px}.attrow{grid-template-columns:1fr 1.3fr 84px}}
 /* 티커 집계 */
 h3.sub{font-size:14px;font-weight:600;margin:24px 0 8px}
 h3.sub .dim{font-weight:400;font-size:13px}
@@ -205,6 +238,7 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
   <p class="tagline">코인, 기술권력, 정치권력, 자본권력 네 축의 일간 관측 장부</p>
   <nav id="nav" aria-label="주 메뉴">
     <a href="#/" data-route="home">오늘</a>
+    <a href="#/sectors" data-route="sectors">섹터</a>
     <a href="#/trend" data-route="trend">트렌드</a>
     <a href="#/companies" data-route="companies">기업</a>
     <a href="#/ledger" data-route="ledger">장부</a>
@@ -261,15 +295,52 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
   function splitSections(text) {
     return text.split(/^## /m).slice(1).map(p => { const nl = p.indexOf('\n'); return { title: p.slice(0, nl).trim(), md: p.slice(nl + 1) }; });
   }
-  /* 읽는 순서: 쉬운 말로 → 누가 유리하고 불리한가 → 오늘의 축 시그널 → 나머지 */
+  /* 브리프 표를 카드로. 표의 행 i 와 "쉬운 말로" i 번째 항목, i 번째 "해석" 불릿이 같은 시그널이다 (brief.md 규칙) */
+  function parseTable(text) {
+    const lines = text.split('\n').filter(l => l.trim().startsWith('|'));
+    if (lines.length < 3) return null;
+    const cells = l => l.trim().replace(/^\|/, '').replace(/\|$/, '').split(/\s\|\s/).map(c => c.trim());
+    const head = cells(lines[0]), rows = lines.slice(2).map(cells).filter(r => r.length === head.length);
+    return rows.length ? { head, rows } : null;
+  }
+  function parseEasy(text) {
+    const items = []; let cur = null;
+    for (const raw of text.split('\n')) {
+      const m = raw.match(/^- \*\*(.+?)\*\*\s*$/); if (m) { cur = { name: m[1], parts: [] }; items.push(cur); continue; }
+      const p = raw.match(/^\s+- (무슨 일|왜 중요|누가 이득·손해)\s*[:：]\s*(.+)$/); if (p && cur) cur.parts.push([p[1], p[2]]);
+    }
+    return items;
+  }
+  const inlineMd = t => md(t).innerHTML.replace(/^\s*<p>/, '').replace(/<\/p>\s*$/, '');
+  const plain = t => t.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[*_`]/g, '');
   function renderBrief(container, text) {
     const secs = splitSections(text);
     const pick = t => { const i = secs.findIndex(x => x.title.startsWith(t)); return i >= 0 ? secs.splice(i, 1)[0] : null; };
     const easy = pick('쉬운 말로'), who = pick('누가 유리'), sig = pick('오늘의 축 시그널');
     container.innerHTML = '';
-    if (easy) { const p = document.createElement('section'); p.className = 'easy'; p.innerHTML = '<h2>쉬운 말로</h2>'; p.appendChild(md(easy.md)); container.appendChild(p); }
-    if (who || sig) container.insertAdjacentHTML('beforeend', KEYS);
-    for (const x of [who, sig, ...secs].filter(Boolean)) container.appendChild(md('## ' + x.title + '\n' + x.md));
+    const table = sig ? parseTable(sig.md) : null, items = easy ? parseEasy(easy.md) : [];
+    const interp = sig ? sig.md.split('\n').filter(l => /^- 해석/.test(l)) : [];
+    if (table) {
+      const cards = table.rows.map((r, i) => {
+        const [axis, fact, st, sec, dir, conf] = r, it = items[i];
+        const [theme, tk] = sec.split('·').map(x => x.trim()); const tickers = (tk || '').split(',').map(x => x.trim()).filter(Boolean);
+        const title = it ? it.name : plain(fact).split(/(?<=다\.)\s|(?<=\.)\s/)[0].slice(0, 70);
+        return `<article class="sig"><header><span class="axtag ${AXC[D.axes.indexOf(axis)]}">${esc(axis)}</span>${stBadge(st)}${dirBadge(dir)}${confBadge(conf)}<span class="dim small">${esc(theme || '')}</span></header><h3>${esc(title)}</h3>` +
+          (it ? it.parts.map(([k, v]) => `<p><b>${esc(k)}</b>${inlineMd(v)}</p>`).join('') : '') +
+          (tickers.length ? `<div class="chips">${tickers.map(t => `<span class="chip">${esc(t)}</span>`).join('')}</div>` : '') +
+          `<details><summary>근거와 출처</summary><p>${inlineMd(fact)}</p>${interp[i] ? `<p class="dim">${inlineMd(interp[i].replace(/^- /, ''))}</p>` : ''}</details></article>`;
+      }).join('');
+      container.insertAdjacentHTML('beforeend', KEYS + `<div class="sigs">${cards}</div>` + (/오늘 구조적 시그널 없음/.test(sig.md) ? `<p class="keys">오늘 구조적 시그널 없음. 위 카드는 아직 확정되지 않은 재료입니다.</p>` : ''));
+    } else {
+      if (easy) { const p = document.createElement('section'); p.className = 'easy'; p.innerHTML = '<h2>쉬운 말로</h2>'; p.appendChild(md(easy.md)); container.appendChild(p); }
+      if (who || sig) container.insertAdjacentHTML('beforeend', KEYS);
+      if (sig) container.appendChild(md('## ' + sig.title + '\n' + sig.md));
+    }
+    for (const x of [who, ...secs].filter(Boolean)) container.appendChild(md('## ' + x.title + '\n' + x.md));
+    if (table) {
+      const d = document.createElement('details'); d.className = 'more'; d.innerHTML = '<summary>원본 시그널 표·해석·확인 방법 메모</summary>';
+      d.appendChild(md('## 오늘의 축 시그널\n' + sig.md)); if (easy) d.appendChild(md('## 쉬운 말로\n' + easy.md)); container.appendChild(d);
+    }
     decorateTables(container);
   }
   function mountBrief(container, date) {
@@ -441,6 +512,41 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     return `<div class="panel full"><h3>논지 점검 <span class="dim">framework/thesis.md. 확인·반증은 최근 ${w.days}일 장부의 thesis 필드. 상태는 Ken 이 /review 로 바꿉니다</span></h3><div class="tbl"><table class="theses"><thead><tr><th>번호</th><th>논지</th><th>상태</th><th class="num">확인</th><th class="num">반증</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   }
 
+  /* ---- 섹터 보드: 장부의 유리·불리를 섹터·티커별로 합친 점수, 헤드라인 관심 테마 ---- */
+  const fmtScore = v => (v > 0 ? '+' : '') + (Number.isInteger(v) ? v : v.toFixed(1));
+  const scoreCls = v => (v > 0 ? 'gs' : v < 0 ? 'ss' : 'dim');
+  const GROUPS = { up: '유리 신호가 쌓이는 섹터', down: '불리 신호가 쌓이는 섹터', mixed: '엇갈리는 섹터' };
+  function divergingBars(themes) {
+    const max = Math.max(1, ...themes.map(t => Math.abs(t.score)));
+    return `<div class="dv">` + themes.map(t => `<div class="dvrow"><span class="dvlab" title="${esc(t.theme)}"><span class="axtag ${AXC[D.axes.indexOf(t.axis)]}">${esc(t.axis)}</span> ${esc(t.theme)} <span class="dim small">${t.tickers.map(esc).join(', ')}</span></span>` +
+      `<span class="dvtrack"><span class="dvneg">${t.score < 0 ? `<i style="width:${(-t.score / max * 100).toFixed(1)}%"></i>` : ''}</span><span class="dvpos">${t.score > 0 ? `<i style="width:${(t.score / max * 100).toFixed(1)}%"></i>` : ''}</span></span>` +
+      `<span class="dvval ${scoreCls(t.score)}">${fmtScore(t.score)}</span><span class="dvn dim small">▲${t.up} ▼${t.down} ◆${t.both}</span></div>`).join('') + `</div>`;
+  }
+  const recentList = rs => `<ul class="feed">` + rs.map(r => `<li><div class="meta"><span class="date">${r.date}</span>${stBadge(r.structural)}${dirBadge(r.dir)}${r.company ? `<span class="dim small">기업 관찰 · ${esc(r.company)}</span>` : ''}</div>${esc(r.fact)} <a href="${esc(r.source)}" target="_blank" rel="noopener">출처</a><br><span class="small dim">${esc(r.note)}</span></li>`).join('') + `</ul>`;
+  const themeCards = list => list.map(t => `<div class="panel"><h3>${esc(t.theme)} <span class="dim">${esc(t.axis)} · ${t.tickers.map(esc).join(', ')} · ${t.n}건 (구조적 ${t.structural}) · 점수 <b class="${scoreCls(t.score)}">${fmtScore(t.score)}</b></span></h3>${recentList(t.recent)}</div>`).join('');
+  function attentionPanel(A, limit) {
+    if (!A || !A.themes.length || !A.days_present7) return '';
+    const top = A.themes.slice(0, limit || 12), max = Math.max(1, ...top.map(t => t.n7));
+    const note = A.comparable ? `괄호는 지난주 대비 비중 변화(%p)` : `지난주 자료가 ${A.days_present_prev7}일뿐이라 비교는 다음 주부터`;
+    return `<div class="panel full"><h3>관심 테마 <span class="dim">최근 7일 수집 헤드라인 ${A.headlines7}건(수집 ${A.days_present7}일)에서 언급된 건수와 비중. ${note}</span></h3><div class="att">` +
+      top.map(t => `<div class="attrow"><span class="attlab" title="${esc(t.theme)}"><span class="axtag ${AXC[D.axes.indexOf(t.axis)]}">${esc(t.axis)}</span> ${esc(t.theme)}</span><span class="atttrack"><i class="${AXC[D.axes.indexOf(t.axis)]}" style="width:${(t.n7 / max * 100).toFixed(1)}%"></i></span><span class="attval">${t.n7} <span class="dim small">${t.share7}%</span>${A.comparable ? ` <span class="${scoreCls(t.delta_pp)} small">(${signed(t.delta_pp)}p)</span>` : ''}</span></div>`).join('') +
+      `</div><p class="keys" style="margin:8px 0 0">소스는 4축 검색어(관세, Fed rate, 빅테크 반독점, 비트코인 ETF)와 Federal Register·연준 보도자료입니다. 기업 검색어 소스는 뺐습니다. 검색어 때문에 편향이 있으니 절대량보다 순위와 주간 변화를 봅니다.</p></div>`;
+  }
+  function sectors(arg) {
+    const days = arg === '90' ? 90 : 30, S = D.sectors && (days === 90 ? D.sectors.w90 : D.sectors.w30), A = D.attention;
+    WIN = null;
+    let h = `<p class="dateline">어느 섹터를 보고 있는가</p><p class="hero-sub">위는 이번 주 헤드라인에서 많이 나온 테마(관심), 아래는 장부에 쌓인 유리·불리 신호를 섹터와 티커로 합친 점수(근거)입니다. 점수는 방향 × 크기 × 기간의 합이지 수익률 예측이 아닙니다. 기대를 높일지 낮출지는 근거가 어느 쪽에 얼마나 쌓였는지로 판단합니다.</p>`;
+    h += `<section class="dash">${attentionPanel(A)}</section>`;
+    if (!S) { app.innerHTML = h + `<p class="empty">섹터 보드 자료가 없습니다.</p>`; return; }
+    h += segTabs('#/sectors', days, `${S.from} ~ ${S.to}. 유리 ${S.counts.up} · 불리 ${S.counts.down} · 엇갈림 ${S.counts.mixed} · 신호 없음 ${S.counts.none}`);
+    h += `<section class="dash"><div class="panel full"><h3>섹터별 유리·불리 점수 <span class="dim">오른쪽(파랑) 유리, 왼쪽(주황) 불리. ▲▼◆는 유리·불리·양쪽 건수</span></h3>${S.themes.length ? divergingBars(S.themes) : '<p class="empty">이 기간에 신호가 없습니다.</p>'}</div>`;
+    for (const g of ['up', 'down', 'mixed']) { const list = S.themes.filter(t => t.group === g); if (list.length) h += `<div class="panel full"><h3>${GROUPS[g]} <span class="dim">${list.length}개. 최근 신호 3건씩</span></h3><div class="dash inner">${themeCards(list)}</div></div>`; }
+    h += `<div class="panel full"><h3>신호 없는 섹터 <span class="dim">${S.none.length}개. 이 기간 장부에 한 건도 없음. 시장이 안 건드리는 곳이거나 우리 소스가 못 보는 곳</span></h3><div class="chips">${S.none.map(t => `<span class="chip"><span class="dim">${esc(t.axis)}</span> ${esc(t.theme)} <span class="dim small">${t.tickers.map(esc).join(', ')}</span></span>`).join('')}</div></div>`;
+    h += `<div class="panel full"><h3>티커별 <span class="dim">점수 절대값 순. 여러 테마에 걸친 티커는 모두 합산</span></h3>` + (S.tickers.length ? `<div class="tbl"><table class="tickers"><thead><tr><th>티커</th><th>테마</th><th class="num">점수</th><th class="num">유리</th><th class="num">불리</th><th class="num">양쪽</th><th>마지막 신호</th></tr></thead><tbody>` +
+      S.tickers.map(x => `<tr><td class="nowrap"><b>${esc(x.ticker)}</b></td><td class="small">${x.themes.map(esc).join(', ')}</td><td class="num ${scoreCls(x.score)}">${fmtScore(x.score)}</td><td class="num">${x.up}</td><td class="num">${x.down}</td><td class="num">${x.both}</td><td class="date">${x.last}</td></tr>`).join('') + `</tbody></table></div>` : '<p class="empty">없음</p>') + `</div></section>`;
+    app.innerHTML = h;
+  }
+
   /* 기간 전환 (30/90일) */
   const segTabs = (base, days, note) => `<div class="seg" role="tablist" aria-label="기간">` + [30, 90].map(n => `<a role="tab" aria-selected="${n === days}" href="${base}/${n}">최근 ${n}일</a>`).join('') + `<span class="dim">${note}</span></div>`;
 
@@ -513,9 +619,17 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     WIN = null;
     const bits = [`최근 30일 장부 ${w.total}건`, `전체 ${D.ledger.length}건`, rawLine(b ? b.date : D.today)].filter(Boolean);
     let h = `<p class="dateline">${fmtDate(D.today)}</p><p class="hero-sub">${bits.join(', ')}</p>`;
+    const S = D.sectors && D.sectors.w30, A = D.attention;
+    if (S || A) {
+      const ups = S ? S.themes.filter(t => t.group === 'up').slice(0, 3) : [], downs = S ? S.themes.filter(t => t.group === 'down').slice(0, 3) : [];
+      const att = A && A.days_present7 ? A.themes.slice(0, 3) : [];
+      const li = t => `<li><b>${esc(t.theme)}</b> <span class="dim small">${t.tickers.map(esc).join(', ')}</span> <span class="${scoreCls(t.score)} small">${fmtScore(t.score)}</span></li>`;
+      h += `<section class="glance"><div class="gl"><h3>이번 주 관심 테마 <a href="#/sectors">섹터 →</a></h3>${att.length ? `<ol>${att.map(t => `<li><b>${esc(t.theme)}</b> <span class="dim small">${t.n7}건 · ${t.share7}%</span></li>`).join('')}</ol>` : '<p class="empty">수집 자료 없음</p>'}</div>` +
+        `<div class="gl"><h3>30일 유리 신호가 쌓인 섹터 <a href="#/sectors">근거 →</a></h3>${ups.length ? `<ol>${ups.map(li).join('')}</ol>` : '<p class="empty">없음</p>'}</div>` +
+        `<div class="gl"><h3>30일 불리 신호가 쌓인 섹터</h3>${downs.length ? `<ol>${downs.map(li).join('')}</ol>` : '<p class="empty">없음</p>'}</div></section>`;
+    }
     h += scaleChart(w, `최근 30일, ${w.from}부터 ${w.to}까지`);
     if (!D.ledger.length) h += `<p class="empty">장부가 비어 있습니다. /brief 를 실행하고 push 하면 여기에 쌓입니다.</p>`;
-    if (w.tickers && w.tickers.by_ticker.length) h += `<p class="keys" style="margin-top:14px">30일 티커 언급 <span class="dim">많이 나온 순. 섹터별 묶음과 추이는 <a href="#/trend">트렌드 대시보드</a></span></p><div class="chips">${w.tickers.by_ticker.slice(0, 12).map(tickerChip).join('')}</div>`;
     if (b) h += `<h2 class="sec">${b.date === D.today ? '오늘의 브리프' : '최근 브리프'} <span class="dim">${b.date}</span></h2><div id="brief"></div>`;
     else h += `<h2 class="sec">브리프</h2><p class="empty">아직 브리프가 없습니다.</p>`;
     if (D.briefs.length > 1) {
@@ -607,8 +721,8 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     document.getElementById('axes').appendChild(md(D.framework.axes_md));
   }
 
-  const views = { home, trend: a => trend(a), companies: a => companies(a), ledger, briefs, framework, brief: a => brief(a) };
-  const titles = { home: 'radar', trend: '트렌드', companies: '기업', ledger: '장부', briefs: '브리프', framework: '기준', brief: '브리프' };
+  const views = { home, sectors: a => sectors(a), trend: a => trend(a), companies: a => companies(a), ledger, briefs, framework, brief: a => brief(a) };
+  const titles = { home: 'radar', sectors: '섹터', trend: '트렌드', companies: '기업', ledger: '장부', briefs: '브리프', framework: '기준', brief: '브리프' };
   function route() {
     if (!D) return;
     const [seg, arg] = location.hash.replace(/^#\/?/, '').split('/');

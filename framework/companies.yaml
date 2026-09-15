@@ -6,11 +6,11 @@ SpaceX:
   query: SpaceX OR Starlink
   tickers: [SPCX]
   note: 2026-06-12 Nasdaq 상장(SPCX). 정부 계약·규제·행정부와의 관계(정치권력), 위성·발사·궤도 AI 컴퓨트(기술권력), 락업 해제·대형 운용사 지분·밸류에이션(자본권력), 재무제표 코인 보유(코인)
-Google:
-  source: gnews_co_google
-  query: Google OR Alphabet
-  tickers: [GOOGL]
-  note: 반독점·규제(정치권력), capex·AI 모델·클라우드(기술권력), 회사채·자사주·밸류에이션(자본권력), 클라우드 블록체인·스테이블코인 결제(코인)
+BITO:
+  source: gnews_co_bito
+  query: BITO ETF OR "ProShares Bitcoin"
+  tickers: [BITO]
+  note: ProShares 비트코인 선물 ETF. 규제·세제(정치권력), 자금흐름·옵션·운용사(자본권력), 코인 시장 구조·ETF 경쟁(코인). Google 대신 관찰 (Ken 요청 2026-09-16)
 Microsoft:
   source: gnews_co_microsoft
   query: Microsoft

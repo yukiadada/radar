@@ -22,7 +22,8 @@ from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "fetch"))
-from config import AXES, load_companies  # noqa: E402
+from config import AXES, load_companies, load_sector_map, theme_keywords  # noqa: E402
+from scoring import attention, grow, in_window, sector_board, weight  # noqa: E402
 
 SITE = ROOT / "site"
 OUT = SITE / "out"
@@ -31,12 +32,6 @@ CONF = re.compile(r"\[충돌:\s*(\S+)\s+vs\s+(\S+)\s*\]", re.I)
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 THESIS_RE = re.compile(r"^## (T\d+)\s+(.+?)\s*$", re.M)
 THESIS_TAG = re.compile(r"^(T\d+)([+-])$")
-HW = {"분기": 1, "1년": 2, "다년": 3}  # impact × horizon 가중. 필드 없는 옛 줄은 1
-
-
-def weight(r: dict) -> int:
-    imp = r.get("impact")
-    return (imp if isinstance(imp, int) and not isinstance(imp, bool) else 1) * HW.get(r.get("horizon"), 1)
 
 
 def load_theses() -> list[dict]:
@@ -69,11 +64,6 @@ def d(s: str) -> datetime.date:
     return datetime.date.fromisoformat(s)
 
 
-def grow(r: dict) -> str:
-    m = GROW.match(r.get("note", ""))
-    return m.group(1) if m else "미표기"
-
-
 def load_jsonl(path: Path) -> list[dict]:
     """장부 한 줄 = JSON 하나. line(줄 번호)과 grow(note 첫 단어)를 붙인다. data.json 전용 파생 필드이며 장부 파일은 건드리지 않는다."""
     rows: list[dict] = []
@@ -91,17 +81,6 @@ def load_jsonl(path: Path) -> list[dict]:
         r["grow"] = grow(r)
         rows.append(r)
     return rows
-
-
-def in_window(rows: list[dict], today: datetime.date, days: int) -> tuple[list[dict], dict]:
-    """최근 days 일 창: cut < date <= today. from 은 cut+1 (포함), to 는 today (포함)."""
-    cut = today - datetime.timedelta(days=days)
-    w = [r for r in rows if cut < d(r["date"]) <= today]
-    return w, {"days": days, "from": (cut + datetime.timedelta(days=1)).isoformat(), "to": today.isoformat()}
-
-
-def pair(m: re.Match) -> str:
-    return " vs ".join(sorted((m.group(1), m.group(2)), key=lambda x: AXES.index(x) if x in AXES else 99))
 
 
 def window(rows: list[dict], today: datetime.date, days: int) -> dict:
@@ -265,6 +244,12 @@ def main(argv=None) -> int:
     today = d(args.date) if args.date else now.date()
 
     rows = load_jsonl(ROOT / "ledger/signals.jsonl")
+    crows = load_jsonl(ROOT / "ledger/companies.jsonl")
+    try:
+        themes = load_sector_map()
+    except ValueError as e:
+        print(f"경고 sector_map.yaml: {e}. 섹터 보드·관심 테마 생략", file=sys.stderr)
+        themes = {}
     briefs = load_briefs()
     data = {
         "generated_at": now.replace(microsecond=0).isoformat(),
@@ -280,7 +265,9 @@ def main(argv=None) -> int:
         "raw": load_raw(),
         "axes": list(AXES),
         "theses": load_theses(),
-        "companies": companies_data(companies_cfg(), load_jsonl(ROOT / "ledger/companies.jsonl"), today),
+        "companies": companies_data(companies_cfg(), crows, today),
+        "sectors": {"w30": sector_board(rows, crows, today, 30, themes), "w90": sector_board(rows, crows, today, 90, themes)} if themes else None,
+        "attention": attention(today, 14, themes=themes, keywords=theme_keywords()) if themes else None,
     }
 
     OUT.mkdir(parents=True, exist_ok=True)
@@ -290,8 +277,10 @@ def main(argv=None) -> int:
     (OUT / "data.json").write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     shutil.copyfile(SITE / "index.html", OUT / "index.html")
     (OUT / ".nojekyll").write_text("", encoding="utf-8")
-    print(f"built site/out: briefs {len(briefs)}, ledger {len(rows)}, companies {len(data['companies']['rows'])}, today {today}, "
-          f"30d {data['trend']['w30']['total']} / 90d {data['trend']['w90']['total']}")
+    att = data["attention"]
+    print(f"built site/out: briefs {len(briefs)}, ledger {len(rows)}, companies {len(crows)}, today {today}, "
+          f"30d {data['trend']['w30']['total']} / 90d {data['trend']['w90']['total']}, "
+          f"sectors up/down/mixed {data['sectors']['w30']['counts'] if data['sectors'] else '-'}, attention days {att['days_present7'] if att else 0}")
     return 0
 
 

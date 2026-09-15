@@ -36,7 +36,7 @@ CLAUDE.md "워크플로 > /brief"를 실행한다. 아래 순서를 건너뛰지
   3. 둘 다 안 되면 structural=false, confidence 0.3 으로 내리거나 버린다. 헤드라인만 보고 structural=true 를 쓰지 않는다.
 - 숫자·날짜·주체는 확인한 출처에 있는 것만 쓴다. 검색 결과에서 얻은 숫자는 그 검색 결과 페이지의 URL 을 팩트 셀에 함께 적는다. URL 이 없으면 그 숫자를 쓰지 않는다(CLAUDE.md 규칙 5). 헤드라인끼리 숫자가 다르면 "확인 안 됨".
 - 후보마다 아래 셋을 따로 적는다. 섞지 않는다.
-  - 팩트: 출처에 있는 내용만 한 문장. 기억이나 추정으로 보강하지 않는다.
+  - 팩트: 출처에 있는 내용만. 첫 문장은 40자 안팎으로 "누가 무엇을 했다"(사이트가 카드 제목으로 쓴다). 문서 번호·조항·시각·세부 숫자는 두 번째 문장부터. 기억이나 추정으로 보강하지 않는다.
   - 해석: 왜 이 축이 커지거나 작아지는 신호인지. axes.md의 "커진다/작아진다" 기준을 인용한다. 팩트 셀에는 해석을, 해석에는 출처 없는 새 숫자를 넣지 않는다.
   - 영향 섹터: sector_map.yaml의 테마 키 하나 + 티커 최대 3개. 영향은 항상 "~라는 가설"로 쓴다.
 - 같은 사건을 다루는 기사가 여럿이면 하나로 합친다.
@@ -44,7 +44,7 @@ CLAUDE.md "워크플로 > /brief"를 실행한다. 아래 순서를 건너뛰지
 - Federal Register 원문은 하루 수십~수백 건이다. 제목과 summary로 4축 관련만 고른다. 나머지는 "버린 뉴스"에 나열하지 않는다.
 - 시각 표기: `published`는 UTC다. ET로 바꾸고 KST를 괄호로 덧붙인다. 3월 둘째 일요일~11월 첫째 일요일은 EDT(UTC-4), 그 외는 EST(UTC-5). Federal Register 항목은 `published`가 게재일 04:00 UTC 고정이므로 시각 대신 "M/D 게재"라고 쓴다. `published`가 null이면 시각을 쓰지 않는다.
 
-## 2b. 기업 관찰 후보 (SpaceX · Google · Microsoft)
+## 2b. 기업 관찰 후보 (companies.yaml 의 기업)
 
 `framework/companies.yaml` 의 기업마다 그 기업의 raw 소스(`gnews_co_*`)를 읽고, 4축 중 하나에 영향을 주는 항목만 고른다. 기업당 하루 최대 3건. 없으면 0건("해당 없음"). 이 표와 장부는 4축 시그널과 별개다. 같은 사건이 둘 다에 올라도 된다.
 - `company`: companies.yaml 의 키 그대로.
@@ -116,8 +116,8 @@ python3 fetch/ledger.py --ledger companies --date <날짜> --rows /tmp/company_r
 
 ```json
 [
-  {"date": "<날짜>", "company": "Google", "axis": "정치권력", "fact": "한 문장. 출처에 있는 내용만.", "source": "https://...",
-   "structural": false, "direction": "-", "confidence": 0.3, "note": "커짐. 왜 그런지 한 줄.", "tickers": ["GOOGL"]}
+  {"date": "<날짜>", "company": "Microsoft", "axis": "정치권력", "fact": "한 문장. 출처에 있는 내용만.", "source": "https://...",
+   "structural": false, "direction": "-", "confidence": 0.3, "note": "커짐. 왜 그런지 한 줄.", "tickers": ["MSFT"]}
 ]
 ```
 
@@ -148,10 +148,10 @@ python3 fetch/ledger.py --ledger companies --date <날짜> --rows /tmp/company_r
 |---|---|---|---|---|
 | XLI, CAT | 미국 산업재 ETF, 건설기계 회사 | ± | 0.6 | 한 줄 |
 
-## 기업 관찰 (SpaceX · Google · Microsoft)
+## 기업 관찰
 | 기업 | 축 | 팩트 (출처) | 구조적 | 회사에 | 확신 | 축은 |
 |---|---|---|---|---|---|---|
-| Google | 정치권력 | 한 문장. 9/8 ET (KST). ([출처](https://...)) | false | - | 0.3 | 커짐 |
+| Microsoft | 정치권력 | 한 문장. 9/8 10:00 ET (23:00 KST). ([출처](https://...)) | false | - | 0.3 | 커짐 |
 
 해당 없음: SpaceX
 
@@ -176,7 +176,7 @@ python3 fetch/ledger.py --ledger companies --date <날짜> --rows /tmp/company_r
 - 표 아래 "해석" 불릿은 표의 행마다 하나씩. 팩트 셀에 해석을 섞지 않기 위한 자리다(CLAUDE.md 규칙 2). structural=true 행은 불릿 끝에 `(기간 · 크기 · 경로 · 논지)` 를 괄호로 붙인다. rows.json 의 horizon·impact·channel·thesis 와 같은 값. 번복 행이면 `번복: 줄 n` 도 붙인다.
 - "쉬운 말로"는 표의 행마다 하나씩, 무슨 일 / 왜 중요 / 누가 이득·손해 세 줄. 중학생이 읽는다고 생각하고 쓴다. 관세, ETF, 연준, 반독점 같은 용어는 처음 나올 때 괄호로 한 줄 풀이. 숫자는 출처 그대로 쓰고 환율 환산 같은 추정은 만들지 않는다.
 - "누가 유리하고 불리한가"는 시그널 표에 나온 티커만, 방향과 확신은 시그널 표와 같은 값. "무엇"은 티커의 쉬운 이름, "왜"는 한 줄. 매매 지시 표현 금지는 여기도 같다.
-- "기업 관찰" 표는 5b 의 company_rows.json 과 같은 값(기업, 축, 팩트, 구조적, 회사에=direction, 확신, 축은=note 첫 단어). 행이 없는 기업은 표 아래 "해당 없음: 기업명" 한 줄. 세 기업 모두 없으면 표 대신 "해당 없음: SpaceX, Google, Microsoft".
+- "기업 관찰" 표는 5b 의 company_rows.json 과 같은 값(기업, 축, 팩트, 구조적, 회사에=direction, 확신, 축은=note 첫 단어). 행이 없는 기업은 표 아래 "해당 없음: 기업명" 한 줄. 모든 기업이 없으면 표 대신 "해당 없음: (기업 이름 나열)".
 - "버린 뉴스"는 축에 걸릴 듯했지만 버린 것만 최대 10줄. 이유 예: 발언만 있고 문서 없음 / 제안 단계 / 4축 어디에도 안 걸림 / 가격 등락 자체 / 같은 사건 중복 / 구조적이나 맵 영향 없음.
 - "논지 점검"은 thesis.md 번호로 쓴다. 오늘 시그널의 thesis 값을 모아 `T4+ 확인: 한 줄` 식으로 논지마다 한 줄. 없으면 "해당 없음". 논지 문장 자체는 고치지 않는다(Ken 이 /review 로 바꾼다).
 - "맵 수정 제안" 섹션은 제안이 있을 때만 쓴다. 없으면 섹션 자체를 생략한다.

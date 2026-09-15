@@ -67,6 +67,25 @@ def all_tickers(themes: dict[str, tuple[str, list[str]]]) -> set[str]:
     return {t for _, ts in themes.values() for t in ts}
 
 
+def theme_keywords(path: Path = SECTOR_MAP) -> dict[str, list[str]]:
+    """{테마: [키워드]}. 헤드라인 언급량(관심 테마) 계산용. keywords 줄이 없는 테마는 빈 리스트."""
+    out: dict[str, list[str]] = {}
+    theme = None
+    for line in _lines(path):
+        if re.match(r"^\S[^:]*:\s*$", line):
+            theme = None
+            continue
+        m = re.match(r"^  (\S[^:]*):\s*$", line)
+        if m:
+            theme = m.group(1).strip()
+            out.setdefault(theme, [])
+            continue
+        m = re.match(r"^\s+keywords:\s*(\[.*\])\s*$", line)
+        if m and theme:
+            out[theme] = [k.lower() for k in _list(m.group(1))]
+    return out
+
+
 def load_companies(path: Path = COMPANIES) -> list[dict]:
     """[{name, source, query, tickers, note, error}]. 항목 하나의 문제는 그 항목의 error 에 적어 돌려주고,
     파일 전체의 문제(이름 중복, 들여쓰기 오류)만 ValueError. 파일이 없으면 []."""

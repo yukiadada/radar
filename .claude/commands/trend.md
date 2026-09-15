@@ -123,6 +123,31 @@ for a in AXES:
         cells.append(f"{len(s)} ({g['커짐']}/{g['작아짐']})")
     print(f"| {a} | " + " | ".join(cells) + " |")
 
+# 섹터 보드 (fetch/scoring.py. 사이트 "섹터" 탭과 같은 계산)
+sys.path.insert(0, "fetch")
+from scoring import sector_board, attention
+crows = []
+cp = Path("ledger/companies.jsonl")
+if cp.exists():
+    for n, l in enumerate(cp.read_text(encoding="utf-8").split("\n"), 1):
+        if l.strip(): d = json.loads(l); d["line"] = n; crows.append(d)
+for r in rows: r["line"] = r["_line"]
+NAME = {"up": "유리 누적", "down": "불리 누적", "mixed": "엇갈림"}
+for days in (30, 90):
+    S = sector_board(rows, crows, today, days)
+    print(f"\n## 섹터 보드 (최근 {days}일. 점수 = 방향 × 크기 × 기간, 기업 관찰은 구조적 1·미확정 0.5) 유리 {S['counts']['up']} / 불리 {S['counts']['down']} / 엇갈림 {S['counts']['mixed']} / 신호 없음 {S['counts']['none']}")
+    print("| 축 | 섹터 | 티커 | 점수 | 유리/불리/양쪽 | 건수(구조적) | 분류 | 최근 신호 |")
+    print("|---|---|---|---|---|---|---|---|")
+    for b in S["themes"]:
+        print(f"| {b['axis']} | {b['theme']} | {', '.join(b['tickers'])} | {b['score']:+g} | {b['up']}/{b['down']}/{b['both']} | {b['n']}({b['structural']}) | {NAME[b['group']]} | {b['recent'][0]['date']} {b['recent'][0]['fact'][:60]} |")
+    print("- 신호 없는 섹터: " + (", ".join(b["theme"] for b in S["none"]) or "없음"))
+    print("- 티커별: " + (", ".join(f"{x['ticker']} {x['score']:+g}({x['up']}/{x['down']}/{x['both']})" for x in S["tickers"]) or "없음"))
+A = attention(today)
+print(f"\n## 관심 테마 (최근 7일 수집 헤드라인 {A['headlines7']}건, 수집 {A['days_present7']}일. 기업 검색어 소스 제외. 지난주 비교 {'가능' if A['comparable'] else '불가(자료 부족)'})")
+for x in A["themes"][:12]:
+    print(f"- {x['theme']}: {x['n7']}건 ({x['share7']}%)" + (f", 지난주 대비 {x['delta_pp']:+g}p" if A["comparable"] else ""))
+if not A["days_present7"]: print("- raw/ 가 없어 계산 못 함 (로컬이면 python3 fetch/fetch.py 또는 radar-raw 연결)")
+
 print("\n## 번복 행 (reverses)")
 rev = [r for r in rows if r.get("reverses")]
 for r in rev: print(f"- {r['date']} [{r['axis']}/{r['theme']}] 줄 {r['_line']} 이 줄 {r['reverses']} 을 뒤집음: {r['fact'][:80]}")
@@ -164,6 +189,8 @@ EOF
 - 티커 집계 표는 스크립트 출력을 그대로 옮긴다. "두 섹터 이상에서 나온 티커"가 있으면 그 티커가 어느 섹터들에서 나왔는지 한 줄로 밝힌다. 횟수는 언급 횟수이지 강도가 아니다.
 - 가중 집계가 건수와 다른 그림을 보이면(건수는 많은데 가중은 작거나 그 반대) 그 점을 한 줄로 밝힌다. 축 판단은 건수와 가중을 같이 보고, 둘이 어긋나면 "유보"로 쓴다.
 - 논지별 증거는 thesis.md 번호와 제목으로 쓴다. 확인·반증 건수만 옮기고 상태 변경은 제안하지 않는다(그건 /review).
+- 섹터 보드는 "어느 섹터에 유리·불리 근거가 쌓였는가"를 답하는 표다. 점수의 부호와 유리/불리 건수를 같이 옮기고, 최근 신호 한 줄로 이유를 붙인다. 티커별 줄은 그대로 옮긴다. 수익률 예측처럼 쓰지 않는다.
+- 관심 테마는 헤드라인 언급량이라 방향이 없다. 순위와 주간 변화만 말하고, 섹터 보드의 방향과 붙여 "관심은 높은데 근거는 없는 곳 / 관심은 낮은데 근거가 쌓이는 곳"을 짚는다.
 - 소스 편향을 밝힌다: 정치권력은 federal_register·gnews_tariff, 자본권력은 fed_press·gnews_fed_rate, 기술권력은 gnews_big_tech_antitrust, 코인은 gnews_bitcoin_etf 가 입력이다. 기술·자본 축의 분기 자료(실적 가이던스, SEP, QRA, 13F)는 파이프라인에 없어 건수가 적게 나온다. 축 간 건수 차이를 그대로 힘의 차이로 읽지 않는다.
 - 맵 수정 제안 등장 횟수는 대문자 토큰 집계라서 티커가 아닌 것이 섞인다. 티커로 보이는 것만 남기고 3회 이상이면 Ken에게 추가 검토를 제안한다.
 - 매매 표현 금지. 영향은 "~라는 가설"로 쓴다. 미국 시장 기준.
@@ -187,6 +214,12 @@ EOF
 
 ## 축 간 충돌
 없음 / 조합별 90일·30일 건수와 각 건의 결과
+
+## 섹터 보드
+(스크립트 표 그대로: 30일, 90일. 신호 없는 섹터와 티커별 줄 포함)
+
+## 관심 테마
+(스크립트 출력 그대로 + 섹터 보드와 붙인 한 줄)
 
 ## 논지별 증거
 T번호 제목: 확인 n / 반증 m (30일, 90일)
