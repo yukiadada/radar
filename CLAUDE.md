@@ -165,16 +165,18 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 
 ## 현재 상태
 
-> /save 자동 업데이트 — 2026-09-12 23:30
+> /save 자동 업데이트 — 2026-09-16 00:18
 
 **브랜치:** main
-**마지막 커밋:** 27147f6 sector_map: 우주/위성 [SPCX] 테마 Ken 승인 (2026-09-12)
+**마지막 커밋:** 972aa9b 섹터 탭·홈 한눈에·브리프 카드: 장부의 유리·불리를 섹터·티커별 점수(방향×크기×기간)로 합친 섹터 보드, 수집 헤드라인 키워드로 세는 관심 테마(fetch/scoring.py, sector_map 
 
 **미완료 항목:**
-- 9/13 06:20 KST 루틴이 새 절차(fetch/ledger.py --append, 기업 관찰 2b/5b)로 사람 개입 없이 끝나는지 확인. 루틴 로그 claude.ai/code/routines/trig_01564MDnvQH3DtPRvCiqfaDY
+- 9/16 06:20 KST 루틴 확인 (팩트 첫 문장 40자 규칙, "## 기업 관찰" 제목, BITO 관찰). 루틴 로그 claude.ai/code/routines/trig_01564MDnvQH3DtPRvCiqfaDY
+- 관심 테마의 지난주 비교는 raw 14일이 쌓이는 9/23 께부터. 키워드는 sector_map.yaml 의 keywords 에서 Ken 이 조정
+- 기존 Google 관찰 행 7건은 companies.yaml 에 없어 기업 탭에서 제외(섹터 보드에는 GOOGL 로 반영). append only 라 유지
 - 첫 /review 는 10월 초 (9월 backdrop.md 행 + 확인 대기 점검). thesis.md 상태 변경은 Ken 승인 후에만
 - Ken: claude.ai/code Default 환경 네트워크 접근 확대 (WebFetch EGRESS_BLOCKED 해제 시 1차 출처 본문 확인 가능)
-- 9/11 장부 4번째 줄은 구 규칙(검색 교차만으로 0.6). 1~6번 줄에는 새 필드 없음. append only 라 유지
-- 로컬 작업 전 `git pull`. 로컬 /brief 는 `python3 fetch/fetch.py` 로 raw/ 생성(미추적). 장부는 `fetch/ledger.py --append` 로만
-- 루틴 사용량 매일 누적(실행당 opus-5 약 8분, 기업 관찰로 늘어남). 부담되면 sonnet-5 로 변경
+- 장부 1~6번 줄에는 새 필드 없음, 9/11 4번째 줄은 구 규칙. append only 라 유지
+- 로컬 작업 전 `git pull` (../radar-raw 도). 로컬 raw 는 ../radar-raw/raw 심볼릭 링크. 장부는 `fetch/ledger.py --append` 로만
+- 루틴 사용량 매일 누적(실행당 opus-5 약 8~13분). 부담되면 sonnet-5 로 변경
 - 저장소: https://github.com/yukiadada/radar (public), https://github.com/yukiadada/radar-raw (private, raw). 사이트 https://yukiadada.github.io/radar/
