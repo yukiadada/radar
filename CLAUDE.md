@@ -155,12 +155,13 @@ logs/                      세션 로그 (/save 가 만듦, git 미추적)
 
 ## 현재 상태
 
-> /save 자동 업데이트 — 2026-09-17 19:27
+> /save 자동 업데이트 — 2026-09-17 19:44
 
 **브랜치:** main
-**마지막 커밋:** 424cdbb 방향 브리프: briefs/direction.md (쉬운 말로 읽는 지금의 방향) 를 홈 "지금 세상의 방향" 아래에 표시
+**마지막 커밋:** b7dc8f1 사이트 디자인 리뉴얼 (HCI 기준, 고딕 전용 글꼴)
 
 **미완료 항목:**
+- 사이트는 2026-09-17 에 HCI 기준으로 리뉴얼(site/index.html): Pretendard 고딕 단일(jsdelivr, 막히면 시스템 고딕), 화면마다 h1 제목 구조, 홈 한눈에 요약 4칸, 설명은 "기호 읽는 법" 펼침. 새 화면을 만들면 pageHead·secHead·legendBox 부품과 글자·색 토큰을 쓴다. 넓은 표는 모바일에서 가로 스크롤
 - briefs/direction.md(홈 "방향 브리프")는 2026-09-17 w30 숫자로 쓴 손글씨 문서. 자동 갱신 없음. 장부가 쌓이면 카드 숫자와 어긋나므로 /trend 때 같이 다시 쓸지 Ken 판단
 - 9/18 04:30 KST fetch.yml: 새 소스 10개 수집 + 종가 갱신 단계(market.py --update, Cboe 가 Actions IP 에서 열리는지) + radar-raw prices 커밋을 로그로 확인. ftc_press(ua: browser)가 Actions 에서 열리는지도. 막히면 error 파일이 남고 사이트 raw 표에 표시
 - 9/18 06:20 KST 루틴: 새 /brief(빌드 확인, 1차 출처 피드 항목은 검색 교차 없이 0.6, "## 시장 반응" 절)가 정상 실행되는지 확인. 루틴 프롬프트가 옛 파일(companies 등)을 언급하면 수정. 루틴 로그 claude.ai/code/routines
