@@ -210,6 +210,9 @@ def main(argv=None) -> int:
         src = ROOT / "framework" / name
         if src.exists():
             shutil.copyfile(src, OUT / "framework" / name)
+    for src in sorted((SITE / "static").glob("*")):   # 로고·파비콘·공유 이미지 (site/static → site/out 루트)
+        if src.is_file():
+            shutil.copyfile(src, OUT / src.name)
     (OUT / "legal").mkdir(exist_ok=True)
     for src in sorted((SITE / "legal").glob("*.md")):   # 이용약관·개인정보처리방침 (index.html 이 #/terms, #/privacy 에서 읽는다)
         shutil.copyfile(src, OUT / "legal" / src.name)
