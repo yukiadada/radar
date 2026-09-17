@@ -56,6 +56,7 @@ ul.plain li{padding:6px 0;border-bottom:1px solid var(--hair2);font-size:15px}
 .gs{color:var(--pos);font-weight:500}.ss{color:var(--neg);font-weight:500}.ns{color:var(--ink)}
 .mkt{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;margin-top:6px;font-size:13px;color:var(--ink2)}.mkt b{font-weight:500}.mkt .lbl{line-height:1.6}
 .glance .gl.full{grid-column:1/-1}.mkt-sum{margin:8px 0 0;font-size:14px}
+.dirbrief{border:1px solid var(--hair);border-radius:12px;padding:10px 16px;background:var(--panel);margin:12px 0 4px}.dirbrief summary{cursor:pointer;font-weight:600;font-size:14px}.dirbrief .md{font-size:15px}.dirbrief .md h2{font-size:15px;margin:16px 0 6px}
 @media (max-width:640px){.mast nav{margin-left:0;width:100%;gap:14px;overflow-x:auto;padding-bottom:2px}.tagline{display:none}.dateline{font-size:22px}}
 
 /* 표 */
@@ -478,6 +479,7 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     h += `<h2 class="sec">지금 세상의 방향 <span class="dim">최근 30일 장부. 세 축이 같은 쪽을 가리킬수록 %가 높다 (50%가 중립) · <a href="#/sectors">섹터 →</a></span></h2>`;
     h += dirs.length ? `<div class="dgrid">${dirs.map(x => dirCard(x, B, 30)).join('')}</div>` : `<p class="empty">아직 장부에 시그널이 없습니다.</p>`;
     if (quiet.length) h += `<p class="keys">신호 없는 방향: ${quiet.map(x => esc(x.direction)).join(', ')}</p>`;
+    if (D.direction_brief) h += `<details class="dirbrief" open><summary>방향 브리프 <span class="dim">쉬운 말로 읽는 지금의 방향 · ${esc((D.direction_brief.match(/^# .*?— (\d{4}-\d{2}-\d{2})/m) || [])[1] || '')}</span></summary><div id="dirbrief"></div></details>`;
     const secs = B.sectors.filter(x => x.n);
     const ups = secs.filter(x => ALIGNED.includes(x.label)).sort(byScore).slice(0, 5);
     const downs = secs.filter(x => CONTESTED.includes(x.label)).sort((a, c) => (a.score - c.score) || (c.n - a.n)).slice(0, 5);
@@ -498,6 +500,7 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
       if (D.briefs.length > 8) h += `<p class="dim" style="font-size:14px"><a href="#/briefs">전체 브리프 ${D.briefs.length}건</a></p>`;
     }
     app.innerHTML = h;
+    if (D.direction_brief) { const el = md(D.direction_brief.replace(/^# .*\n/, '')); document.getElementById('dirbrief').appendChild(el); }
     if (b) mountBrief(document.getElementById('brief'), b);
   }
 

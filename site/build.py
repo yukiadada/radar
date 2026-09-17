@@ -10,7 +10,8 @@ data.json:
   today, generated_at, first_date, axes, labels, params, sectors{이름: {direction, tickers, note}}
   ledger[행 + line], board{w30, w90}(scoring.alignment + delta + orphans), series{w30, w90}(scoring.series)
   activity{w30, w90}(축별 건수·방향·상위 섹터), attention(scoring.attention), briefs[{date, structural, none_today, signals, md(최신 것만)}]
-  raw{날짜: {소스: {count, error, current, backfill}}}, market{장부 줄: 시장 반응(market.reaction)}, market_meta{source, asof, updated_at} | null, warnings[]
+  raw{날짜: {소스: {count, error, current, backfill}}}, market{장부 줄: 시장 반응(market.reaction)}, market_meta{source, asof, updated_at} | null,
+  direction_brief(briefs/direction.md 본문. 홈 "지금 세상의 방향" 서술) | null, warnings[]
   브리프 signals 에는 장부와 (날짜, 출처 URL, 섹터) 가 같은 행의 line 을 붙인다 (카드에 시장 반응을 보이기 위해).
 브리프 카드는 여기서 마크다운을 구조화(parse_brief)해 signals 로 준다. 사이트는 나머지 절만 마크다운으로 그린다.
 """
@@ -193,6 +194,7 @@ def main(argv=None) -> int:
         "activity": {f"w{n}": activity(rows, today, n) for n in PARAMS["windows"]},
         "attention": attention(scan, smap),
         "briefs": [{k: v for k, v in b.items() if k != "md" or b is briefs[0]} for b in briefs],   # 본문은 최신 브리프만 싣는다 (홈 첫 화면용)
+        "direction_brief": (ROOT / "briefs/direction.md").read_text(encoding="utf-8") if (ROOT / "briefs/direction.md").exists() else None,   # 홈 "지금 세상의 방향" 서술 (쉬운 말). 날짜는 본문 제목에
         "raw": scan["days"],
         "market": market,
         "market_meta": market_meta,
