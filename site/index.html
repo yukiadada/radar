@@ -7,26 +7,28 @@
 <meta name="description" content="기술 · 사회 · 정책 세 축으로 읽는 세상의 방향과 섹터 정렬">
 <meta name="theme-color" content="#F5F6F8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0F1217" media="(prefers-color-scheme: dark)">
-<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
 <style>
 /* 디자인 원칙 (HCI)
    - 위계: 페이지 제목(h1) → 한눈에 요약 → 근거(카드·표) → 상세(접힘). 답을 먼저, 설명은 필요할 때 펼친다 (점진적 공개)
    - 일관성: 글자 크기 6단계, 간격 8px 배수, 모서리 3종(카드 14 · 컨트롤 10 · 알약). 같은 뜻은 같은 모양
    - 인지: 색만으로 뜻을 전하지 않는다 (▲▼◆ 기호 + 글자 + 색). 작은 글자도 대비 4.5:1 이상
    - 조작: 누르는 곳은 최소 32px, 주요 탐색은 44px. 키보드 초점은 항상 보인다
-   - 글꼴: 고딕 한 가지 (Pretendard, 없으면 시스템 고딕). 숫자는 고정폭 숫자로 정렬 */
+   - 글꼴: 고딕 한 가지 (IBM Plex Sans KR, 없으면 시스템 고딕). 티커·%·날짜가 많아 영문·숫자 모양이 고유한 글꼴을 쓴다. 숫자는 고정폭 숫자로 정렬
+   - 장식: 색은 주색(파랑) + 중립 + 강조(빨강). 축 색 3개와 차트 계열색은 자료를 구분할 때만. 반투명 흐림·색 띠·알약 모양 남발 없음 */
 :root{
   --ground:#F5F6F8; --panel:#FFFFFF; --ink:#141A22; --ink2:#4A5563; --muted:#667080;
   --hair:#DCE0E5; --hair2:#ECEEF1; --wash:#EEF1F4;
   --accent:#1D5FB0; --pos:#2a78d6; --pos-ink:#1D5FB0; --pos-solid:#1D5FB0; --neg:#e34948; --neg-ink:#BF2F2D; --both:#9AA2AB;
   --ax0:#4a3aa7; --ax1:#1baf7a; --ax2:#eb6834;
   --s0:#2a78d6; --s1:#eb6834; --s2:#1baf7a; --s3:#eda100; --s4:#e87ba4; --s5:#008300; --s6:#4a3aa7; --s7:#e34948;
-  --font:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic","맑은 고딕",system-ui,sans-serif;
+  --font:"IBM Plex Sans KR","Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic","맑은 고딕",system-ui,sans-serif;
   --sans:var(--font);
   --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"D2Coding",var(--font);
   --fs-cap:13px; --fs-sm:14px; --fs-body:16px; --fs-lg:18px; --fs-h2:21px; --fs-h1:30px;
-  --r-card:14px; --r-ctl:10px;
+  --r-card:12px; --r-ctl:8px; --r-tag:6px;
   --w:1080px; --gut:24px;
   --shadow:0 1px 2px rgba(16,24,40,.05),0 4px 12px rgba(16,24,40,.06);
   color-scheme:light;
@@ -64,10 +66,11 @@ h1:focus{outline:none}
 .keys{font-size:var(--fs-sm);color:var(--ink2);margin:8px 0;line-height:1.8}
 
 /* 머리글 · 탐색: 화면을 내려도 위치와 이동 수단이 보인다 */
-.top{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--ground) 86%,transparent);-webkit-backdrop-filter:saturate(1.5) blur(12px);backdrop-filter:saturate(1.5) blur(12px);border-bottom:1px solid var(--hair)}
+.top{position:sticky;top:0;z-index:10;background:var(--ground);border-bottom:1px solid var(--hair)}
 .mast{max-width:var(--w);margin:0 auto;padding:0 var(--gut);display:flex;align-items:center;gap:8px 20px;min-height:64px}
 .brand{display:inline-flex;align-items:center;gap:9px;min-height:44px;font-weight:700;font-size:19px;letter-spacing:-.02em;color:var(--ink);text-decoration:none}
-.brand i{width:14px;height:14px;border-radius:50%;background:conic-gradient(var(--ax0) 0 33.3%,var(--ax1) 0 66.6%,var(--ax2) 0)}
+.brand i{position:relative;width:16px;height:16px;border-radius:50%;box-shadow:inset 0 0 0 2px var(--accent)}
+.brand i::after{content:"";position:absolute;left:5px;top:5px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
 .tagline{margin:0;font-size:var(--fs-cap);color:var(--muted)}
 .mast nav{margin-left:auto;display:flex;gap:2px}
 .mast nav a{display:inline-flex;align-items:center;min-height:44px;padding:0 13px;border-radius:var(--r-ctl);color:var(--ink2);text-decoration:none;font-size:15px;font-weight:500;white-space:nowrap;transition:background-color .15s,color .15s}
@@ -82,10 +85,10 @@ h1:focus{outline:none}
 .eyebrow{margin:0 0 8px;font-size:var(--fs-sm);font-weight:500;color:var(--muted)}
 .eyebrow a{color:var(--ink2);text-decoration:none}.eyebrow a:hover{text-decoration:underline}
 .eyebrow .sep{margin:0 6px;color:var(--hair)}
-.ph h1{margin:0;font-size:var(--fs-h1);line-height:1.25;font-weight:800;letter-spacing:-.03em}
+.ph h1{margin:0;font-size:var(--fs-h1);line-height:1.3;font-weight:700;letter-spacing:-.015em}
 .lede{margin:12px 0 0;max-width:60ch;font-size:17px;line-height:1.65;color:var(--ink2)}
 .metas{list-style:none;display:flex;flex-wrap:wrap;gap:6px;margin:16px 0 0;padding:0}
-.metas li{font-size:var(--fs-cap);color:var(--ink2);background:var(--panel);border:1px solid var(--hair);border-radius:999px;padding:2px 11px;line-height:1.7;font-variant-numeric:tabular-nums}
+.metas li{font-size:var(--fs-cap);color:var(--ink2);background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-tag);padding:2px 11px;line-height:1.7;font-variant-numeric:tabular-nums}
 .pager{display:flex;justify-content:space-between;gap:12px;margin:32px 0 0}
 .pager a{display:inline-flex;align-items:center;min-height:44px;padding:0 16px;border:1px solid var(--hair);border-radius:var(--r-ctl);background:var(--panel);color:var(--ink);text-decoration:none;font-weight:500}
 .pager a:hover{border-color:var(--ink2)}
@@ -102,8 +105,6 @@ h2.sec .dim{font-size:var(--fs-sm);margin-left:8px}
 /* 한눈에 요약: 답을 먼저 */
 .sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:12px;margin:28px 0 0}
 .sumc{position:relative;background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-card);padding:16px 18px 14px;min-width:0;overflow:hidden}
-.sumc.pos::before,.sumc.neg::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--pos)}
-.sumc.neg::before{background:var(--neg)}
 .sumc .k{margin:0;font-size:var(--fs-cap);font-weight:600;color:var(--ink2)}
 .sumc .v{display:block;overflow-wrap:anywhere;margin:6px 0 4px;font-size:22px;font-weight:700;line-height:1.3;letter-spacing:-.02em;color:var(--ink);text-decoration:none;font-variant-numeric:tabular-nums}
 .sumc a.v:hover{text-decoration:underline}
@@ -127,7 +128,7 @@ details.dirbrief>div{padding:4px 24px 22px;border-top:1px solid var(--hair2)}
 
 /* 기호 읽는 법 */
 details.legend{margin:0 0 14px;font-size:var(--fs-sm)}
-details.legend>summary{display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:0 14px 0 8px;border-radius:999px;border:1px solid var(--hair);background:var(--panel);color:var(--ink2);font-weight:500}
+details.legend>summary{display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:0 14px 0 8px;border-radius:var(--r-ctl);border:1px solid var(--hair);background:var(--panel);color:var(--ink2);font-weight:500}
 details.legend>summary:hover{color:var(--ink);border-color:var(--ink2)}
 details.legend>summary::before{content:"?";display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--wash);color:var(--ink);font-size:var(--fs-cap);font-weight:700}
 details.legend[open]>summary{color:var(--ink)}
@@ -172,11 +173,11 @@ input[type=search]{width:100%}
 .seg.sticky a{min-height:38px}
 .seg-note{margin:4px 0 0;font-size:var(--fs-cap);color:var(--ink2)}
 .seg[role=tablist]{padding:0}
-.seg a{display:inline-flex;align-items:center;min-height:40px;padding:0 16px;border:1px solid var(--hair);border-radius:999px;text-decoration:none;color:var(--ink2);background:var(--panel);font-weight:600;transition:border-color .15s,background-color .15s}
+.seg a{display:inline-flex;align-items:center;min-height:40px;padding:0 16px;border:1px solid var(--hair);border-radius:var(--r-ctl);text-decoration:none;color:var(--ink2);background:var(--panel);font-weight:600;transition:border-color .15s,background-color .15s}
 .seg a:hover{border-color:var(--ink2);color:var(--ink)}
 .seg a[aria-selected=true]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
 .seg .dim{font-size:var(--fs-cap);flex:1 1 280px}
-.seg button{font-size:var(--fs-sm);min-height:34px;padding:0 13px;border:1px solid var(--hair);border-radius:999px;background:var(--panel);color:var(--ink2);cursor:pointer;font-variant-numeric:tabular-nums}
+.seg button{font-size:var(--fs-sm);min-height:34px;padding:0 13px;border:1px solid var(--hair);border-radius:var(--r-ctl);background:var(--panel);color:var(--ink2);cursor:pointer;font-variant-numeric:tabular-nums}
 .seg button:hover{border-color:var(--ink2);color:var(--ink)}
 .seg button[aria-pressed=true]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
 .seg button[aria-pressed=true] i{display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--c);margin-right:7px;vertical-align:-1px;box-shadow:0 0 0 1.5px var(--ground)}
@@ -190,14 +191,14 @@ input[type=search]{width:100%}
 .conf i{display:inline-flex;gap:3px;align-items:center}
 .conf s{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ink);text-decoration:none}
 .conf s.off{background:transparent;box-shadow:inset 0 0 0 1.5px var(--muted)}
-.st{min-height:22px;padding:0 9px;border-radius:999px;border:1px solid var(--hair)}
+.st{min-height:22px;padding:0 9px;border-radius:var(--r-tag);border:1px solid var(--hair)}
 .st.yes{background:var(--ink);color:var(--ground);border-color:var(--ink)}
 .st.no{color:var(--ink2);font-weight:500}
 .ax0{--c:var(--ax0)}.ax1{--c:var(--ax1)}.ax2{--c:var(--ax2)}
 .s0{--c:var(--s0)}.s1{--c:var(--s1)}.s2{--c:var(--s2)}.s3{--c:var(--s3)}.s4{--c:var(--s4)}.s5{--c:var(--s5)}.s6{--c:var(--s6)}.s7{--c:var(--s7)}
-.axtag{display:inline-flex;align-items:center;gap:6px;min-height:24px;padding:0 10px 0 8px;border-radius:999px;font-size:var(--fs-cap);font-weight:600;color:var(--ink);background:color-mix(in srgb,var(--c) 11%,var(--panel));border:1px solid color-mix(in srgb,var(--c) 38%,var(--hair));white-space:nowrap}
+.axtag{display:inline-flex;align-items:center;gap:6px;min-height:24px;padding:0 10px 0 8px;border-radius:var(--r-tag);font-size:var(--fs-cap);font-weight:600;color:var(--ink);background:color-mix(in srgb,var(--c) 11%,var(--panel));border:1px solid color-mix(in srgb,var(--c) 38%,var(--hair));white-space:nowrap}
 .axtag::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--c)}
-.lbl{display:inline-flex;align-items:center;min-height:22px;padding:0 9px;border-radius:999px;font-size:var(--fs-cap);font-weight:600;white-space:nowrap;border:1px solid var(--hair);color:var(--ink2);background:var(--panel)}
+.lbl{display:inline-flex;align-items:center;min-height:22px;padding:0 9px;border-radius:var(--r-tag);font-size:var(--fs-cap);font-weight:600;white-space:nowrap;border:1px solid var(--hair);color:var(--ink2);background:var(--panel)}
 .lbl-aligned3{background:var(--pos-solid);color:#fff;border-color:var(--pos-solid)}
 .lbl-aligned2{color:var(--pos-ink);border-color:color-mix(in srgb,var(--pos) 60%,var(--hair))}
 .lbl-aligned1{color:var(--ink)}
@@ -227,6 +228,7 @@ input[type=search]{width:100%}
 .kpi{padding:14px 16px;border:1px solid var(--hair);border-radius:var(--r-card);background:var(--panel);min-width:0;display:flex;flex-direction:column-reverse;justify-content:flex-end;gap:4px}
 .kpi b{display:block;font-size:26px;font-weight:700;line-height:1.25;letter-spacing:-.02em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .kpi b.txt{font-size:18px}
+.kpi .axn{white-space:nowrap}.kpi .axn .sw2{width:9px;height:9px;margin-right:5px;vertical-align:2px}
 .kpi b small{font-size:var(--fs-cap);font-weight:500;color:var(--ink2)}
 .kpi>span{font-size:var(--fs-cap);font-weight:600;color:var(--ink2)}
 .kpi b .small{font-size:inherit}
@@ -242,15 +244,13 @@ input[type=search]{width:100%}
 .glance{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;margin:0}
 .gl{background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-card);padding:16px 20px;min-width:0}
 .gl h3{font-size:var(--fs-body);font-weight:700;margin:0 0 6px;display:flex;align-items:center;gap:8px}
-.gl h3::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--pos)}
-.gl.neg h3::before{background:var(--neg)}
 .gl ol{margin:0;padding:0;list-style:none;counter-reset:r}
 .gl ol li{counter-increment:r;display:grid;grid-template-columns:20px 1fr auto;align-items:baseline;gap:10px;padding:9px 0;border-top:1px solid var(--hair2);font-size:15px}
 .gl ol li:first-child{border-top:0}
 .gl ol li::before{content:counter(r);color:var(--muted);font-size:var(--fs-cap);font-variant-numeric:tabular-nums}
 .gl ol li b{font-variant-numeric:tabular-nums}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin:0}
-.chip{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;border:1px solid var(--hair);border-radius:999px;font-size:var(--fs-sm);font-weight:500;white-space:nowrap;background:var(--ground);color:var(--ink);text-decoration:none;transition:border-color .15s}
+.chip{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;border:1px solid var(--hair);border-radius:var(--r-tag);font-size:var(--fs-sm);font-weight:500;white-space:nowrap;background:var(--ground);color:var(--ink);text-decoration:none;transition:border-color .15s}
 a.chip:hover{border-color:var(--ink2);background:var(--panel)}
 .chip b{font-variant-numeric:tabular-nums}
 .leg{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:var(--fs-cap);color:var(--ink2);margin:0 0 8px}
@@ -340,8 +340,12 @@ pre.yaml{font-family:var(--mono);font-size:var(--fs-cap);line-height:1.65;backgr
 .atttrack i{display:block;height:100%;background:var(--pos);border-radius:6px}
 .attval{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 
+/* 약관 · 방침의 미입력 자리 */
+mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--neg-ink);border:1px dashed color-mix(in srgb,var(--neg) 55%,var(--hair));border-radius:var(--r-tag);padding:0 5px;font-weight:600}
+.todo-note{margin:0 0 20px;padding:12px 16px;border:1px dashed var(--hair);border-radius:var(--r-card);background:var(--panel);color:var(--ink2);font-size:var(--fs-sm)}
+
 /* 경고 */
-.warn{margin:24px 0 0;padding:14px 18px;border:1px solid color-mix(in srgb,var(--neg) 55%,var(--hair));border-left-width:4px;border-radius:var(--r-card);background:color-mix(in srgb,var(--neg) 7%,var(--panel));font-size:var(--fs-sm)}
+.warn{margin:24px 0 0;padding:14px 18px;border:1px solid color-mix(in srgb,var(--neg) 55%,var(--hair));border-radius:var(--r-card);background:color-mix(in srgb,var(--neg) 7%,var(--panel));font-size:var(--fs-sm)}
 .warn ul{margin:6px 0 0;padding-left:20px}
 .warn li{margin:2px 0}
 
@@ -394,7 +398,7 @@ pre.yaml{font-family:var(--mono);font-size:var(--fs-cap);line-height:1.65;backgr
 </header>
 </div>
 <main id="app" tabindex="-1"><p class="loading">불러오는 중</p></main>
-<footer class="foot"><span id="gen"></span><a href="https://github.com/yukiadada/radar">저장소</a><span>판단 재료이지 매매 신호가 아닙니다</span></footer>
+<footer class="foot"><span id="gen"></span><a href="https://github.com/yukiadada/radar">저장소</a><a href="#/terms">이용약관</a><a href="#/privacy">개인정보처리방침</a><span>판단 재료이지 매매 신호가 아닙니다</span></footer>
 <noscript><p style="padding:24px">이 페이지는 JavaScript 로 장부와 브리프를 읽습니다. data.json 과 briefs/ 는 저장소에서 직접 볼 수 있습니다.</p></noscript>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/18.0.12/lib/marked.umd.js"></script>
 <script>
@@ -444,7 +448,7 @@ pre.yaml{font-family:var(--mono);font-size:var(--fs-cap);line-height:1.65;backgr
   const labelHtml = l => `<span class="lbl lbl-${esc(l)}">${esc(D.labels[l] || l)}</span>`;
   const sectorLink = (s, days) => (D.sectors[s] ? `<a href="#/sector/${enc(s)}${days === 90 ? '/90' : ''}">${esc(s)}</a>` : `<span title="sector_map 에 없는 섹터">${esc(s)}</span>`);
   const tile = (v, l, cls) => `<div class="kpi"><b${cls ? ` class="${cls}"` : ''}>${v}</b><span>${l}</span></div>`;
-  const banner = () => (D.warnings && D.warnings.length ? `<div class="warn" role="alert"><b>빌드 경고 ${D.warnings.length}건</b> — 자료 일부가 빠진 채 만들어졌습니다.<ul>${D.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>` : '');
+  const banner = () => (D.warnings && D.warnings.length ? `<div class="warn" role="alert"><b>빌드 경고 ${D.warnings.length}건.</b> 자료 일부가 빠진 채 만들어졌습니다.<ul>${D.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>` : '');
   /* 장부가 창보다 짧으면 30일·90일 창이 같은 자료다. 그 사실을 화면에 적는다 */
   /* ---- 시장 반응: 장부 줄 번호 → 사건 전날(장부 날짜 이틀 전) 종가 대비 티커 평균 수익률과 SPY. build.py 가 fetch/market.py 로 계산 ---- */
   const pctS = v => (v > 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
@@ -458,7 +462,7 @@ pre.yaml{font-family:var(--mono);font-size:var(--fs-cap);line-height:1.65;backgr
     const v = x.verdict ? `<span class="lbl ${VLBL[x.verdict] || ''}">${x.verdict}</span>` : '';
     return `<div class="mkt"><span class="dim small">시장 반응 · ${x.base.slice(5).replace('-', '/')} 종가 기준</span>${hs.length ? hs.join('') : '<span class="dim small">아직 거래일 없음</span>'}${v}</div>`;
   }
-  const ledgerNote = () => { if (!D.first_date) return ''; const short30 = D.first_date > D.board.w30.from, short90 = D.first_date > D.board.w90.from; return `장부는 ${D.first_date}부터${short30 ? ' — 아직 30일이 안 돼 30일·90일 창이 같은 자료입니다' : short90 ? ' (90일 창은 그날부터)' : ''}`; };
+  const ledgerNote = () => { if (!D.first_date) return ''; const short30 = D.first_date > D.board.w30.from, short90 = D.first_date > D.board.w90.from; return `장부는 ${D.first_date}부터${short30 ? '. 아직 30일이 안 돼 30일·90일 창이 같은 자료입니다' : short90 ? ' (90일 창은 그날부터)' : ''}`; };
 
   /* 축 점수 미니 막대: −1 ~ +1. 왼쪽(빨강) 막음, 오른쪽(파랑) 밀어줌 */
   function axisBar(a, net, n, withLabel = true) {
@@ -497,7 +501,7 @@ pre.yaml{font-family:var(--mono);font-size:var(--fs-cap);line-height:1.65;backgr
 
   /* ---- 방향 브리프 (briefs/direction.md). "한 줄 요약" 절은 바로 보이고, 나머지는 펼쳐 읽는다 ---- */
   function dirBriefParts(text) {
-    const date = (text.match(/^# .*?— (\d{4}-\d{2}-\d{2})/m) || [])[1] || '';
+    const date = (text.match(/^# .*?(\d{4}-\d{2}-\d{2})/m) || [])[1] || '';
     const body = text.replace(/^# .*\n/, '');
     const k = body.search(/^## /m), intro = (k < 0 ? body : body.slice(0, k)).trim();
     const secs = splitSections(body), lead = secs.find(x => /^한 줄 요약/.test(x.title)), rest = secs.filter(x => x !== lead);
@@ -793,7 +797,7 @@ pre.yaml{font-family:var(--mono);font-size:var(--fs-cap);line-height:1.65;backgr
     let h = pageHead({ eyebrow: '추이', title: '근거는 어떻게 바뀌어 왔나', lede: '정렬 %를 날마다 그날 기준 창으로 다시 계산해 선으로 그렸습니다. 선 위에 마우스를 올리면 그날 값이 보입니다.', meta: [`기준일 ${D.today}`, `장부 전체 ${D.ledger.length}건`, ledgerNote()].filter(Boolean).map(esc) });
     if (!D.ledger.length) { app.innerHTML = h + `<p class="empty">장부가 비어 있습니다.</p>`; REDRAW = null; return; }
     h += segTabs('#/trend', days, `${B.from} ~ ${B.to} · ${B.total}건`, true);
-    h += `<section class="dash"><div class="kpis full">` + tile(B.total, `최근 ${days}일 구조적 시그널`) + tile(A.axes.map(x => `<span class="${axCls(x.axis)}" style="color:var(--c)">${x.count}</span>`).join(' <small>/</small> '), `${D.axes.join(' / ')} 건수`) +
+    h += `<section class="dash"><div class="kpis full">` + tile(B.total, `최근 ${days}일 구조적 시그널`) + tile(A.axes.map(x => `<span class="axn ${axCls(x.axis)}" title="${esc(x.axis)} ${x.count}건"><i class="sw2" aria-hidden="true"></i>${x.count}</span>`).join(' <small>/</small> '), `${D.axes.join(' / ')} 건수`) +
       tile(`${c.aligned3 + c.aligned2} <small>3축 ${c.aligned3}</small>`, '2축 이상 정렬 섹터') + tile(`${c.headwind} <small>엇갈림 ${c.mixed}</small>`, '역풍 섹터') + `</div>`;
     h += `<div class="panel full"><h3>섹터 정렬 % 추이 <span class="dim">섹터를 눌러 켜고 끕니다 (최대 8개). 처음에는 중립(50%)에서 먼 섹터가 켜져 있습니다.</span></h3><div class="seg" style="margin:0 0 8px" role="group" aria-label="섹터 선택">` +
       active.sort(byScore).map(x => `<button type="button" data-sel="${esc(x.sector)}" aria-pressed="${SEL.includes(x.sector)}" class="${SEL.includes(x.sector) ? slotOf(x.sector) : ''}"><i></i>${esc(x.sector)} ${x.score}%</button>`).join('') + `</div><div class="chart-box" data-chart="sectors"></div></div>`;
@@ -872,8 +876,21 @@ pre.yaml{font-family:var(--mono);font-size:var(--fs-cap);line-height:1.65;backgr
     }).catch(e => { const ax = document.getElementById('axes'); if (ax) ax.innerHTML = `<p class="empty">기준 문서를 불러오지 못했습니다 (${esc(e.message)}).</p>`; });
   }
 
-  const views = { home, sectors, sector, trend, ledger, briefs, brief, framework };
-  const titles = { home: 'radar', sectors: '섹터', sector: '섹터', trend: '추이', ledger: '장부', briefs: '브리프', brief: '브리프', framework: '기준' };
+  /* 이용약관·개인정보처리방침: site/legal/*.md 를 그대로 보여준다. [입력 필요 ...]·[확인 필요 ...] 는 운영자가 채울 자리라 눈에 띄게 표시 */
+  function legal(file, title, lede) {
+    REDRAW = null;
+    app.innerHTML = pageHead({ eyebrow: '안내', title, lede }) + `<div id="legal" style="margin-top:24px"><p class="loading">불러오는 중</p></div>`;
+    fetchText(`legal/${file}`).then(t => {
+      const box = document.getElementById('legal'); if (!box) return;
+      const todo = (t.match(/\[(입력 필요|확인 필요)[^\]]*\]/g) || []).length;
+      box.innerHTML = todo ? `<p class="todo-note" role="note">아직 채우지 않은 항목이 ${todo}곳 있습니다. 표시된 자리는 운영자가 사실을 확인해 채워야 합니다.</p>` : '';
+      box.appendChild(md(t.replace(/^# .*\n/, '').replace(/\[(입력 필요|확인 필요)[^\]]*\]/g, m => `<mark class="todo">${esc(m)}</mark>`)));
+    }).catch(e => { const box = document.getElementById('legal'); if (box) box.innerHTML = `<p class="empty">문서를 불러오지 못했습니다 (${esc(e.message)}).</p>`; });
+  }
+  const terms = () => legal('terms.md', '이용약관', 'radar 를 이용할 때의 조건입니다.');
+  const privacy = () => legal('privacy.md', '개인정보처리방침', '이 사이트가 방문자의 정보를 어떻게 다루는지 적었습니다.');
+  const views = { home, sectors, sector, trend, ledger, briefs, brief, framework, terms, privacy };
+  const titles = { home: 'radar', sectors: '섹터', sector: '섹터', trend: '추이', ledger: '장부', briefs: '브리프', brief: '브리프', framework: '기준', terms: '이용약관', privacy: '개인정보처리방침' };
   function route() {
     if (!D) return;
     const [seg, a1, a2] = location.hash.replace(/^#\/?/, '').split('/');

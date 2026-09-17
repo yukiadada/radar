@@ -210,6 +210,9 @@ def main(argv=None) -> int:
         src = ROOT / "framework" / name
         if src.exists():
             shutil.copyfile(src, OUT / "framework" / name)
+    (OUT / "legal").mkdir(exist_ok=True)
+    for src in sorted((SITE / "legal").glob("*.md")):   # 이용약관·개인정보처리방침 (index.html 이 #/terms, #/privacy 에서 읽는다)
+        shutil.copyfile(src, OUT / "legal" / src.name)
     (OUT / "data.json").write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     shutil.copyfile(SITE / "index.html", OUT / "index.html")
     (OUT / ".nojekyll").write_text("", encoding="utf-8")
