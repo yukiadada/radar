@@ -155,10 +155,10 @@ logs/                      세션 로그 (/save 가 만듦, git 미추적)
 
 ## 현재 상태
 
-> /save 자동 업데이트 — 2026-09-17 18:41
+> /save 자동 업데이트 — 2026-09-17 18:48
 
 **브랜치:** main
-**마지막 커밋:** a6446c5 docs: session log 2026-09-17 (4) — 1차 출처 피드 10개 추가, 소스별 UA, brief 확인 등급 (로그는 로컬 보관)
+**마지막 커밋:** 2f32e47 지난 90일 소급(raw·장부 80건) + 시그널별 시장 반응 (session log 2026-09-17 (5), 로그는 로컬 보관)
 
 **미완료 항목:**
 - 9/18 04:30 KST fetch.yml: 새 소스 10개 수집 + 종가 갱신 단계(market.py --update, Cboe 가 Actions IP 에서 열리는지) + radar-raw prices 커밋을 로그로 확인. ftc_press(ua: browser)가 Actions 에서 열리는지도. 막히면 error 파일이 남고 사이트 raw 표에 표시
