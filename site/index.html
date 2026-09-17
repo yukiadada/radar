@@ -167,10 +167,10 @@ select:hover,input[type=search]:hover{border-color:var(--ink2)}
 input[type=search]{width:100%}
 .count{font-size:var(--fs-sm);color:var(--ink2);min-height:40px;display:inline-flex;align-items:center;font-variant-numeric:tabular-nums}
 .seg{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:24px 0 0;font-size:var(--fs-sm)}
-/* 기간 탭 고정: 머리글(.top) 바로 아래에 붙는다. 배경은 화면 폭 전체로 깔고, 붙었을 때만 흐림과 아래 선을 보인다 */
-.seg.sticky{position:sticky;top:var(--top-h,65px);z-index:6;margin-top:16px;padding:10px 0}
-.seg.sticky::before{content:"";position:absolute;top:0;bottom:0;left:calc(50% - 50vw);right:calc(50% - 50vw);z-index:-1;background:var(--ground);transition:box-shadow .15s,background-color .15s}
-.seg.sticky.stuck::before{background:color-mix(in srgb,var(--ground) 90%,transparent);-webkit-backdrop-filter:saturate(1.5) blur(12px);backdrop-filter:saturate(1.5) blur(12px);box-shadow:0 1px 0 var(--hair),0 10px 18px -14px rgba(16,24,40,.35)}
+/* 기간 탭 고정: 머리글(.top) 아래 8px 띄워 붙는다. 배경은 화면 폭 전체로 깔고 그 틈까지 덮는다. 붙었을 때만 흐림 (아래 선 없음) */
+.seg.sticky{--stick-gap:8px;position:sticky;top:calc(var(--top-h,65px) + var(--stick-gap));z-index:6;margin-top:16px;padding:10px 0}
+.seg.sticky::before{content:"";position:absolute;top:calc(-1 * var(--stick-gap));bottom:0;left:calc(50% - 50vw);right:calc(50% - 50vw);z-index:-1;background:var(--ground);transition:background-color .15s}
+.seg.sticky.stuck::before{background:color-mix(in srgb,var(--ground) 90%,transparent);-webkit-backdrop-filter:saturate(1.5) blur(12px);backdrop-filter:saturate(1.5) blur(12px)}
 .seg.sticky a{min-height:38px}
 .seg-note{margin:4px 0 0;font-size:var(--fs-cap);color:var(--ink2)}
 .stick-mark{height:0}
@@ -906,11 +906,11 @@ pre.yaml{font-family:var(--mono);font-size:var(--fs-cap);line-height:1.65;backgr
   /* 고정 머리글 높이를 CSS 변수로 (좁은 화면에서는 메뉴가 두 줄이라 높이가 바뀐다) */
   const topEl = document.querySelector('.top');
   const setTop = () => { TOP_H = topEl ? topEl.offsetHeight : 0; document.documentElement.style.setProperty('--top-h', `${TOP_H}px`); updateStuck(); };
-  /* 기간 탭이 머리글 아래에 붙었는지: 탭 바로 앞의 0px 표지가 머리글 아래 선보다 위로 올라가면 붙은 것. 붙었을 때만 배경·선을 보인다 */
+  /* 기간 탭이 붙었는지: 탭 바로 앞의 0px 표지가 머리글 아래 + 간격(--stick-gap) 보다 위로 올라가면 붙은 것. 붙었을 때만 흐린 배경 */
   function updateStuck() {
     if (!STICKY || !STICKY.isConnected) return;
     const mark = STICKY.previousElementSibling;
-    if (mark && mark.classList.contains('stick-mark')) STICKY.classList.toggle('stuck', mark.getBoundingClientRect().top < TOP_H);
+    if (mark && mark.classList.contains('stick-mark')) STICKY.classList.toggle('stuck', mark.getBoundingClientRect().top < TOP_H + (parseFloat(getComputedStyle(STICKY).getPropertyValue('--stick-gap')) || 0));
   }
   window.addEventListener('scroll', updateStuck, { passive: true });
   if (topEl && 'ResizeObserver' in window) new ResizeObserver(setTop).observe(topEl); else window.addEventListener('resize', setTop);
