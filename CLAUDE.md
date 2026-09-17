@@ -155,13 +155,15 @@ logs/                      세션 로그 (/save 가 만듦, git 미추적)
 
 ## 현재 상태
 
-> /save 자동 업데이트 — 2026-09-17 19:44
+> /save 자동 업데이트 — 2026-09-17 21:56
 
 **브랜치:** main
-**마지막 커밋:** b7dc8f1 사이트 디자인 리뉴얼 (HCI 기준, 고딕 전용 글꼴)
+**마지막 커밋:** 8db398b 로고·공유 이미지 적용
 
 **미완료 항목:**
-- 사이트는 2026-09-17 에 HCI 기준으로 리뉴얼(site/index.html): Pretendard 고딕 단일(jsdelivr, 막히면 시스템 고딕), 화면마다 h1 제목 구조, 홈 한눈에 요약 4칸, 설명은 "기호 읽는 법" 펼침. 새 화면을 만들면 pageHead·secHead·legendBox 부품과 글자·색 토큰을 쓴다. 넓은 표는 모바일에서 가로 스크롤
+- 사이트(site/index.html): 글꼴 IBM Plex Sans KR 단일(Google Fonts, 막히면 시스템 고딕), 화면마다 h1 구조, 홈 요약 4칸, 설명은 "기호 읽는 법" 펼침, 모서리 3단계(상자 12·조작 8·배지 6), 섹터·섹터 상세·추이의 기간 탭은 머리글 아래 8px 고정(배경 없음). 새 화면은 pageHead·secHead·legendBox 부품과 토큰을 쓴다. 긴 대시(—)·알약 모양·색 띠·반투명 흐림은 쓰지 않는다
+- 이용약관·개인정보처리방침(site/legal/*.md, #/terms #/privacy)의 [입력 필요]·[확인 필요] 16곳을 Ken 이 채운다. 책임 제한 문구는 법률 검토, Cboe 지연 시세 게시 조건 확인. 외부 요청 목록(GitHub Pages·Google Fonts·cdnjs)이나 브라우저 저장 값이 바뀌면 privacy.md 도 고친다
+- 로고·아이콘·공유 이미지는 site/static (원본 logo.png, og.png 1200×630). 채팅 첨부 이미지가 열리지 않아 바탕화면의 같은 로고로 만들었다. 다르면 다시 생성. og.png·새 글꼴·고정 탭 모양은 이미지 확인 없이 수치로만 검증했으니 Ken 이 눈으로 확인
 - briefs/direction.md(홈 "방향 브리프")는 2026-09-17 w30 숫자로 쓴 손글씨 문서. 자동 갱신 없음. 장부가 쌓이면 카드 숫자와 어긋나므로 /trend 때 같이 다시 쓸지 Ken 판단
 - 9/18 04:30 KST fetch.yml: 새 소스 10개 수집 + 종가 갱신 단계(market.py --update, Cboe 가 Actions IP 에서 열리는지) + radar-raw prices 커밋을 로그로 확인. ftc_press(ua: browser)가 Actions 에서 열리는지도. 막히면 error 파일이 남고 사이트 raw 표에 표시
 - 9/18 06:20 KST 루틴: 새 /brief(빌드 확인, 1차 출처 피드 항목은 검색 교차 없이 0.6, "## 시장 반응" 절)가 정상 실행되는지 확인. 루틴 프롬프트가 옛 파일(companies 등)을 언급하면 수정. 루틴 로그 claude.ai/code/routines
