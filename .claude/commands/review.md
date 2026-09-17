@@ -26,25 +26,23 @@ if not Path("CLAUDE.md").exists(): sys.exit("레포 루트에서 실행해야 �
 today = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).date()
 sys.path.insert(0, "fetch")
 from config import AXES, load_sector_map, directions
-from scoring import alignment, series, attach_deltas, board_table, in_window, LABELS
-rows = []
-for n, l in enumerate(Path("ledger/signals.jsonl").read_text(encoding="utf-8").split("\n"), 1):
-    if l.strip(): r = json.loads(l); r["line"] = n; r["_d"] = datetime.date.fromisoformat(r["date"]); rows.append(r)
-smap = load_sector_map()
+from scoring import alignment, series, attach_deltas, board_table, pending_review, in_window, LABELS
+from ledger import load_existing
+try: rows, _ = load_existing(); smap = load_sector_map()
+except ValueError as e: sys.exit(str(e))
 w90, _ = in_window(rows, today, 90)
 print(f"장부 {len(rows)}줄, 최근 90일 {len(w90)}건, 기준일 {today}")
 board = attach_deltas(alignment(rows, today, 90, smap), series(rows, today, 90, 90, smap))
 print("\n## 섹터 정렬 (최근 90일)")
 print("\n".join(board_table(board)))
 print("- 신호 없는 섹터: " + (", ".join(x["sector"] for x in board["sectors"] if not x["n"]) or "없음"))
+if board["orphan_total"]: print(f"- 경고: sector_map 에 없는 섹터의 행 {board['orphan_total']}건이 정렬에서 빠짐: " + ", ".join(f"{k} {v}건" for k, v in board["orphans"].items()))
 print("\n## 축별 90일 건수·방향")
 for a in AXES:
     s = [r for r in w90 if r["axis"] == a]; dc = collections.Counter(r["direction"] for r in s)
     print(f"- {a}: {len(s)}건 (+{dc['+']} / -{dc['-']} / ±{dc['±']})")
-rev = {r["reverses"] for r in rows if r.get("reverses")}
-cut = today - datetime.timedelta(days=30)
 print("\n## 확인 대기 (30일 넘은 + 시그널, horizon 1년 이상, 번복 없음). 예상 결과가 실제로 나타났는지 검색으로 확인한다")
-wait = [r for r in w90 if r["_d"] <= cut and r["direction"] == "+" and r.get("horizon", "1년") != "분기" and r["line"] not in rev]
+wait = pending_review(rows, today)
 for r in wait: print(f"- 줄 {r['line']} {r['date']} [{r['axis']}/{r['sector']}] {r['fact'][:90]}\n    출처 {r['source']}")
 if not wait: print("- 없음")
 props = collections.Counter()

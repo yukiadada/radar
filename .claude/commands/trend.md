@@ -24,16 +24,12 @@ try: today = datetime.date.fromisoformat(DATE)
 except ValueError: sys.exit(f"DATE 가 YYYY-MM-DD 가 아님: {DATE!r}")
 sys.path.insert(0, "fetch")
 from config import AXES, load_sector_map, all_tickers, directions
-from scoring import alignment, series, attach_deltas, board_table, attention, in_window, weight, fmt_net, LABELS, delta
+from scoring import alignment, series, attach_deltas, board_table, attention, raw_scan, pending_review, in_window, weight, fmt_net, fmt_delta, LABELS, delta
 
-rows = []
-p = Path("ledger/signals.jsonl")
-if p.exists():
-    for n, l in enumerate(p.read_text(encoding="utf-8").split("\n"), 1):
-        if not l.strip(): continue
-        try: r = json.loads(l); r["_d"] = datetime.date.fromisoformat(r["date"])
-        except (json.JSONDecodeError, KeyError, ValueError) as e: sys.exit(f"ledger {n}번째 줄 파싱 실패: {e}. 장부는 수정 금지. Ken 에게 알린다")
-        r["line"] = n; rows.append(r)
+from ledger import load_existing
+try: rows, _ = load_existing()
+except ValueError as e: sys.exit(str(e))
+for r in rows: r["_d"] = datetime.date.fromisoformat(r["date"])
 if not rows: print("장부 비어 있음"); raise SystemExit
 future = sum(1 for r in rows if r["_d"] > today)
 print(f"장부 전체 {len(rows)}건, {min(r['_d'] for r in rows)} ~ {max(r['_d'] for r in rows)}" + (f" (기준일 이후 {future}건은 집계 제외)" if future else ""))
@@ -60,17 +56,17 @@ for days in (30, 90):
     print("\n".join(board_table(board)))
     print("- 신호 없는 섹터: " + (", ".join(x["sector"] for x in board["sectors"] if not x["n"]) or "없음"))
     print(f"\n### 방향 (최근 {days}일. 신호 있는 소속 섹터의 축 점수 평균)")
-    print("| 방향 | 기술 | 사회 | 정책 | 정렬 | 상태 | 건수 | 섹터(신호/전체) | 7일 변화 |")
-    print("|---|---|---|---|---|---|---|---|---|")
+    print("| 방향 | " + " | ".join(AXES) + " | 정렬 | 상태 | 건수 | 섹터(신호/전체) | 7일 변화 |")
+    print("|---|" + "---|" * (len(AXES) + 5))
     for x in sorted(board["directions"], key=lambda x: (x["score"] is None, -(x["score"] or 0), x["direction"])):
-        dl = "–" if x.get("delta") is None else f"{x['delta']:+d}p"
         sc = f"{x['score']}%" if x["score"] is not None else "–"
-        print(f"| {x['direction']} | " + " | ".join(fmt_net(x["axes"][a]) for a in AXES) + f" | {sc} | {LABELS[x['label']]} | {x['n']} | {x['active']}/{len(x['sectors'])} | {dl} |")
+        print(f"| {x['direction']} | " + " | ".join(fmt_net(x["axes"][a]) for a in AXES) + f" | {sc} | {LABELS[x['label']]} | {x['n']} | {x['active']}/{len(x['sectors'])} | {fmt_delta(x.get('delta'))} |")
+    if board["orphan_total"]: print(f"- 경고: sector_map 에 없는 섹터의 행 {board['orphan_total']}건이 정렬에서 빠짐: " + ", ".join(f"{k} {v}건" for k, v in board["orphans"].items()))
 print("\n## 30일 변화 (30일 창 정렬 %, 30일 전 대비. 둘 다 값이 있는 섹터만)")
 ch = [(s, delta(v, 30), v[-1]) for s, v in ser[30]["sectors"].items() if delta(v, 30) is not None]
 for s, dl, now in sorted(ch, key=lambda x: -abs(x[1])): print(f"- {s}: {now}% ({dl:+d}p)")
 if not ch: print("- 없음 (장부가 30일 미만)")
-A = attention(today, smap=smap)
+A = attention(raw_scan(today), smap)
 print(f"\n## 관심 (최근 7일 수집 헤드라인 {A['headlines7']}건, 수집 {A['days_present7']}일. 지난주 비교 {'가능' if A['comparable'] else '불가(자료 부족)'})")
 if not A["days_present7"]: print("- raw/ 가 없어 계산 못 함 (로컬이면 python3 fetch/fetch.py 또는 radar-raw 연결)")
 for x in (A["sectors"][:12] if A["days_present7"] else []):
@@ -79,11 +75,8 @@ print("\n## 번복 행 (reverses)")
 rev = [r for r in rows if r.get("reverses")]
 for r in rev: print(f"- {r['date']} [{r['axis']}/{r['sector']}] 줄 {r['line']} 이 줄 {r['reverses']} 을 뒤집음: {r['fact'][:80]}")
 if not rev: print("- 없음")
-reversed_lines = {r["reverses"] for r in rev}
-cut30 = today - datetime.timedelta(days=30)
-w90, _ = in_window(rows, today, 90)
 print("\n## 확인 대기 (30일 넘은 + 시그널, horizon 1년 이상, 번복 없음. /review 에서 예상 결과를 확인한다)")
-wait = [r for r in w90 if r["_d"] <= cut30 and r["direction"] == "+" and r.get("horizon", "1년") != "분기" and r["line"] not in reversed_lines]
+wait = pending_review(rows, today)
 for r in wait: print(f"- 줄 {r['line']} {r['date']} [{r['axis']}/{r['sector']}] {r['fact'][:80]}")
 if not wait: print("- 없음")
 tickers = all_tickers(smap)
@@ -106,7 +99,8 @@ EOF
 ## 3. 서술
 
 - "지금 세상은 어느 방향으로 흐르는가": 한 문단. 근거는 위 숫자만 쓴다. 방향별 정렬 %와 상태, 3축·2축 정렬 섹터, 엇갈림·역풍 섹터, 30일 변화의 가속·감속. 숫자 없는 주장은 쓰지 않는다.
-- 어느 섹터든 표본이 3건 미만이면 "표본 부족"이라고 쓰고 방향을 단정하지 않는다. 한 축에서만 신호가 있는 섹터(1축)는 "나머지 두 축은 아직 모른다"라고 쓴다.
+- 어느 섹터든 표본이 3건 미만이면 "표본 부족"이라고 쓰고 방향을 단정하지 않는다. 한 축에서만 신호가 있는 섹터(1축)는 "나머지 두 축은 아직 모른다"라고 쓴다. 상태 "양쪽"은 신호는 있는데 축 점수가 모두 0 인 섹터(± 뿐이거나 상쇄)다. 엇갈림과 다르며, 방향을 말하지 않고 "판단 보류"라고 쓴다.
+- 스크립트가 "sector_map 에 없는 섹터" 경고를 내면 그 행이 정렬에서 빠져 있다는 뜻이다. 서술 첫머리에 밝히고 맵의 섹터 이름을 되돌리거나 Ken 에게 알린다.
 - 정렬이 깨진 섹터(엇갈림)는 axes.md 의 세 가지 패턴(기술 +/사회 −, 사회 +/정책 −, 정책 +/사회 −) 중 어디에 해당하는지 짚는다.
 - 축별 상세 표는 스크립트 출력을 그대로 옮긴다. 가중 합이 건수와 다른 그림을 보이면 한 줄로 밝힌다.
 - 관심은 헤드라인 언급량이라 방향이 없다. 순위와 주간 변화만 말하고, 섹터 정렬과 붙여 "관심은 높은데 근거는 없는 곳 / 관심은 낮은데 근거가 쌓이는 곳"을 짚는다.

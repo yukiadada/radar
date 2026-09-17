@@ -30,7 +30,7 @@
 소스는 동시에 받는다 (스레드 풀). 출력 순서는 sources.yaml 순서로 고정한다.
 같은 날 다시 실행하면 그 날 파일을 덮어쓴다 (실패한 소스의 기존 파일은 남긴다).
 환경변수 RADAR_UA 로 User-Agent 를 바꿀 수 있다.
-종료 코드: 0 전부 성공 / 1 일부 피드 실패 / 2 인자·환경·sources.yaml 오류
+종료 코드: 0 전부 성공 / 1 일부 피드 실패 또는 sources.yaml 항목 오류(그 소스만 건너뜀) / 2 인자·환경 오류 또는 sources.yaml 전체 오류
 """
 from __future__ import annotations
 
@@ -63,11 +63,14 @@ FR_FEED_CAP = 200
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import load_sources  # noqa: E402  (framework/sources.yaml 공용 파서)
 
+CONFIG_ERRORS: list[str] = []   # sources.yaml 항목 오류. 그 소스만 건너뛰고 나머지는 수집한다. main 이 [fail] 로 알린다
 try:
-    SOURCES = {s["name"]: s for s in load_sources()}
-except (ValueError, OSError) as _e:
+    _all = load_sources()
+except (ValueError, OSError) as _e:   # 파일 전체가 깨진 경우만 수집 불가
     sys.stderr.write(f"framework/sources.yaml 읽기 실패: {_e}\n")
     sys.exit(2)
+SOURCES = {s["name"]: s for s in _all if not s["error"]}
+CONFIG_ERRORS = [f"{s['name']}: {s['error']}" for s in _all if s["error"]]
 SOURCE_NAMES = list(SOURCES)
 
 # federalreserve.gov 는 User-Agent 를 가린다 (2026-09-08 확인):
@@ -79,8 +82,11 @@ ACCEPT = "application/rss+xml, application/atom+xml, application/xml, text/xml;q
 
 
 def gnews_url(query: str, hours: int) -> str:
-    q = query if hours <= 0 else f"{query} when:{-(-hours // 24)}d"
-    return GNEWS_TMPL.format(q=quote_plus(q))
+    """OR 가 있는 검색어는 괄호로 묶어 when:Nd 가 마지막 항에만 붙지 않게 한다."""
+    if hours <= 0:
+        return GNEWS_TMPL.format(q=quote_plus(query))
+    q = f"({query})" if " OR " in query else query
+    return GNEWS_TMPL.format(q=quote_plus(f"{q} when:{-(-hours // 24)}d"))
 
 
 def build_sources(hours: int) -> dict[str, str]:
@@ -260,7 +266,12 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     if args.list:
         print("\n".join(SOURCE_NAMES))
+        for err in CONFIG_ERRORS:
+            print(f"[fail] sources.yaml {err}  (이 소스는 수집하지 않음)", file=sys.stderr)
         return 0
+    if not SOURCE_NAMES:
+        sys.stderr.write("sources.yaml 에 쓸 수 있는 소스가 없음: " + "; ".join(CONFIG_ERRORS) + "\n")
+        return 2
     if feedparser is None:
         sys.stderr.write("feedparser 없음. 설치: python3 -m pip install --user --break-system-packages feedparser\n")
         return 2
@@ -335,6 +346,10 @@ def main(argv: list[str] | None = None) -> int:
                     "window_hours": args.hours, "count": 0, "error": str(e), "items": [],
                 })
                 print(f"[fail] {name:<24} {e}  -> {rel} (error 표시 파일)", file=sys.stderr)
+
+    for err in CONFIG_ERRORS:
+        print(f"[fail] sources.yaml {err}  (이 소스는 수집하지 않음)", file=sys.stderr)
+        failed.append("sources.yaml")
 
     if failed:
         print(f"{len(failed)}/{len(names)} failed: {', '.join(failed)}", file=sys.stderr)

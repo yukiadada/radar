@@ -53,15 +53,18 @@ def load_sector_map(path: Path = SECTOR_MAP) -> dict[str, dict]:
                 raise ValueError(f"sector_map: 섹터 이름 중복 {sector!r}")
             sectors[sector] = {"direction": direction, "tickers": [], "keywords": [], "note": ""}
             continue
-        m = re.match(r"^\s+(tickers|keywords|note):\s*(.*?)\s*$", line)
-        if m and sector:
-            k, v = m.groups()
-            if k == "note":
-                sectors[sector][k] = v
-            elif k == "tickers":
-                sectors[sector][k] = _list(v)
-            else:
-                sectors[sector][k] = [x.lower() for x in _list(v)]
+        m = re.match(r"^\s+(\S[^:]*):\s*(.*?)\s*$", line)
+        if not m or not sector:
+            raise ValueError(f"sector_map: 읽을 수 없는 줄 {line.strip()!r}")
+        k, v = m.group(1).strip(), m.group(2)
+        if k == "note":
+            sectors[sector][k] = v
+        elif k == "tickers":
+            sectors[sector][k] = _list(v)
+        elif k == "keywords":
+            sectors[sector][k] = [x.lower() for x in _list(v)]
+        else:
+            raise ValueError(f"sector_map: {sector!r} 에 모르는 키 {k!r} (tickers / keywords / note 만)")
     if not sectors:
         raise ValueError("sector_map 에 섹터가 없음")
     empty = [s for s, c in sectors.items() if not c["tickers"]]
@@ -91,47 +94,46 @@ def all_tickers(sectors: dict[str, dict]) -> set[str]:
     return {t for c in sectors.values() for t in c["tickers"]}
 
 
-def sector_of_ticker(sectors: dict[str, dict]) -> dict[str, str]:
-    return {t: s for s, c in sectors.items() for t in c["tickers"]}
-
-
 def load_sources(path: Path = SOURCES) -> list[dict]:
-    """[{name, type, url, query, axis, note}]. 형식이 어긋나면 ValueError (수집 전체가 멈춘다. 소스 하나의 오류도 파일을 고쳐야 한다)."""
+    """[{name, type, url, query, axis, note, error}]. 항목 하나의 문제는 그 항목의 error 에 적어 돌려주고(fetch.py 가 그 소스만 건너뛴다),
+    파일 전체의 문제(소스 없음, 이름 중복, 들여쓰기 오류)만 ValueError."""
     out: list[dict] = []
     cur: dict | None = None
     for line in _lines(path):
         m = re.match(r"^(\S[^:]*):\s*$", line)
         if m:
-            cur = {"name": m.group(1).strip(), "type": "", "url": "", "query": "", "axis": "", "note": ""}
+            cur = {"name": m.group(1).strip(), "type": "", "url": "", "query": "", "axis": "", "note": "", "error": ""}
             out.append(cur)
             continue
-        m = re.match(r"^\s+(type|url|query|axis|note):\s*(.*?)\s*$", line)
-        if m and cur is not None:
-            cur[m.group(1)] = m.group(2)
-        elif cur is None:
-            raise ValueError(f"sources.yaml: 소스 이름 앞에 들여쓴 줄이 있음: {line!r}")
+        m = re.match(r"^\s+(\S[^:]*):\s*(.*?)\s*$", line)
+        if cur is None or not m:
+            raise ValueError(f"sources.yaml: 읽을 수 없는 줄 {line.strip()!r}")
+        k, v = m.group(1).strip(), m.group(2)
+        if k in ("type", "url", "query", "axis", "note"):
+            cur[k] = v
+        else:
+            cur["error"] = f"모르는 키 {k!r}"
     if not out:
         raise ValueError("sources.yaml 에 소스가 없음")
-    problems = []
     for s in out:
+        problems = [s["error"]] if s["error"] else []
         if not SOURCE_NAME.fullmatch(s["name"]):
-            problems.append(f"{s['name']!r}: 이름은 소문자·숫자·밑줄")
+            problems.append("이름은 소문자·숫자·밑줄")
         if s["type"] == "rss":
             if not re.match(r"^https?://", s["url"]):
-                problems.append(f"{s['name']}: rss 는 url 이 필요")
+                problems.append("rss 는 url 이 필요")
         elif s["type"] == "gnews":
             if not s["query"]:
-                problems.append(f"{s['name']}: gnews 는 query 가 필요")
+                problems.append("gnews 는 query 가 필요")
         else:
-            problems.append(f"{s['name']}: type 은 rss 또는 gnews ({s['type']!r})")
+            problems.append(f"type 은 rss 또는 gnews ({s['type']!r})")
         if s["axis"] not in AXES:
-            problems.append(f"{s['name']}: axis 는 {' / '.join(AXES)} 중 하나 ({s['axis']!r})")
+            problems.append(f"axis 는 {' / '.join(AXES)} 중 하나 ({s['axis']!r})")
+        s["error"] = "; ".join(problems)
     names = [s["name"] for s in out]
     dup = sorted({n for n in names if names.count(n) > 1})
     if dup:
-        problems.append(f"소스 이름 중복 {dup}")
-    if problems:
-        raise ValueError("sources.yaml: " + "; ".join(problems))
+        raise ValueError(f"sources.yaml: 소스 이름 중복 {dup}")
     return out
 
 
@@ -141,4 +143,4 @@ if __name__ == "__main__":
     for dname, members in directions(smap):
         print(f"  {dname}: {', '.join(members)}")
     srcs = load_sources()
-    print(f"sources: {len(srcs)}개 — " + ", ".join(f"{s['name']}({s['axis']})" for s in srcs))
+    print(f"sources: {len(srcs)}개 — " + ", ".join(f"{s['name']}({s['axis']})" + (f" 오류: {s['error']}" if s["error"] else "") for s in srcs))

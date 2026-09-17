@@ -69,6 +69,7 @@ td.date,td.nowrap,th.nowrap{white-space:nowrap;font-variant-numeric:tabular-nums
 td.small{font-size:13px;color:var(--ink2)}
 table.secs td{vertical-align:middle}
 table.secs td.axcell{min-width:96px}
+table.secs td.num{white-space:nowrap}
 
 /* 필터·탭 */
 .filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:16px 0 10px;font-size:14px}
@@ -214,6 +215,9 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
 .atttrack{height:12px;background:var(--wash);border-radius:3px;overflow:hidden}.atttrack i{display:block;height:100%;background:var(--accent);border-radius:3px}
 .attval{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 @media (max-width:560px){.attrow{grid-template-columns:1fr 1.3fr 84px}}
+.warn{margin:18px 0 0;padding:10px 14px;border:1px solid var(--neg);border-radius:10px;background:color-mix(in srgb,var(--neg) 8%,var(--panel));font-size:13.5px}
+.warn ul{margin:4px 0 0;padding-left:18px}
+.warn li{margin:2px 0}
 </style>
 </head>
 <body>
@@ -245,33 +249,41 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
   const daysOf = arg => (arg === '90' ? 90 : 30);
   const board = days => (days === 90 ? D.board.w90 : D.board.w30);
   const serOf = days => (days === 90 ? D.series.w90 : D.series.w30);
+  const firstSentence = t => { const m = t.match(/^[\s\S]*?(다\.|\. )(?=\s|$)/); return (m ? m[0] : t).trim(); };   // 옛 Safari 를 위해 lookbehind 는 쓰지 않는다
 
   const DIR = { '+': ['up', '▲', '밀어줌'], '-': ['down', '▼', '막음'], '±': ['both', '◆', '양쪽'] };
   const CONF = { '0.3': ['conf-low', 1, '낮음'], '0.6': ['conf-mid', 2, '보통'], '0.8': ['conf-high', 3, '높음'] };
-  const LABEL = { aligned3: '3축 정렬', aligned2: '2축 정렬', aligned1: '1축', mixed: '엇갈림', neutral: '양쪽', headwind: '역풍', none: '신호 없음' };
-  const AXC = ['ax0', 'ax1', 'ax2'];
   const SC = ['s0', 's1', 's2', 's3', 's4', 's5', 's6', 's7'];
+  const ALIGNED = ['aligned3', 'aligned2', 'aligned1'], CONTESTED = ['headwind', 'mixed'];
   const axIdx = a => D.axes.indexOf(a);
-  const axTag = a => `<span class="axtag ${AXC[axIdx(a)]}">${esc(a)}</span>`;
+  const axCls = a => 'ax' + axIdx(a);
+  const axTag = a => `<span class="axtag ${axCls(a)}">${esc(a)}</span>`;
   const dots = n => `<i aria-hidden="true">${[1, 2, 3].map(k => `<s${k <= n ? '' : ' class="off"'}></s>`).join('')}</i>`;
   const dirBadge = v => { const d = DIR[String(v).trim()]; return d ? `<span class="dir ${d[0]}" title="방향 ${esc(v)}"><i>${d[1]}</i>${d[2]}</span>` : esc(v); };
   const confBadge = v => { const c = CONF[String(Number(v))]; return c ? `<span class="conf ${c[0]}" title="확신 ${esc(v)}">${dots(c[1])}${c[2]}</span>` : esc(v); };
   const stBadge = v => { const t = String(v).trim().toLowerCase(); return t === 'true' ? `<span class="st yes" title="문서로 남은 확정 사실">확정</span>` : t === 'false' ? `<span class="st no" title="발언·보도·조사 단계">미확정</span>` : esc(v); };
   const KEYS = `<p class="keys">구조적은 <span class="st yes">확정</span> 문서로 남은 것, <span class="st no">미확정</span> 발언·보도 단계. 방향은 그 섹터를 <span class="dir up"><i>▲</i>밀어줌</span> <span class="dir down"><i>▼</i>막음</span> <span class="dir both"><i>◆</i>양쪽</span>. 확신은 <span class="conf conf-low">${dots(1)}낮음 0.3</span> <span class="conf conf-mid">${dots(2)}보통 0.6</span> <span class="conf conf-high">${dots(3)}높음 0.8</span></p>`;
   const fmtNet = v => (Math.abs(v) < 0.005 ? '0' : (v > 0 ? '+' : '') + v.toFixed(2));
+  const netCls = v => (v > 0 ? 'gs' : v < 0 ? 'ss' : 'dim');
   const pctCls = s => (s == null ? 'dim' : s >= 60 ? 'gs' : s <= 40 ? 'ss' : 'ns');
   const pctText = s => (s == null ? '–' : `${s}%`);
-  const deltaHtml = v => (v == null ? '<span class="dim small">–</span>' : `<span class="small ${v > 0 ? 'gs' : v < 0 ? 'ss' : 'dim'}">${v > 0 ? '+' : ''}${v}p</span>`);
-  const labelHtml = l => `<span class="lbl lbl-${esc(l)}">${LABEL[l] || esc(l)}</span>`;
-  const sectorLink = (s, days) => `<a href="#/sector/${enc(s)}${days === 90 ? '/90' : ''}">${esc(s)}</a>`;
+  /* 7일 변화. 값이 없는데 신호는 있으면 7일 전에는 점수가 없던 섹터 = 신규 */
+  const deltaHtml = (v, n) => (v == null ? `<span class="dim small">${n ? '신규' : '–'}</span>` : `<span class="small ${v > 0 ? 'gs' : v < 0 ? 'ss' : 'dim'}">${v > 0 ? '+' : ''}${v}p</span>`);
+  const labelHtml = l => `<span class="lbl lbl-${esc(l)}">${esc(D.labels[l] || l)}</span>`;
+  const sectorLink = (s, days) => (D.sectors[s] ? `<a href="#/sector/${enc(s)}${days === 90 ? '/90' : ''}">${esc(s)}</a>` : `<span title="sector_map 에 없는 섹터">${esc(s)}</span>`);
+  const tile = (v, l, cls) => `<div class="kpi"><b${cls ? ` class="${cls}"` : ''}>${v}</b><span>${l}</span></div>`;
+  const banner = () => (D.warnings && D.warnings.length ? `<div class="warn" role="alert"><b>빌드 경고 ${D.warnings.length}건</b> — 자료 일부가 빠진 채 만들어졌습니다.<ul>${D.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>` : '');
+  /* 장부가 창보다 짧으면 30일·90일 창이 같은 자료다. 그 사실을 화면에 적는다 */
+  const ledgerNote = () => { if (!D.first_date) return ''; const same = D.first_date > D.board.w90.from; return `장부는 ${D.first_date}부터${same ? ' — 아직 90일이 안 돼 30일·90일 창이 같은 자료입니다' : ''}`; };
 
   /* 축 점수 미니 막대: −1 ~ +1. 왼쪽(빨강) 막음, 오른쪽(파랑) 밀어줌 */
-  function axisBar(a, net, n) {
+  function axisBar(a, net, n, withLabel = true) {
     const tip = `${a} ${fmtNet(net)}${n != null ? `, ${n}건` : ''}`;
-    return `<span class="axb" title="${esc(tip)}"><span class="axl">${esc(a)}</span><span class="axt"><span class="axneg">${net < 0 ? `<i style="width:${(-net * 100).toFixed(0)}%"></i>` : ''}</span><span class="axpos">${net > 0 ? `<i style="width:${(net * 100).toFixed(0)}%"></i>` : ''}</span></span><span class="axv ${net > 0 ? 'gs' : net < 0 ? 'ss' : 'dim'}">${fmtNet(net)}</span></span>`;
+    const track = `<span class="axt"${withLabel ? '' : ' style="grid-column:1/-1"'}><span class="axneg">${net < 0 ? `<i style="width:${(-net * 100).toFixed(0)}%"></i>` : ''}</span><span class="axpos">${net > 0 ? `<i style="width:${(net * 100).toFixed(0)}%"></i>` : ''}</span></span>`;
+    return withLabel ? `<span class="axb" title="${esc(tip)}"><span class="axl">${esc(a)}</span>${track}<span class="axv ${netCls(net)}">${fmtNet(net)}</span></span>`
+      : `<span class="axb" title="${esc(tip)}">${track}</span><span class="small ${netCls(net)}">${fmtNet(net)}</span>`;
   }
   const axes3 = axes => `<div class="axes3">${D.axes.map(a => { const x = axes[a]; const net = typeof x === 'number' ? x : x.net; return axisBar(a, net, typeof x === 'object' ? x.n : null); }).join('')}</div>`;
-  const axCell = x => `<span class="axb" title="${esc(fmtNet(x.net))}, ${x.n}건"><span class="axt" style="grid-column:1/-1"><span class="axneg">${x.net < 0 ? `<i style="width:${(-x.net * 100).toFixed(0)}%"></i>` : ''}</span><span class="axpos">${x.net > 0 ? `<i style="width:${(x.net * 100).toFixed(0)}%"></i>` : ''}</span></span></span><span class="small ${x.net > 0 ? 'gs' : x.net < 0 ? 'ss' : 'dim'}">${fmtNet(x.net)}</span>`;
 
   /* ---- 마크다운 ---- */
   function md(text) {
@@ -299,69 +311,42 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     });
   }
 
-  /* ---- 브리프: 세 축 절의 표를 카드로. 카드 순서(기술→사회→정책)와 "쉬운 말로" 항목 순서가 같다 ---- */
+  /* ---- 브리프. 카드는 build.py 가 구조화한 signals 로 그리고, 나머지 절만 마크다운으로 그린다 ---- */
   const briefCache = {};
-  function fetchBrief(date) {
-    if (!briefCache[date]) briefCache[date] = fetch(`briefs/${date}.md`, { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.text(); });
-    return briefCache[date];
+  function fetchBrief(b) {
+    if (b.md) return Promise.resolve(b.md);
+    if (!briefCache[b.date]) briefCache[b.date] = fetch(`briefs/${b.date}.md`, { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.text(); });
+    return briefCache[b.date];
   }
   const splitSections = text => text.split(/^## /m).slice(1).map(p => { const nl = p.indexOf('\n'); return { title: p.slice(0, nl).trim(), md: p.slice(nl + 1) }; });
-  function parseTable(text) {
-    const lines = text.split('\n').filter(l => l.trim().startsWith('|'));
-    if (lines.length < 3) return null;
-    const cells = l => l.trim().replace(/^\|/, '').replace(/\|$/, '').split(/\s\|\s/).map(c => c.trim());
-    const head = cells(lines[0]), rows = lines.slice(2).map(cells).filter(r => r.length === head.length);
-    return rows.length ? { head, rows } : null;
+  function signalCard(s) {
+    const title = s.easy ? s.easy.name : firstSentence(plain(s.fact)).slice(0, 70);
+    return `<article class="sig"><header>${axTag(s.axis)}${s.structural == null ? '' : stBadge(s.structural)}${dirBadge(s.direction)}${confBadge(s.confidence)}<span class="dim small">${sectorLink(s.sector)}</span></header><h3>${esc(title)}</h3>` +
+      (s.easy ? s.easy.parts.map(([k, v]) => `<p><b>${esc(k)}</b>${inlineMd(v)}</p>`).join('') : '') +
+      (s.tickers.length ? `<div class="chips">${s.tickers.map(t => `<span class="chip">${esc(t)}</span>`).join('')}</div>` : '') +
+      `<details><summary>근거와 출처</summary><p>${inlineMd(s.fact)}</p>${s.interp ? `<p class="dim">${inlineMd(s.interp)}</p>` : ''}</details></article>`;
   }
-  function parseEasy(text) {
-    const items = []; let cur = null;
-    for (const raw of text.split('\n')) {
-      const m = raw.match(/^- \*\*(.+?)\*\*\s*$/); if (m) { cur = { name: m[1], parts: [] }; items.push(cur); continue; }
-      const p = raw.match(/^\s+- (무슨 일|왜 중요|누가 이득·손해)\s*[:：]\s*(.+)$/); if (p && cur) cur.parts.push([p[1], p[2]]);
-    }
-    return items;
-  }
-  function renderBrief(container, text) {
+  function renderBrief(container, b, text) {
     const secs = splitSections(text);
-    const pick = (t, exact) => { const i = secs.findIndex(x => (exact ? x.title === t : x.title.startsWith(t))); return i >= 0 ? secs.splice(i, 1)[0] : null; };
-    const easy = pick('쉬운 말로'), items = easy ? parseEasy(easy.md) : [];
-    const axisSecs = D.axes.map(a => pick(a, true));
-    container.innerHTML = '';
-    let k = 0, cards = '', any = false, noneToday = false;
-    axisSecs.forEach((sec, ai) => {
-      const a = D.axes[ai];
-      if (!sec) return;
-      any = true;
-      if (/오늘 구조적 시그널 없음/.test(sec.md)) noneToday = true;
-      const table = parseTable(sec.md), interp = sec.md.split('\n').filter(l => /^- 해석/.test(l));
-      cards += `<h3 class="axh ${AXC[ai]}"><i class="sw2"></i>${esc(a)} <span class="dim">${table ? `${table.rows.length}건` : '해당 없음'}</span></h3>`;
-      if (!table) return;
-      cards += `<div class="sigs">` + table.rows.map((r, i) => {
-        const [fact, st, sec2, dir, conf] = r, it = items[k++];
-        const [sector, tk] = sec2.split('·').map(x => x.trim()), tickers = (tk || '').split(',').map(x => x.trim()).filter(Boolean);
-        const title = it ? it.name : plain(fact).split(/(?<=다\.)\s|(?<=\.)\s/)[0].slice(0, 70);
-        const known = D.sectors[sector];
-        return `<article class="sig"><header>${axTag(a)}${stBadge(st)}${dirBadge(dir)}${confBadge(conf)}<span class="dim small">${known ? sectorLink(sector) : esc(sector || '')}</span></header><h3>${esc(title)}</h3>` +
-          (it ? it.parts.map(([kk, v]) => `<p><b>${esc(kk)}</b>${inlineMd(v)}</p>`).join('') : '') +
-          (tickers.length ? `<div class="chips">${tickers.map(t => `<span class="chip">${esc(t)}</span>`).join('')}</div>` : '') +
-          `<details><summary>근거와 출처</summary><p>${inlineMd(fact)}</p>${interp[i] ? `<p class="dim">${inlineMd(interp[i].replace(/^- /, ''))}</p>` : ''}</details></article>`;
-      }).join('') + `</div>`;
-    });
-    if (any) container.insertAdjacentHTML('beforeend', KEYS + cards + (noneToday ? `<p class="keys">오늘 구조적 시그널 없음. 위 카드는 아직 확정되지 않은 재료입니다.</p>` : ''));
-    else if (easy) { const p = document.createElement('section'); p.className = 'easy'; p.innerHTML = '<h2>쉬운 말로</h2>'; p.appendChild(md(easy.md)); container.appendChild(p); }
-    for (const x of secs) container.appendChild(md('## ' + x.title + '\n' + x.md));
-    if (any) {
-      const dd = document.createElement('details'); dd.className = 'more'; dd.innerHTML = '<summary>원본 시그널 표·해석·확인 방법 메모</summary>';
-      axisSecs.forEach((sec, ai) => { if (sec) dd.appendChild(md('## ' + D.axes[ai] + '\n' + sec.md)); });
-      if (easy) dd.appendChild(md('## 쉬운 말로\n' + easy.md));
-      container.appendChild(dd);
+    const isAxis = t => D.axes.includes(t), isEasy = t => t.startsWith('쉬운 말로');
+    let cards = '';
+    for (const a of D.axes) {
+      const list = b.signals.filter(s => s.axis === a), sec = secs.find(x => x.title === a);
+      if (!sec) continue;
+      cards += `<h3 class="axh ${axCls(a)}"><i class="sw2"></i>${esc(a)} <span class="dim">${list.length ? `${list.length}건` : '해당 없음'}</span></h3>`;
+      if (list.length) cards += `<div class="sigs">${list.map(signalCard).join('')}</div>`;
     }
+    container.innerHTML = KEYS + cards + (b.none_today ? `<p class="keys">오늘 구조적 시그널 없음. 위 카드는 아직 확정되지 않은 재료입니다.</p>` : '');
+    for (const x of secs.filter(x => !isAxis(x.title) && !isEasy(x.title))) container.appendChild(md('## ' + x.title + '\n' + x.md));
+    const dd = document.createElement('details'); dd.className = 'more'; dd.innerHTML = '<summary>원본 시그널 표·해석·확인 방법 메모</summary>';
+    for (const x of secs.filter(x => isAxis(x.title) || isEasy(x.title))) dd.appendChild(md('## ' + x.title + '\n' + x.md));
+    container.appendChild(dd);
     decorateTables(container);
   }
-  function mountBrief(container, date) {
+  function mountBrief(container, b) {
     container.innerHTML = `<p class="loading">브리프 불러오는 중</p>`;
-    fetchBrief(date).then(text => { if (container.isConnected) renderBrief(container, text); })
-      .catch(e => { container.innerHTML = `<p class="empty">briefs/${esc(date)}.md 를 불러오지 못했습니다 (${esc(e.message)}).</p>`; });
+    fetchBrief(b).then(text => { if (container.isConnected) renderBrief(container, b, text); })
+      .catch(e => { container.innerHTML = `<p class="empty">briefs/${esc(b.date)}.md 를 불러오지 못했습니다 (${esc(e.message)}).</p>`; });
   }
 
   /* ---- 차트 (SVG 직접). 폭은 컨테이너에 맞추고 창 크기가 바뀌면 다시 그린다 ---- */
@@ -376,10 +361,11 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
   }
   const dateAxis = (f, dates) => { let s = ''; const n = dates.length; for (let i = n - 1; i >= 0; i -= xStep(n)) s += `<text class="tick" x="${f.x(i).toFixed(1)}" y="${f.H - 8}" text-anchor="middle">${mdShort(dates[i])}</text>`; return s; };
 
-  /* 정렬 % 라인: 값은 0~100, 신호 없는 날(null)은 선을 끊는다. 홑점은 점으로 */
+  /* 정렬 % 라인: 값은 0~100, 신호 없는 날(null)은 선을 끊는다. 홑점은 점으로. 직접 라벨은 4개까지, 그 이상은 범례(칩)로 */
   function pctLines(el, dates, sers, { label, H = 240, endLabels = true } = {}) {
+    if (!dates.length) { el.innerHTML = `<p class="empty">아직 장부에 자료가 없습니다.</p>`; return; }
+    endLabels = endLabels && sers.length <= 4;
     const n = dates.length;
-    endLabels = endLabels && sers.length <= 4;   // 직접 라벨은 4개까지. 그 이상은 범례(선택 칩)로
     const f = frame(el, { H, m: { l: 36, r: endLabels ? 124 : 14, t: 12, b: 26 }, lo: 0, hi: 100, n, label, ticks: [0, 25, 50, 75, 100], fmtY: v => v + '%' });
     let s = f.open + dateAxis(f, dates);
     const ends = [];
@@ -433,7 +419,7 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     });
     el.innerHTML = s + `</svg>`;
   }
-  /* 스파크라인: 표 안의 90일 추이 */
+  /* 스파크라인: 표 안의 추이 */
   function spark(values) {
     const n = values.length, W = 120, H = 28, x = i => (n > 1 ? i / (n - 1) * (W - 4) + 2 : W / 2), y = v => H - 2 - (v / 100) * (H - 4);
     let s = `<svg class="spark" viewBox="0 0 ${W} ${H}" aria-hidden="true"><line class="mid" x1="0" x2="${W}" y1="${y(50).toFixed(1)}" y2="${y(50).toFixed(1)}"/>`;
@@ -453,11 +439,11 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
   window.addEventListener('resize', debounce(() => { if (REDRAW) REDRAW(); }, 150));
   const segTabs = (base, days, note) => `<div class="seg" role="tablist" aria-label="기간">` + [30, 90].map(n => `<a role="tab" aria-selected="${n === days}" href="${base}${n === 90 ? '/90' : ''}">최근 ${n}일</a>`).join('') + `<span class="dim">${note}</span></div>`;
   const legend = items => `<div class="leg">${items.map(([name, cls]) => `<span class="${cls}"><i></i>${esc(name)}</span>`).join('')}</div>`;
-  const axisLegend = () => legend(D.axes.map((a, i) => [a, AXC[i]]));
+  const axisLegend = () => legend(D.axes.map(a => [a, axCls(a)]));
   function rawLine(date) {
     const day = D.raw[date];
     if (!day) return '';
-    const names = Object.keys(day).filter(k => !k.startsWith('gnews_co_')), zero = names.filter(k => !day[k].count || day[k].error);
+    const names = Object.keys(day).filter(k => day[k].current !== false), zero = names.filter(k => !day[k].count || day[k].error);
     return `수집 ${names.length}개 소스${zero.length ? `, 0건 ${zero.join(', ')}` : ''}`;
   }
   const byScore = (a, b) => (b.score - a.score) || (b.n - a.n) || a.sector.localeCompare(b.sector);
@@ -466,20 +452,23 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
   function dirCard(x, B, days) {
     const chips = x.sectors.map(s => { const sb = B.sectors.find(z => z.sector === s); return `<a class="chip" href="#/sector/${enc(s)}${days === 90 ? '/90' : ''}">${esc(s)} <b class="${pctCls(sb.score)}">${pctText(sb.score)}</b></a>`; }).join('');
     return `<article class="dcard"><header><h3><a href="#/sectors${days === 90 ? '/90' : ''}">${esc(x.direction)}</a></h3><b class="pct big ${pctCls(x.score)}">${pctText(x.score)}</b></header>` +
-      `<div class="meta">${labelHtml(x.label)}<span>${x.n}건 · 섹터 ${x.active}/${x.sectors.length}</span>${x.delta != null ? `<span>7일 ${deltaHtml(x.delta)}</span>` : ''}</div>${axes3(x.axes)}<div class="chips">${chips}</div></article>`;
+      `<div class="meta">${labelHtml(x.label)}<span>${x.n}건 · 섹터 ${x.active}/${x.sectors.length}</span><span>7일 ${deltaHtml(x.delta, x.n)}</span></div>${axes3(x.axes)}<div class="chips">${chips}</div></article>`;
   }
   function home() {
     const B = D.board.w30, b = D.briefs[0];
     REDRAW = null;
-    const bits = [`최근 30일 장부 ${B.total}건`, `전체 ${D.ledger.length}건`, rawLine(b ? b.date : D.today)].filter(Boolean);
-    let h = `<p class="dateline">${fmtDate(D.today)}</p><p class="hero-sub">${bits.join(', ')}</p>`;
+    const bits = [`최근 30일 장부 ${B.total}건`, `전체 ${D.ledger.length}건`, ledgerNote(), rawLine(b ? b.date : D.today)].filter(Boolean);
+    let h = `<p class="dateline">${fmtDate(D.today)}</p><p class="hero-sub">${bits.join(' · ')}</p>`;
     const dirs = B.directions.filter(x => x.n).sort((a, c) => (c.score - a.score) || (c.n - a.n)), quiet = B.directions.filter(x => !x.n);
     h += `<h2 class="sec">지금 세상의 방향 <span class="dim">최근 30일 장부. 세 축이 같은 쪽을 가리킬수록 %가 높다 (50%가 중립) · <a href="#/sectors">섹터 →</a></span></h2>`;
     h += dirs.length ? `<div class="dgrid">${dirs.map(x => dirCard(x, B, 30)).join('')}</div>` : `<p class="empty">아직 장부에 시그널이 없습니다.</p>`;
     if (quiet.length) h += `<p class="keys">신호 없는 방향: ${quiet.map(x => esc(x.direction)).join(', ')}</p>`;
-    const secs = B.sectors.filter(x => x.n), ups = secs.filter(x => x.score > 50).sort(byScore).slice(0, 5), downs = secs.filter(x => x.score < 50).sort((a, c) => (a.score - c.score) || (c.n - a.n)).slice(0, 5);
-    const li = x => `<li>${sectorLink(x.sector)} <b class="${pctCls(x.score)}">${x.score}%</b> <span class="dim small">${LABEL[x.label]} · ${x.n}건</span></li>`;
-    h += `<section class="glance"><div class="gl"><h3>정렬이 높은 섹터</h3>${ups.length ? `<ol>${ups.map(li).join('')}</ol>` : '<p class="empty">없음</p>'}</div><div class="gl"><h3>역풍·엇갈림 섹터</h3>${downs.length ? `<ol>${downs.map(li).join('')}</ol>` : '<p class="empty">없음</p>'}</div></section>`;
+    const secs = B.sectors.filter(x => x.n);
+    const ups = secs.filter(x => ALIGNED.includes(x.label)).sort(byScore).slice(0, 5);
+    const downs = secs.filter(x => CONTESTED.includes(x.label)).sort((a, c) => (a.score - c.score) || (c.n - a.n)).slice(0, 5);
+    const neutral = secs.filter(x => x.label === 'neutral');
+    const li = x => `<li>${sectorLink(x.sector)} <b class="${pctCls(x.score)}">${x.score}%</b> <span class="dim small">${esc(D.labels[x.label])} · ${x.n}건</span></li>`;
+    h += `<section class="glance"><div class="gl"><h3>밀어주는 축만 있는 섹터</h3>${ups.length ? `<ol>${ups.map(li).join('')}</ol>` : '<p class="empty">없음</p>'}</div><div class="gl"><h3>역풍·엇갈림 섹터</h3>${downs.length ? `<ol>${downs.map(li).join('')}</ol>` : '<p class="empty">없음</p>'}${neutral.length ? `<p class="keys" style="margin:8px 0 0">양쪽(± 만 있어 축 점수 0): ${neutral.map(x => sectorLink(x.sector)).join(', ')}</p>` : ''}</div></section>`;
     if (b) h += `<h2 class="sec">${b.date === D.today ? '오늘의 브리프' : '최근 브리프'} <span class="dim">${b.date}</span></h2><div id="brief"></div>`;
     else h += `<h2 class="sec">브리프</h2><p class="empty">아직 새 체계의 브리프가 없습니다. 다음 /brief 부터 쌓입니다.</p>`;
     if (D.briefs.length > 1) {
@@ -487,7 +476,7 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
       if (D.briefs.length > 8) h += `<p class="dim" style="font-size:14px"><a href="#/briefs">전체 브리프 ${D.briefs.length}건</a></p>`;
     }
     app.innerHTML = h;
-    if (b) mountBrief(document.getElementById('brief'), b.date);
+    if (b) mountBrief(document.getElementById('brief'), b);
   }
 
   function attentionPanel(A, limit) {
@@ -501,17 +490,17 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
   function sectors(arg) {
     const days = daysOf(arg), B = board(days), S = serOf(days), c = B.counts;
     REDRAW = null;
-    let h = `<p class="dateline">어느 섹터에 근거가 쌓이는가</p><p class="hero-sub">섹터마다 기술·사회·정책 세 축의 점수(−1~+1)와 정렬 %(50 + 50 × 세 축 평균)를 냅니다. 100%는 세 축 모두 밀어줌, 0%는 모두 역풍, 50%는 중립. 방향(내러티브)은 소속 섹터의 평균입니다. 점수는 근거의 누적이지 수익률 예측이 아닙니다.</p>`;
-    h += segTabs('#/sectors', days, `${B.from} ~ ${B.to}, ${B.total}건. 3축 정렬 ${c.aligned3} · 2축 ${c.aligned2} · 1축 ${c.aligned1} · 엇갈림 ${c.mixed} · 양쪽 ${c.neutral} · 역풍 ${c.headwind} · 신호 없음 ${c.none}`);
+    let h = `<p class="dateline">어느 섹터에 근거가 쌓이는가</p><p class="hero-sub">섹터마다 ${D.axes.join('·')} 세 축의 점수(−1~+1)와 정렬 %(50 + 50 × 세 축 평균)를 냅니다. 축 점수는 시그널의 방향 × 가중치(크기 × 기간) 합을 ${D.params.K}으로 나눈 것. 100%는 세 축 모두 밀어줌, 0%는 모두 역풍, 50%는 중립. 방향(내러티브)은 소속 섹터의 평균입니다. 점수는 근거의 누적이지 수익률 예측이 아닙니다.</p>`;
+    h += segTabs('#/sectors', days, `${B.from} ~ ${B.to}, ${B.total}건. 3축 정렬 ${c.aligned3} · 2축 ${c.aligned2} · 1축 ${c.aligned1} · 엇갈림 ${c.mixed} · 양쪽 ${c.neutral} · 역풍 ${c.headwind} · 신호 없음 ${c.none}${ledgerNote() ? ` · ${ledgerNote()}` : ''}`);
     h += `<section class="dash">`;
     for (const dir of B.directions) {
       const rows = dir.sectors.map(s => B.sectors.find(z => z.sector === s));
-      h += `<div class="panel full"><h3><span>${esc(dir.direction)} <b class="pct ${pctCls(dir.score)}">${pctText(dir.score)}</b> ${labelHtml(dir.label)}</span><span class="dim">${dir.n}건 · 섹터 ${dir.active}/${dir.sectors.length}${dir.delta != null ? ` · 7일 ${deltaHtml(dir.delta)}` : ''}</span></h3>` +
+      h += `<div class="panel full"><h3><span>${esc(dir.direction)} <b class="pct ${pctCls(dir.score)}">${pctText(dir.score)}</b> ${labelHtml(dir.label)}</span><span class="dim">${dir.n}건 · 섹터 ${dir.active}/${dir.sectors.length} · 7일 ${deltaHtml(dir.delta, dir.n)}</span></h3>` +
         (dir.n ? axes3(dir.axes) : '') +
-        `<div class="tbl"><table class="secs"><thead><tr><th>섹터</th><th>티커</th>${D.axes.map((a, i) => `<th class="${AXC[i]}"><i class="sw2"></i>${esc(a)}</th>`).join('')}<th class="num">정렬</th><th>상태</th><th class="num">건수</th><th class="num">7일</th><th>90일 추이</th></tr></thead><tbody>` +
+        `<div class="tbl"><table class="secs"><thead><tr><th>섹터</th><th>티커</th>${D.axes.map(a => `<th class="${axCls(a)}"><i class="sw2"></i>${esc(a)}</th>`).join('')}<th class="num">정렬</th><th>상태</th><th class="num">건수</th><th class="num">7일</th><th>추이</th></tr></thead><tbody>` +
         rows.map(x => `<tr><td class="nowrap"><b>${sectorLink(x.sector, days)}</b></td><td class="small">${x.tickers.map(esc).join(', ')}</td>` +
-          D.axes.map(a => `<td class="axcell">${x.n ? axCell(x.axes[a]) : '<span class="dim small">–</span>'}</td>`).join('') +
-          `<td class="num"><b class="pct ${pctCls(x.score)}">${pctText(x.score)}</b></td><td>${labelHtml(x.label)}</td><td class="num">${x.n}</td><td class="num">${deltaHtml(x.delta)}</td><td>${x.n ? spark(S.sectors[x.sector]) : ''}</td></tr>`).join('') +
+          D.axes.map(a => `<td class="axcell">${x.n ? axisBar(a, x.axes[a].net, x.axes[a].n, false) : '<span class="dim small">–</span>'}</td>`).join('') +
+          `<td class="num"><b class="pct ${pctCls(x.score)}">${pctText(x.score)}</b></td><td>${labelHtml(x.label)}</td><td class="num">${x.n}</td><td class="num">${deltaHtml(x.delta, x.n)}</td><td>${x.n ? spark(S.sectors[x.sector]) : ''}</td></tr>`).join('') +
         `</tbody></table></div></div>`;
     }
     h += attentionPanel(D.attention) + `</section>`;
@@ -520,17 +509,16 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
 
   function sector(name, arg) {
     const days = daysOf(arg), B = board(days), S = serOf(days), x = B.sectors.find(z => z.sector === name), cfg = D.sectors[name];
-    if (!x || !cfg) { app.innerHTML = `<p class="empty">${esc(name)} 섹터가 없습니다. <a href="#/sectors">섹터 목록</a></p>`; REDRAW = null; return; }
+    if (!x || !cfg) { app.innerHTML = `<p class="empty">${esc(name)} 섹터가 sector_map 에 없습니다. <a href="#/sectors">섹터 목록</a></p>`; REDRAW = null; return; }
     const rows = D.ledger.filter(r => r.sector === name && r.date >= B.from && r.date <= B.to).sort((a, c) => c.date.localeCompare(a.date) || c.line - a.line);
     let h = `<p class="dateline">${esc(name)}</p><p class="hero-sub">${esc(cfg.direction)} · ${cfg.tickers.map(esc).join(', ')}${cfg.note ? ` · ${esc(cfg.note)}` : ''}</p>`;
-    h += segTabs(`#/sector/${enc(name)}`, days, `${B.from} ~ ${B.to}, ${x.n}건`);
-    const tile = (v, l, cls) => `<div class="kpi"><b${cls ? ` class="${cls}"` : ''}>${v}</b><span>${l}</span></div>`;
-    h += `<section class="dash"><div class="kpis full">` + tile(`<span class="${pctCls(x.score)}">${pctText(x.score)}</span>`, `정렬 (최근 ${days}일)`) + tile(labelHtml(x.label), '상태', 'txt') + tile(x.n, `시그널 건수`) + tile(x.delta == null ? '–' : `${x.delta > 0 ? '+' : ''}${x.delta}p`, '7일 변화', x.delta > 0 ? 'gs' : x.delta < 0 ? 'ss' : '') + `</div>`;
+    h += segTabs(`#/sector/${enc(name)}`, days, `${B.from} ~ ${B.to}, ${x.n}건${ledgerNote() ? ` · ${ledgerNote()}` : ''}`);
+    h += `<section class="dash"><div class="kpis full">` + tile(`<span class="${pctCls(x.score)}">${pctText(x.score)}</span>`, `정렬 (최근 ${days}일)`) + tile(labelHtml(x.label), '상태', 'txt') + tile(x.n, `시그널 건수`) + tile(deltaHtml(x.delta, x.n).replace(/ small/, ''), '7일 변화', 'txt') + `</div>`;
     h += `<div class="panel full"><h3>정렬 % 추이 <span class="dim">날마다 그날 기준 최근 ${days}일 창으로 다시 계산. 신호 없는 날은 비어 있음</span></h3><div class="chart-box" data-chart="sector"></div></div>`;
     for (const a of D.axes) {
       const ax = x.axes[a], ev = rows.filter(r => r.axis === a);
-      h += `<div class="panel full"><h3><span>${axTag(a)} <span class="${ax.net > 0 ? 'gs' : ax.net < 0 ? 'ss' : 'dim'}">${fmtNet(ax.net)}</span></span><span class="dim">${ax.n}건 · <span class="dir up"><i>▲</i>${ax.up}</span> <span class="dir down"><i>▼</i>${ax.down}</span> <span class="dir both"><i>◆</i>${ax.both}</span> · 가중 합 ${ax.raw > 0 ? '+' : ''}${ax.raw}</span></h3>` +
-        (ev.length ? `<ul class="feed">` + ev.map(r => `<li><div class="meta"><span class="date">${r.date}</span>${dirBadge(r.direction)}${confBadge(r.confidence)}<span class="dim small">${esc(r.horizon)} · 크기 ${esc(r.impact)} · ${esc(r.channel)}${r.reverses ? ` · 번복 줄 ${r.reverses}` : ''}</span><span class="dim small">${r.tickers.map(esc).join(', ')}</span></div>${esc(r.fact)} <a href="${esc(r.source)}" target="_blank" rel="noopener">출처</a><br><span class="small dim">${esc(r.note)}</span></li>`).join('') + `</ul>` : `<p class="empty">이 축의 근거가 아직 없습니다. "아직 모른다"이지 "아니다"가 아닙니다.</p>`) + `</div>`;
+      h += `<div class="panel full"><h3><span>${axTag(a)} <span class="${netCls(ax.net)}">${fmtNet(ax.net)}</span></span><span class="dim">${ax.n}건 · <span class="dir up"><i>▲</i>${ax.up}</span> <span class="dir down"><i>▼</i>${ax.down}</span> <span class="dir both"><i>◆</i>${ax.both}</span> · 가중 합 ${ax.raw > 0 ? '+' : ''}${ax.raw}</span></h3>` +
+        (ev.length ? `<ul class="feed">` + ev.map(r => `<li><div class="meta"><span class="date">${r.date}</span>${dirBadge(r.direction)}${confBadge(r.confidence)}<span class="dim small">${esc(r.horizon)} · 크기 ${esc(r.impact)} · ${esc(r.channel)}${r.reverses ? ` · 번복 줄 ${r.reverses}` : ''}</span><span class="dim small">${(r.tickers || []).map(esc).join(', ')}</span></div>${esc(r.fact)} <a href="${esc(r.source)}" target="_blank" rel="noopener">출처</a><br><span class="small dim">${esc(r.note)}</span></li>`).join('') + `</ul>` : `<p class="empty">이 축의 근거가 아직 없습니다. "아직 모른다"이지 "아니다"가 아닙니다.</p>`) + `</div>`;
     }
     h += `</section>`;
     app.innerHTML = h;
@@ -538,52 +526,54 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     REDRAW();
   }
 
-  /* 추이: 섹터 선택은 최대 8개. 색은 선택한 섹터에 고정되고 다른 섹터를 껐다 켜도 바뀌지 않는다 */
+  /* 추이: 섹터 선택은 최대 8개. 색은 선택한 섹터에 고정되고 다른 섹터를 껐다 켜도 바뀌지 않는다. 창을 바꾸면 그 창에 신호 없는 섹터는 선택에서 빠진다 */
   let SEL = null; const SLOT = new Map();
   const slotOf = name => { if (!SLOT.has(name)) { const used = new Set(SLOT.values()); SLOT.set(name, SC.find(c => !used.has(c)) || SC[SC.length - 1]); } return SLOT.get(name); };
   function trend(arg) {
     const days = daysOf(arg), B = board(days), S = serOf(days), A = D.activity[days === 90 ? 'w90' : 'w30'], c = B.counts;
-    const active = B.sectors.filter(x => x.n);
+    const active = B.sectors.filter(x => x.n), activeNames = new Set(active.map(x => x.sector));
     if (!SEL) SEL = active.slice().sort((a, b) => (Math.abs(b.score - 50) - Math.abs(a.score - 50)) || (b.n - a.n)).slice(0, 6).map(x => x.sector);
-    SEL = SEL.filter(s => D.sectors[s]);
+    for (const s of SEL) if (!activeNames.has(s)) SLOT.delete(s);
+    SEL = SEL.filter(s => activeNames.has(s));
     SEL.forEach(slotOf);
-    let h = `<p class="dateline">추이</p><p class="hero-sub">기준일 ${D.today}, 장부 전체 ${D.ledger.length}건. 정렬 %는 날마다 그날 기준 창으로 다시 계산한 값입니다.</p>`;
+    let h = `<p class="dateline">추이</p><p class="hero-sub">기준일 ${D.today}, 장부 전체 ${D.ledger.length}건. 정렬 %는 날마다 그날 기준 창으로 다시 계산한 값입니다.${ledgerNote() ? ` ${ledgerNote()}.` : ''}</p>`;
     if (!D.ledger.length) { app.innerHTML = h + `<p class="empty">장부가 비어 있습니다.</p>`; REDRAW = null; return; }
     h += segTabs('#/trend', days, `${B.from} ~ ${B.to}, ${B.total}건`);
-    const tile = (v, l, cls) => `<div class="kpi"><b${cls ? ` class="${cls}"` : ''}>${v}</b><span>${l}</span></div>`;
-    h += `<section class="dash"><div class="kpis full">` + tile(B.total, `최근 ${days}일 구조적 시그널`) + tile(A.axes.map((x, i) => `<span class="${AXC[i]}" style="color:var(--c)">${x.count}</span>`).join(' <small>/</small> '), `기술 / 사회 / 정책 건수`) +
+    h += `<section class="dash"><div class="kpis full">` + tile(B.total, `최근 ${days}일 구조적 시그널`) + tile(A.axes.map(x => `<span class="${axCls(x.axis)}" style="color:var(--c)">${x.count}</span>`).join(' <small>/</small> '), `${D.axes.join(' / ')} 건수`) +
       tile(`${c.aligned3 + c.aligned2} <small>3축 ${c.aligned3}</small>`, '2축 이상 정렬 섹터') + tile(`${c.headwind} <small>엇갈림 ${c.mixed}</small>`, '역풍 섹터') + `</div>`;
     h += `<div class="panel full"><h3>섹터 정렬 % 추이 <span class="dim">칩을 눌러 섹터를 고른다. 최대 8개, 기본은 중립(50%)에서 먼 순. 선 위에 마우스를 올리면 그날 값</span></h3><div class="seg" style="margin:0 0 8px" role="group" aria-label="섹터 선택">` +
       active.sort(byScore).map(x => `<button type="button" data-sel="${esc(x.sector)}" aria-pressed="${SEL.includes(x.sector)}" class="${SEL.includes(x.sector) ? slotOf(x.sector) : ''}"><i></i>${esc(x.sector)} ${x.score}%</button>`).join('') + `</div><div class="chart-box" data-chart="sectors"></div></div>`;
     h += `<div class="panel full"><h3>방향 정렬 % 추이 <span class="dim">소속 섹터의 평균</span></h3>${legend(B.directions.map((x, i) => [x.direction, SC[i % SC.length]]))}<div class="chart-box" data-chart="directions"></div></div>`;
     h += `<div class="panel full"><h3>일별 시그널 <span class="dim">축별로 쌓음</span></h3>${axisLegend()}<div class="chart-box" data-chart="daily"></div></div>`;
     h += `<div class="panel full"><h3>축별 상세 <span class="dim">최근 ${days}일. 방향은 섹터 기준</span></h3><div class="tbl"><table><thead><tr><th>축</th><th class="num">건수</th><th class="num">비중</th><th class="num">밀어줌 / 막음 / 양쪽</th><th class="num">평균 확신</th><th>상위 섹터</th><th>상위 티커</th></tr></thead><tbody>` +
-      A.axes.map((x, i) => `<tr><td class="nowrap">${axTag(x.axis)}</td><td class="num">${x.count}</td><td class="num">${A.total ? Math.round(x.share * 100) + '%' : '–'}</td><td class="num">${x.dir['+']} / ${x.dir['-']} / ${x.dir['±']}</td><td class="num">${x.avg_conf ?? '–'}</td><td class="small">${x.sectors.map(([k, v]) => `${esc(k)}(${v})`).join(', ') || '–'}</td><td class="small">${x.tickers.map(([k, v]) => `${esc(k)}(${v})`).join(', ') || '–'}</td></tr>`).join('') + `</tbody></table></div></div></section>`;
+      A.axes.map(x => `<tr><td class="nowrap">${axTag(x.axis)}</td><td class="num">${x.count}</td><td class="num">${A.total ? Math.round(x.share * 100) + '%' : '–'}</td><td class="num">${x.dir['+']} / ${x.dir['-']} / ${x.dir['±']}</td><td class="num">${x.avg_conf ?? '–'}</td><td class="small">${x.sectors.map(([k, v]) => `${esc(k)}(${v})`).join(', ') || '–'}</td><td class="small">${x.tickers.map(([k, v]) => `${esc(k)}(${v})`).join(', ') || '–'}</td></tr>`).join('') + `</tbody></table></div></div></section>`;
     app.innerHTML = h;
-    const draw = () => {
-      pctLines(app.querySelector('[data-chart="sectors"]'), S.dates, SEL.map(s => ({ name: s, cls: slotOf(s), values: S.sectors[s] })), { label: `섹터 정렬 % 추이, 최근 ${days}일 창` });
+    const drawSectors = () => pctLines(app.querySelector('[data-chart="sectors"]'), S.dates, SEL.map(s => ({ name: s, cls: slotOf(s), values: S.sectors[s] })), { label: `섹터 정렬 % 추이, 최근 ${days}일 창` });
+    const drawAll = () => {
+      drawSectors();
       pctLines(app.querySelector('[data-chart="directions"]'), S.dates, B.directions.map((x, i) => ({ name: x.direction, cls: SC[i % SC.length], values: S.directions[x.direction] })), { label: `방향 정렬 % 추이, 최근 ${days}일 창` });
       const { days: dd, per } = dailyCounts(D.ledger, B.from, B.to);
-      stackChart(app.querySelector('[data-chart="daily"]'), dd, D.axes.map((a, i) => ({ name: a, cls: AXC[i], counts: per[i] })), `일별 구조적 시그널 건수, 최근 ${days}일`);
+      stackChart(app.querySelector('[data-chart="daily"]'), dd, D.axes.map(a => ({ name: a, cls: axCls(a), counts: per[axIdx(a)] })), `일별 구조적 시그널 건수, 최근 ${days}일`);
     };
     app.querySelectorAll('button[data-sel]').forEach(btn => btn.addEventListener('click', () => {
       const s = btn.dataset.sel;
       if (SEL.includes(s)) { SEL = SEL.filter(z => z !== s); SLOT.delete(s); btn.setAttribute('aria-pressed', 'false'); btn.className = ''; }
       else if (SEL.length >= 8) { return; }
       else { SEL = [...SEL, s]; btn.setAttribute('aria-pressed', 'true'); btn.className = slotOf(s); }
-      draw();
+      drawSectors();
     }));
-    REDRAW = draw;
-    draw();
+    REDRAW = drawAll;
+    drawAll();
   }
 
   function ledger() {
     REDRAW = null;
     const rows = [...D.ledger].sort((a, b) => b.date.localeCompare(a.date) || b.line - a.line);
     rows.forEach(r => { r._q = [r.sector, r.fact, r.note, (r.tickers || []).join(' ')].join(' ').toLowerCase(); });
+    const sectorNames = [...new Set([...Object.keys(D.sectors), ...rows.map(r => r.sector).filter(Boolean)])];   // 맵에 없는 옛 섹터도 고를 수 있게
     app.innerHTML = `<p class="dateline">장부</p><p class="hero-sub">구조적 시그널만 쌓입니다. 한 줄이 한 사건, 추가만 하고 고치지 않습니다.</p>` +
       `<div class="filters"><label>축 <select id="f-axis"><option value="">전체</option>${D.axes.map(a => `<option>${a}</option>`).join('')}</select></label>` +
-      `<label>섹터 <select id="f-sector"><option value="">전체</option>${Object.keys(D.sectors).map(s => `<option>${esc(s)}</option>`).join('')}</select></label>` +
+      `<label>섹터 <select id="f-sector"><option value="">전체</option>${sectorNames.map(s => `<option>${esc(s)}</option>`).join('')}</select></label>` +
       `<label>기간 <select id="f-days"><option value="">전체</option><option value="30">최근 30일</option><option value="90">최근 90일</option></select></label>` +
       `<input type="search" id="f-q" placeholder="섹터, 티커, 팩트 검색" aria-label="검색"><span class="count" id="f-count"></span></div>` + KEYS + `<div id="ledger-table"></div>`;
     const meta = r => `${esc(r.horizon)} · 크기 ${esc(r.impact)} · ${esc(r.channel)}${r.reverses ? ` · 번복 줄 ${r.reverses}` : ''}`;
@@ -604,8 +594,8 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
   function briefs() {
     REDRAW = null;
     app.innerHTML = `<p class="dateline">브리프</p><p class="hero-sub">${D.briefs.length}건</p>` + (D.briefs.length ?
-      `<div class="tbl"><table><thead><tr><th>날짜</th><th class="num">구조적 시그널</th></tr></thead><tbody>` +
-      D.briefs.map(b => `<tr><td class="date"><a href="#/brief/${b.date}">${b.date}</a></td><td class="num">${b.none_today ? '없음' : b.structural}</td></tr>`).join('') + `</tbody></table></div>` :
+      `<div class="tbl"><table><thead><tr><th>날짜</th><th class="num">구조적 시그널</th><th class="num">시그널 카드</th></tr></thead><tbody>` +
+      D.briefs.map(b => `<tr><td class="date"><a href="#/brief/${b.date}">${b.date}</a></td><td class="num">${b.none_today ? '없음' : b.structural}</td><td class="num">${b.signals.length}</td></tr>`).join('') + `</tbody></table></div>` :
       `<p class="empty">아직 브리프가 없습니다. 다음 /brief 부터 쌓입니다.</p>`);
   }
   function brief(date) {
@@ -616,12 +606,17 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     const meta = [`구조적 ${b.none_today ? '없음' : b.structural + '건'}`, rawLine(b.date)].filter(Boolean).join(', ');
     app.innerHTML = `<p class="dateline">${fmtDate(b.date)} 브리프</p><p class="hero-sub">${esc(meta)}</p><div id="brief"></div>` +
       `<nav class="pager" aria-label="브리프 이동"><span>${prev ? `<a href="#/brief/${prev.date}">이전 ${prev.date}</a>` : ''}</span><span>${next ? `<a href="#/brief/${next.date}">다음 ${next.date}</a>` : ''}</span></nav>`;
-    mountBrief(document.getElementById('brief'), b.date);
+    mountBrief(document.getElementById('brief'), b);
   }
+  const fwCache = {};
+  const fetchText = p => { if (!fwCache[p]) fwCache[p] = fetch(p, { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.text(); }); return fwCache[p]; };
   function framework() {
     REDRAW = null;
-    app.innerHTML = `<p class="dateline">판단 기준</p><p class="hero-sub">framework/axes.md, sector_map.yaml, sources.yaml 그대로. Ken 이 고칩니다.</p><div id="axes"></div><h2 class="sec">방향·섹터·티커 <span class="dim">framework/sector_map.yaml</span></h2><pre class="yaml">${esc(D.framework.sector_map)}</pre><h2 class="sec">수집 소스 <span class="dim">framework/sources.yaml</span></h2><pre class="yaml">${esc(D.framework.sources)}</pre>`;
-    document.getElementById('axes').appendChild(md(D.framework.axes_md));
+    app.innerHTML = `<p class="dateline">판단 기준</p><p class="hero-sub">framework/axes.md, sector_map.yaml, sources.yaml 그대로. Ken 이 고칩니다. 점수 계산의 구현은 fetch/scoring.py 하나입니다 (K=${D.params.K}, 기간 가중 ${Object.entries(D.params.HW).map(([k, v]) => `${k} ${v}`).join(' · ')}).</p><div id="axes"><p class="loading">불러오는 중</p></div><h2 class="sec">방향·섹터·티커 <span class="dim">framework/sector_map.yaml</span></h2><pre class="yaml" id="smap"></pre><h2 class="sec">수집 소스 <span class="dim">framework/sources.yaml</span></h2><pre class="yaml" id="srcs"></pre>`;
+    Promise.all([fetchText('framework/axes.md'), fetchText('framework/sector_map.yaml'), fetchText('framework/sources.yaml')]).then(([a, s, r]) => {
+      const ax = document.getElementById('axes'); if (!ax) return;
+      ax.innerHTML = ''; ax.appendChild(md(a)); document.getElementById('smap').textContent = s; document.getElementById('srcs').textContent = r;
+    }).catch(e => { const ax = document.getElementById('axes'); if (ax) ax.innerHTML = `<p class="empty">기준 문서를 불러오지 못했습니다 (${esc(e.message)}).</p>`; });
   }
 
   const views = { home, sectors, sector, trend, ledger, briefs, brief, framework };
@@ -638,6 +633,7 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     try { arg = decodeURIComponent(arg); } catch (e) { /* 그대로 둔다 */ }
     document.title = name === 'home' ? 'radar' : `${['brief', 'sector'].includes(name) ? arg + ' ' : ''}${titles[name]} | radar`;
     if (name === 'sector') sector(arg, a2); else views[name](arg);
+    app.insertAdjacentHTML('afterbegin', banner());
     window.scrollTo(0, 0);
   }
 
