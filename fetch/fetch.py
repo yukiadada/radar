@@ -4,6 +4,7 @@
 소스 목록은 framework/sources.yaml 이 정한다 (`--list` 로 이름만 출력).
   type: rss    피드 URL 그대로 (Federal Register, 연준 보도자료)
   type: gnews  Google News RSS 검색. 관련도순 상위 100건만 주므로 쿼리에 when:Nd (N = 시간창/24) 를 붙여 최근 것만 받는다
+  ua: browser  그 소스만 브라우저형 User-Agent 로 받는다 (ftc.gov 처럼 봇 UA 를 403 으로 막는 곳). 기본은 feedparser 형 UA
 
 출력: raw/YYYY-MM-DD/{source}.json
   {
@@ -29,7 +30,7 @@
 
 소스는 동시에 받는다 (스레드 풀). 출력 순서는 sources.yaml 순서로 고정한다.
 같은 날 다시 실행하면 그 날 파일을 덮어쓴다 (실패한 소스의 기존 파일은 남긴다).
-환경변수 RADAR_UA 로 User-Agent 를 바꿀 수 있다.
+환경변수 RADAR_UA 로 기본 User-Agent 를 바꿀 수 있다 (ua: browser 소스는 영향 없음).
 종료 코드: 0 전부 성공 / 1 일부 피드 실패 또는 sources.yaml 항목 오류(그 소스만 건너뜀) / 2 인자·환경 오류 또는 sources.yaml 전체 오류
 """
 from __future__ import annotations
@@ -73,11 +74,14 @@ SOURCES = {s["name"]: s for s in _all if not s["error"]}
 CONFIG_ERRORS = [f"{s['name']}: {s['error']}" for s in _all if s["error"]]
 SOURCE_NAMES = list(SOURCES)
 
-# federalreserve.gov 는 User-Agent 를 가린다 (2026-09-08 확인):
-#   Python 기본 UA -> 403, 브라우저형 UA -> 404, feedparser 형 UA -> 200
+# federalreserve.gov 는 User-Agent 를 가린다 (2026-09-08 확인: Python 기본 UA -> 403, 브라우저형 UA -> 404, feedparser 형 UA -> 200.
+# 2026-09-17 에는 넷 다 200 이었지만 기본은 그대로 feedparser 형으로 둔다).
+# ftc.gov 는 반대로 브라우저형 UA 만 200 (2026-09-17 확인) -> sources.yaml 에서 ua: browser 로 소스별 지정.
+# bls.gov, newyorkfed.org, commerce.gov, fcc.gov 는 어떤 UA 로도 403 이라 소스로 못 쓴다 (2026-09-17 확인).
 USER_AGENT = os.environ.get(
     "RADAR_UA", f"feedparser/{getattr(feedparser, '__version__', '6')} +https://github.com/kurtmckee/feedparser/"
 )
+BROWSER_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
 ACCEPT = "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.5"
 
 
@@ -179,11 +183,11 @@ def to_iso_utc(entry) -> str | None:
 
 
 # ---------------------------------------------------------------- 수집
-def fetch_bytes(url: str, timeout: float, retries: int) -> bytes:
+def fetch_bytes(url: str, timeout: float, retries: int, ua: str | None = None) -> bytes:
     last: Exception | None = None
     for attempt in range(retries + 1):
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": ACCEPT})
+            req = urllib.request.Request(url, headers={"User-Agent": ua or USER_AGENT, "Accept": ACCEPT})
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 return resp.read()
         except (urllib.error.URLError, OSError, http.client.HTTPException) as e:
@@ -301,7 +305,8 @@ def main(argv: list[str] | None = None) -> int:
     failed: list[str] = []
 
     def work(name: str):
-        data = fetch_bytes(sources[name], args.timeout, args.retries)
+        ua = BROWSER_UA if SOURCES[name]["ua"] == "browser" else None
+        data = fetch_bytes(sources[name], args.timeout, args.retries, ua)
         items, warn = parse_items(data)
         kept, n_old, n_dup = select(items, args.hours, now, dedup_title=SOURCES[name]["type"] == "gnews")
         return items, warn, kept, n_old, n_dup

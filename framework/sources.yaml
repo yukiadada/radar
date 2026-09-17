@@ -3,6 +3,9 @@
 # axis 는 어느 축의 입력인지 힌트일 뿐이다. 분류는 /brief 가 기사 내용으로 한다.
 # gnews 는 관련도순 상위 100건만 주고 fetch.py 가 when:Nd 를 붙여 최근 것만 받는다. OR 와 따옴표 구문을 쓸 수 있다.
 # 값 안에 ' #' 을 쓰면 주석으로 잘린다. 이름을 바꾸면 그날부터 raw 파일 이름이 바뀐다 (사이트의 관심 집계는 제목만 보므로 영향 없음).
+# ua: browser 를 주면 그 소스만 브라우저형 User-Agent 로 받는다 (봇 UA 를 403 으로 막는 ftc.gov). 나머지는 feedparser 형 UA.
+# 못 쓰는 곳 (2026-09-17 확인): bls.gov·newyorkfed.org·commerce.gov·fcc.gov 는 어떤 UA 로도 403, nrc.gov 503, Gallup 은 RSS 없이 sitemap 뿐,
+# Treasury·BIS 는 피드를 못 찾음, Census 보도자료 피드(newsroom/press-releases.xml)는 link 가 비어 있어 출처로 못 씀. BLS 는 gnews_consumer 가 대신 잡는다.
 
 # 정책 — 문서가 나오는 곳
 federal_register:
@@ -15,6 +18,42 @@ fed_press:
   url: https://www.federalreserve.gov/feeds/press_all.xml
   axis: 정책
   note: 연준 보도자료. FOMC 성명·규제 규칙
+wh_actions:
+  type: rss
+  url: https://www.whitehouse.gov/presidential-actions/feed/
+  axis: 정책
+  note: 백악관 행정명령·포고·각서 원문. 관보 게재보다 1~3일 빠르다. summary 는 본문 첫 500자. 30건 캡
+sec_press:
+  type: rss
+  url: https://www.sec.gov/news/pressreleases.rss
+  axis: 정책
+  note: SEC 보도자료. 규칙 제안·채택, 코인·ETF 조치, 집행. 승인은 정책, 자금 유입은 사회(gnews_bitcoin_etf). 25건 캡
+ftc_press:
+  type: rss
+  url: https://www.ftc.gov/feeds/press-release.xml
+  axis: 정책
+  ua: browser
+  note: FTC 보도자료. 반독점·합병 심사·소비자 규칙. 10건 캡
+doj_antitrust:
+  type: rss
+  url: https://www.justice.gov/news/rss?type%5B0%5D=press_release&field_component=376&search_api_language=en&show_public_archived=0&require_all=0
+  axis: 정책
+  note: DOJ 반독점국 보도자료만 (field_component=376). 전체 DOJ 피드는 하루 수십 건이라 안 쓴다. 25건 캡
+ustr_press:
+  type: rss
+  url: https://ustr.gov/rss.xml
+  axis: 정책
+  note: USTR 보도자료·연설. 관세 조치·무역 협정. 10건 캡, 연설 제목("February" 같은)이 섞인다
+doe_news:
+  type: rss
+  url: https://www.energy.gov/rss/energygov/2193718
+  axis: 정책
+  note: 에너지부 보도자료. 전력망 비상명령·원자력·핵심광물·LNG. 정부 조치라 정책, 영향 섹터는 전력/데이터센터·에너지. 10건 캡
+court_opinions:
+  type: rss
+  url: https://www.courtlistener.com/feed/search/?q=antitrust+OR+tariff+OR+tariffs+OR+%22export+controls%22+OR+copyright+OR+%22artificial+intelligence%22+OR+cryptocurrency+OR+stablecoin+OR+%22data+center%22+OR+semiconductor&type=o&order_by=dateFiled+desc&court=scotus+cadc+ca5+ca9+cafc+cand+nysd+dcd+cit
+  axis: 정책
+  note: CourtListener 판결문 검색 (Atom). 대법원·DC/5/9/연방 순회항소·N.D. Cal·S.D.N.Y.·D.D.C.·국제무역법원에서 q 의 키워드가 본문에 있는 것. 인용문에만 걸린 판결도 오니 summary 의 일치 문장으로 거른다. 20건 캡
 gnews_tariff:
   type: gnews
   query: tariff
@@ -49,6 +88,21 @@ gnews_frontier:
   note: 피지컬 AI·우주·양자. 데모·로드맵은 대부분 미확정
 
 # 사회 — 사람들이 받아들이는가
+bea_releases:
+  type: rss
+  url: https://apps.bea.gov/rss/rss.xml
+  axis: 사회
+  note: BEA 통계 발표. GDP·개인소득과 소비(PCE)·무역수지. 월 수 건이라 0건인 날이 정상. 공식 통계라 구조적
+census_indicators:
+  type: rss
+  url: https://www.census.gov/economic-indicators/indicator.xml
+  axis: 사회
+  note: Census 경제지표. 소매판매·재고·주택착공·내구재·기업설립. summary 에 숫자가 있고 link 는 지표 첫 페이지
+pew_research:
+  type: rss
+  url: https://www.pewresearch.org/feed/
+  axis: 사회
+  note: Pew 조사 전부. 보고서의 장(章)·부록·감사의 글도 항목으로 와서 하루 10~30건. 제목만 훑고 기술 수용·인구·소비 관련만 본다. 100건 캡
 gnews_consumer:
   type: gnews
   query: "consumer spending" OR "retail sales" OR "consumer sentiment"

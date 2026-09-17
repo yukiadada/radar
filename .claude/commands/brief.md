@@ -22,17 +22,17 @@ CLAUDE.md "워크플로 > /brief"를 실행한다. 아래 순서를 건너뛰지
    > raw/<날짜>/ 없음. 먼저 `python3 fetch/fetch.py --date <날짜>` 실행이 필요합니다.
 
    비대화형(클라우드 루틴)에서는 GitHub MCP 도구(`actions_run_trigger` 의 `run_workflow`, owner yukiadada, repo radar, workflow_id fetch.yml, ref main)로 수집을 직접 실행하고 radar-raw 에서 15초 간격으로 `git pull --rebase` 하며 최대 10분 기다린다. 도구가 없으면 2분 간격으로 최대 20분 기다린 뒤 그래도 없으면 멈춘다. fetch.yml 은 04:30 과 05:15 KST 두 번 예약돼 있어 보통은 이미 있다.
-2. 파일이 있으면 전부 읽는다. 구조는 `{source, feed_url, fetched_at, window_hours, count, items: [{title, link, published, summary}]}`. 파일 수가 `python3 fetch/fetch.py --list` 가 출력하는 소스 수보다 적거나, count가 0이거나, `error` 필드가 있는(수집 실패) 소스가 있으면 기억해 두고 마지막 채팅 요약에 적는다. sources.yaml 의 axis 는 그 소스가 주로 어느 축의 입력인지 힌트다. 옛 날짜의 `gnews_co_*` 파일은 무시한다.
+2. 파일이 있으면 전부 읽는다. 구조는 `{source, feed_url, fetched_at, window_hours, count, items: [{title, link, published, summary}]}`. 파일 수가 `python3 fetch/fetch.py --list` 가 출력하는 소스 수보다 적거나, count가 0이거나, `error` 필드가 있는(수집 실패) 소스가 있으면 기억해 두고 마지막 채팅 요약에 적는다. sources.yaml 의 axis 는 그 소스가 주로 어느 축의 입력인지 힌트다. `type: rss` 소스(federal_register, fed_press, wh_actions, sec_press, ftc_press, doj_antitrust, ustr_press, doe_news, bea_releases, census_indicators, pew_research)는 발행 기관의 피드라 `link` 가 곧 1차 출처 URL 이고 `summary` 가 기관이 쓴 본문·요약이다. court_opinions 는 판결문 검색 피드라 `summary` 가 검색어 일치 문장 하나뿐이다. 옛 날짜의 `gnews_co_*` 파일은 무시한다.
 3. `briefs/<날짜>.md`가 이미 있으면 내용을 보여주고 덮어쓸지 Ken에게 묻는다. 답을 받기 전에는 덮어쓰지 않는다. Ken이 거부하면 거기서 멈춘다. 장부도 건드리지 않는다. 비대화형(클라우드 루틴)에서는 묻지 않고 "이미 있음"을 출력하고 멈춘다.
 
 ## 2. 분류와 후보 추출
 
 - 모든 항목을 axes.md 의 3축 중 하나로 분류한다: **기술**(무엇이 가능해졌나 — 성능·비용 도약, 공급 병목, capex, 체결된 계약) / **사회**(사람·기업·기관이 받아들이나 — 이용자·판매 통계, 소비 패턴, 인구·생활, 여론조사, 기관의 채택·인수) / **정책**(정부가 밀어주나 막나 — 행정명령·관세·규제·보조금·판결·법안·FOMC). 어느 축에도 안 걸리면 버린다. 두 축에 걸치면 사건의 주체로 정한다: 정부가 한 일이면 정책, 통계·수용·채택이면 사회, 기술·공급·capex·계약이면 기술.
 - 해외 중앙은행(ECB 등) 결정과 가격 등락 자체(주가·유가·비트코인 가격)는 시그널이 아니다. "버린 뉴스"에 한 줄만 적는다.
-- 용어: **1차 출처**란 발행 기관 사이트다. whitehouse.gov, federalregister.gov(API `https://www.federalregister.gov/api/v1/documents/<문서번호>.json` 과 그 안의 raw_text_url 은 봇 차단 없이 열린다), federalreserve.gov, sec.gov, bls.gov, census.gov, pewresearch.org, 기업 IR 페이지 등. 이하 "1차 출처"는 이 뜻이다.
+- 용어: **1차 출처**란 발행 기관 사이트다. whitehouse.gov, federalregister.gov(API `https://www.federalregister.gov/api/v1/documents/<문서번호>.json` 과 그 안의 raw_text_url 은 봇 차단 없이 열린다), federalreserve.gov, sec.gov, ftc.gov, justice.gov, ustr.gov, energy.gov, bea.gov, census.gov, pewresearch.org, 기업 IR 페이지 등. courtlistener.com 은 판결문 원문을 그대로 싣는 곳이라 판결의 1차 출처로 친다. 이하 "1차 출처"는 이 뜻이다.
 - Google News 항목은 `summary`가 제목과 같은 경우가 대부분이다. 헤드라인만으로 판단할 수 있는 것은 structural=false 판정과 "버린다" 판정뿐이다.
 - **structural=true 후보는 확인 등급을 거친다.** 순서대로 시도하고, 도달한 등급의 제한을 지킨다.
-  1. 본문 확인: 기사나 1차 출처를 WebFetch 로 연다. Google News 링크(news.google.com/rss/articles/...)는 WebFetch 로 직접 열리지 않으므로 `python3 fetch/gn_decode.py --raw <날짜> <source> <위치...>`(위치는 raw `items` 배열의 순서, 0부터) 또는 `python3 fetch/gn_decode.py <링크>` 로 실제 URL 을 얻은 뒤 연다. `ERROR` 가 나오거나 유료라 못 열면 같은 사건의 다른 기사나 1차 출처를 연다. 이 등급이면 confidence 0.6 또는 0.8.
+  1. 본문 확인: 기사나 1차 출처를 WebFetch 로 연다. **1차 출처 피드 항목**(위 `type: rss` 소스, court_opinions 제외)은 raw 의 `title`+`summary` 가 기관이 쓴 글이므로 그 범위 안의 사실은 WebFetch 없이도 이 등급으로 친다. 단 팩트는 `summary` 에 있는 내용만 쓰고 confidence 는 0.6, 전문을 열어 확인했을 때만 0.8. Google News 링크(news.google.com/rss/articles/...)는 WebFetch 로 직접 열리지 않으므로 `python3 fetch/gn_decode.py --raw <날짜> <source> <위치...>`(위치는 raw `items` 배열의 순서, 0부터) 또는 `python3 fetch/gn_decode.py <링크>` 로 실제 URL 을 얻은 뒤 연다. `ERROR` 가 나오거나 유료라 못 열면 같은 사건의 다른 기사나 1차 출처를 연다. 이 등급이면 confidence 0.6 또는 0.8.
   2. 검색 교차 확인: WebFetch 가 막힌 환경(EGRESS_BLOCKED)이면 WebSearch 로 같은 사건을 다룬 서로 다른 매체 2개 이상의 결과를 교차 확인한다. 이 등급이면 structural=true 는 허용하되 confidence 는 0.6 을 넘기지 않고, note 끝에 ` 확인: 검색 교차` 를 붙이고, 브리프 해석 아래에 "확인 방법 메모" 한 줄을 남긴다.
   3. 둘 다 안 되면 structural=false, confidence 0.3 으로 내리거나 버린다. 헤드라인만 보고 structural=true 를 쓰지 않는다.
 - 숫자·날짜·주체는 확인한 출처에 있는 것만 쓴다. 검색 결과에서 얻은 숫자는 그 검색 결과 페이지의 URL 을 팩트 셀에 함께 적는다. URL 이 없으면 그 숫자를 쓰지 않는다(CLAUDE.md 규칙 5). 헤드라인끼리 숫자가 다르면 "확인 안 됨".
@@ -42,7 +42,7 @@ CLAUDE.md "워크플로 > /brief"를 실행한다. 아래 순서를 건너뛰지
   - 영향 섹터: sector_map.yaml 의 섹터 키 하나 + 그 섹터의 티커 최대 3개. 영향은 항상 "~라는 가설"로 쓴다. 같은 사건이 두 섹터에 반대로 작용하면 섹터마다 행을 따로 쓴다.
 - 같은 사건을 다루는 기사가 여럿이면 하나로 합친다.
 - 출처(`source`) URL 규칙: 사실을 실제로 확인한 URL 을 쓴다. 1차 출처에서 확인했으면 그 URL, 그렇지 않으면 raw 의 `link` 를 그대로(Google News 리다이렉트 URL 포함). `source` 는 장부 중복 검사 키의 일부이므로 같은 사건이 날마다 같은 URL 이 되도록 1차 출처를 우선한다. 쓰지 않은 쪽(원문 URL 또는 raw 기사 제목)은 note 에 적는다.
-- Federal Register 원문은 하루 수십~수백 건이다. 제목과 summary 로 3축·섹터 관련만 고른다. 나머지는 "버린 뉴스"에 나열하지 않는다.
+- Federal Register 원문은 하루 수십~수백 건, Pew 는 보고서의 장·부록까지 하루 10~30건이다. 제목과 summary 로 3축·섹터 관련만 고른다. 나머지는 "버린 뉴스"에 나열하지 않는다. court_opinions 는 인용문에 검색어가 있는 판결도 오므로 summary 의 일치 문장이 사건 자체와 무관하면 버린다.
 - 시각 표기: `published`는 UTC다. ET로 바꾸고 KST를 괄호로 덧붙인다. 3월 둘째 일요일~11월 첫째 일요일은 EDT(UTC-4), 그 외는 EST(UTC-5). Federal Register 항목은 `published`가 게재일 04:00 UTC 고정이므로 시각 대신 "M/D 게재"라고 쓴다. `published`가 null이면 시각을 쓰지 않는다.
 
 ## 3. structural 판정과 필드

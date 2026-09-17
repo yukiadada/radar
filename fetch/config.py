@@ -95,21 +95,21 @@ def all_tickers(sectors: dict[str, dict]) -> set[str]:
 
 
 def load_sources(path: Path = SOURCES) -> list[dict]:
-    """[{name, type, url, query, axis, note, error}]. 항목 하나의 문제는 그 항목의 error 에 적어 돌려주고(fetch.py 가 그 소스만 건너뛴다),
-    파일 전체의 문제(소스 없음, 이름 중복, 들여쓰기 오류)만 ValueError."""
+    """[{name, type, url, query, axis, note, ua, error}]. 항목 하나의 문제는 그 항목의 error 에 적어 돌려주고(fetch.py 가 그 소스만 건너뛴다),
+    파일 전체의 문제(소스 없음, 이름 중복, 들여쓰기 오류)만 ValueError. ua 는 빈 값(기본 UA) 또는 browser."""
     out: list[dict] = []
     cur: dict | None = None
     for line in _lines(path):
         m = re.match(r"^(\S[^:]*):\s*$", line)
         if m:
-            cur = {"name": m.group(1).strip(), "type": "", "url": "", "query": "", "axis": "", "note": "", "error": ""}
+            cur = {"name": m.group(1).strip(), "type": "", "url": "", "query": "", "axis": "", "note": "", "ua": "", "error": ""}
             out.append(cur)
             continue
         m = re.match(r"^\s+(\S[^:]*):\s*(.*?)\s*$", line)
         if cur is None or not m:
             raise ValueError(f"sources.yaml: 읽을 수 없는 줄 {line.strip()!r}")
         k, v = m.group(1).strip(), m.group(2)
-        if k in ("type", "url", "query", "axis", "note"):
+        if k in ("type", "url", "query", "axis", "note", "ua"):
             cur[k] = v
         else:
             cur["error"] = f"모르는 키 {k!r}"
@@ -129,6 +129,8 @@ def load_sources(path: Path = SOURCES) -> list[dict]:
             problems.append(f"type 은 rss 또는 gnews ({s['type']!r})")
         if s["axis"] not in AXES:
             problems.append(f"axis 는 {' / '.join(AXES)} 중 하나 ({s['axis']!r})")
+        if s["ua"] not in ("", "browser"):
+            problems.append(f"ua 는 비우거나 browser ({s['ua']!r})")
         s["error"] = "; ".join(problems)
     names = [s["name"] for s in out]
     dup = sorted({n for n in names if names.count(n) > 1})

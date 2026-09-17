@@ -149,20 +149,22 @@ logs/                      세션 로그 (/save 가 만듦, git 미추적)
 
 ## 현재 상태
 
-> /save 자동 업데이트 — 2026-09-17 12:23
+> /save 자동 업데이트 — 2026-09-17 16:47
 
 **브랜치:** main
-**마지막 커밋:** 2fa5083 docs: session log 2026-09-17 (2) — 배포 실패 원인·코드리뷰 반영 (로그는 로컬 보관)
+**마지막 커밋:** 95db048 docs: session log 2026-09-17 (3) — 세션 종료 (로그는 로컬 보관)
 
 **미완료 항목:**
-- 9/18 06:20 KST 루틴이 새 /brief(빌드 확인 단계 포함)를 정상 실행하는지 확인. 루틴 프롬프트가 옛 파일(companies 등)을 언급하면 수정. 루틴 로그 claude.ai/code/routines
-- 9/18 raw 의 fetch 로그([ok] fetched vs older)로 OR 검색어 괄호 + when:2d 가 먹는지, 새 소스 7개(gnews_policy, gnews_ai_infra, gnews_semiconductor, gnews_frontier, gnews_consumer, gnews_adoption, gnews_society)의 품질을 첫 주에 보고 sources.yaml 조정
-- 사회 축은 구조적 시그널이 드물다(공식 통계·정기 조사·공시만). 첫 달 장부에서 사회 축 건수를 보고 소스·기준을 조정
+- 9/18 04:30 KST 수집부터 새 소스 10개(정책 wh_actions·sec_press·ftc_press·doj_antitrust·ustr_press·doe_news·court_opinions, 사회 bea_releases·census_indicators·pew_research)가 돈다. ftc_press(ua: browser)가 GitHub Actions IP 에서도 열리는지 fetch 로그로 확인. 막히면 error 파일이 남고 사이트 raw 표에 표시
+- 9/18 06:20 KST 루틴이 새 /brief(빌드 확인 단계, 1차 출처 피드 항목은 검색 교차 없이 0.6 본문 확인 등급)를 정상 실행하는지 확인. 루틴 프롬프트가 옛 파일(companies 등)을 언급하면 수정. 루틴 로그 claude.ai/code/routines
+- 9/18 raw 의 fetch 로그([ok] fetched vs older)로 OR 검색어 괄호 + when:2d 가 먹는지 확인. gnews 소스 7개와 새 피드 10개의 품질을 첫 주에 보고 sources.yaml 조정. court_opinions 의 키워드·법원 목록, pew_research 의 소음(하루 10~30건)이 조정 후보
+- 못 쓰는 소스는 sources.yaml 머리말에 기록(BLS·NY Fed·Commerce·FCC 403, NRC 503, Gallup sitemap 뿐, Treasury·BIS 피드 없음, Census 보도자료 link 없음). 다시 찾지 않는다
+- 사회 축은 구조적 시그널이 드물다(공식 통계·정기 조사·공시만). BEA·Census·Pew 피드를 넣었으니 첫 달 장부에서 사회 축 건수를 보고 기준 조정
 - 사이트 상단에 빌드 경고 배너가 보이면 그 자료(장부 줄·sector_map·브리프 형식)를 고친다. 빌드는 멈추지 않는다
 - 장부 1~11번 줄은 옛 장부의 3축 재분류(이관 판단). 첫 문장 40자·note 접미어 규칙의 예외. 12번 줄부터 ledger.py 가 검사
 - 기업 관찰(SpaceX·BITO·Microsoft)은 새 스펙에 없어 뺐다. 필요하면 backlog 에서 복원
 - 관심의 지난주 비교는 raw 14일이 쌓이는 9/23 께부터. 키워드는 sector_map.yaml 의 keywords 에서 Ken 이 조정
 - 첫 /review 는 10월 초 (확인 대기 점검 + 맵·소스 제안)
-- Ken: claude.ai/code Default 환경 네트워크 접근 확대 (WebFetch EGRESS_BLOCKED 해제 시 1차 출처 본문 확인 가능)
-- 로컬 작업 전 `git pull` (../radar-raw 도). 로컬 raw 는 ../radar-raw/raw 심볼릭 링크. 장부는 `fetch/ledger.py --append` 로만
+- Ken: claude.ai/code Default 환경 네트워크 접근 확대 (WebFetch EGRESS_BLOCKED 해제 시 1차 출처 본문 확인 가능 → confidence 0.8)
+- 로컬 작업 전 `git pull` (../radar-raw 도). 로컬 raw 는 ../radar-raw/raw 심볼릭 링크(이 머신에는 없음). 장부는 `fetch/ledger.py --append` 로만
 - 저장소: https://github.com/yukiadada/radar (public), https://github.com/yukiadada/radar-raw (private, raw). 사이트 https://yukiadada.github.io/radar/
