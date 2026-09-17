@@ -5,227 +5,379 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>radar</title>
 <meta name="description" content="기술 · 사회 · 정책 세 축으로 읽는 세상의 방향과 섹터 정렬">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=Noto+Serif+KR:wght@400;600&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#F5F6F8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F1217" media="(prefers-color-scheme: dark)">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
+/* 디자인 원칙 (HCI)
+   - 위계: 페이지 제목(h1) → 한눈에 요약 → 근거(카드·표) → 상세(접힘). 답을 먼저, 설명은 필요할 때 펼친다 (점진적 공개)
+   - 일관성: 글자 크기 6단계, 간격 8px 배수, 모서리 3종(카드 14 · 컨트롤 10 · 알약). 같은 뜻은 같은 모양
+   - 인지: 색만으로 뜻을 전하지 않는다 (▲▼◆ 기호 + 글자 + 색). 작은 글자도 대비 4.5:1 이상
+   - 조작: 누르는 곳은 최소 32px, 주요 탐색은 44px. 키보드 초점은 항상 보인다
+   - 글꼴: 고딕 한 가지 (Pretendard, 없으면 시스템 고딕). 숫자는 고정폭 숫자로 정렬 */
 :root{
-  --ground:#F3F4F2; --ink:#1E2A3A; --ink2:#5A6675; --muted:#6F7A86;
-  --hair:#D8DCE0; --hair2:#E7EAED; --wash:#E9ECEF; --panel:#FBFBFA;
-  --accent:#2a78d6; --pos:#2a78d6; --neg:#e34948; --both:#A6ADB4;
+  --ground:#F5F6F8; --panel:#FFFFFF; --ink:#141A22; --ink2:#4A5563; --muted:#667080;
+  --hair:#DCE0E5; --hair2:#ECEEF1; --wash:#EEF1F4;
+  --accent:#1D5FB0; --pos:#2a78d6; --pos-ink:#1D5FB0; --pos-solid:#1D5FB0; --neg:#e34948; --neg-ink:#BF2F2D; --both:#9AA2AB;
   --ax0:#4a3aa7; --ax1:#1baf7a; --ax2:#eb6834;
   --s0:#2a78d6; --s1:#eb6834; --s2:#1baf7a; --s3:#eda100; --s4:#e87ba4; --s5:#008300; --s6:#4a3aa7; --s7:#e34948;
-  --sans:"IBM Plex Sans KR",-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
-  --serif:"Noto Serif KR","Apple SD Gothic Neo","Nanum Myeongjo",serif;
+  --font:"Pretendard Variable",Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic","맑은 고딕",system-ui,sans-serif;
+  --sans:var(--font);
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"D2Coding",var(--font);
+  --fs-cap:13px; --fs-sm:14px; --fs-body:16px; --fs-lg:18px; --fs-h2:21px; --fs-h1:30px;
+  --r-card:14px; --r-ctl:10px;
+  --w:1080px; --gut:24px;
+  --shadow:0 1px 2px rgba(16,24,40,.05),0 4px 12px rgba(16,24,40,.06);
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){
   :root{
-    --ground:#14171B; --ink:#ECEEF0; --ink2:#A9B1BA; --muted:#8A939D;
-    --hair:#2B3138; --hair2:#22272D; --wash:#1C2026; --panel:#1A1E24;
-    --accent:#3987e5; --pos:#3987e5; --neg:#e66767; --both:#5B646E;
+    --ground:#0F1217; --panel:#171B22; --ink:#E8EBEF; --ink2:#AAB3BE; --muted:#8C96A3;
+    --hair:#2A3038; --hair2:#20252C; --wash:#1D2229;
+    --accent:#7DB2F2; --pos:#3987e5; --pos-ink:#6EA8F2; --pos-solid:#2F6FC0; --neg:#e66767; --neg-ink:#F28B89; --both:#5B646E;
     --ax0:#9085e9; --ax1:#199e70; --ax2:#d95926;
     --s0:#3987e5; --s1:#d95926; --s2:#199e70; --s3:#c98500; --s4:#d55181; --s5:#008300; --s6:#9085e9; --s7:#e66767;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 16px rgba(0,0,0,.35);
     color-scheme:dark;
   }
 }
+
+/* 기본 */
 *{box-sizing:border-box}
-html{background:var(--ground)}
-body{margin:0;font-family:var(--sans);font-size:16px;line-height:1.7;color:var(--ink);background:var(--ground);-webkit-font-smoothing:antialiased}
-a{color:var(--accent);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
-a:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.mast,#app,.foot{max-width:960px;margin:0 auto;padding-left:24px;padding-right:24px}
-.mast{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 18px;padding-top:22px;padding-bottom:14px;border-bottom:1px solid var(--hair)}
-.brand{font-weight:600;font-size:21px;letter-spacing:-.01em;color:var(--ink);text-decoration:none}
-.tagline{margin:0;font-size:13.5px;color:var(--ink2)}
-.mast nav{margin-left:auto;display:flex;gap:16px;font-size:14px}
-.mast nav a{color:var(--ink2);text-decoration:none;padding:4px 0;border-bottom:2px solid transparent;white-space:nowrap}
-.mast nav a[aria-current=page]{color:var(--ink);border-bottom-color:var(--ink)}
-#app{padding-bottom:72px;min-height:60vh}
-.foot{padding-top:18px;padding-bottom:40px;border-top:1px solid var(--hair);font-size:12.5px;color:var(--muted);display:flex;flex-wrap:wrap;gap:16px}
-.foot a{color:var(--muted)}
-h2.sec{font-size:15px;font-weight:600;margin:40px 0 12px;padding-top:14px;border-top:1px solid var(--hair)}
-h2.sec .dim,.dim{color:var(--ink2);font-weight:400}
-.small{font-size:13px}
+html{background:var(--ground);-webkit-text-size-adjust:100%;scroll-padding-top:84px}
+body{margin:0;font-family:var(--font);font-size:var(--fs-body);line-height:1.65;color:var(--ink);background:var(--ground);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;word-break:keep-all;overflow-wrap:break-word}
+button,input,select,textarea{font-family:inherit}
+a{color:var(--accent);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px;text-decoration-color:color-mix(in srgb,var(--accent) 45%,transparent)}
+a:hover{text-decoration-color:currentColor}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+h1:focus{outline:none}
+.skip{position:absolute;left:12px;top:-64px;z-index:20;padding:10px 14px;border-radius:var(--r-ctl);background:var(--ink);color:var(--ground);font-weight:600;text-decoration:none}
+.skip:focus{top:12px}
+.dim{color:var(--ink2);font-weight:400}
+.small{font-size:var(--fs-cap)}
 .empty,.loading{color:var(--ink2);font-size:15px;margin:16px 0}
-ul.plain{list-style:none;padding:0;margin:0}
-ul.plain li{padding:6px 0;border-bottom:1px solid var(--hair2);font-size:15px}
-.pager{display:flex;justify-content:space-between;font-size:14px;margin:28px 0 0}
-.dateline{font-family:var(--serif);font-size:26px;font-weight:600;line-height:1.35;margin:30px 0 2px}
-.hero-sub{color:var(--ink2);font-size:14px;margin:0;max-width:74ch}
-.gs{color:var(--pos);font-weight:500}.ss{color:var(--neg);font-weight:500}.ns{color:var(--ink)}
-.mkt{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;margin-top:6px;font-size:13px;color:var(--ink2)}.mkt b{font-weight:500}.mkt .lbl{line-height:1.6}
-.glance .gl.full{grid-column:1/-1}.mkt-sum{margin:8px 0 0;font-size:14px}
-.dirbrief{border:1px solid var(--hair);border-radius:12px;padding:10px 16px;background:var(--panel);margin:12px 0 4px}.dirbrief summary{cursor:pointer;font-weight:600;font-size:14px}.dirbrief .md{font-size:15px}.dirbrief .md h2{font-size:15px;margin:16px 0 6px}
-@media (max-width:640px){.mast nav{margin-left:0;width:100%;gap:14px;overflow-x:auto;padding-bottom:2px}.tagline{display:none}.dateline{font-size:22px}}
+.loading::before{content:"";display:inline-block;width:12px;height:12px;margin-right:8px;border-radius:50%;border:2px solid var(--hair);border-top-color:var(--ink2);vertical-align:-1px;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.gs{color:var(--pos-ink);font-weight:600}.ss{color:var(--neg-ink);font-weight:600}.ns{color:var(--ink)}
+.pct{font-variant-numeric:tabular-nums;font-weight:700}
+.keys{font-size:var(--fs-sm);color:var(--ink2);margin:8px 0;line-height:1.8}
+
+/* 머리글 · 탐색: 화면을 내려도 위치와 이동 수단이 보인다 */
+.top{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--ground) 86%,transparent);-webkit-backdrop-filter:saturate(1.5) blur(12px);backdrop-filter:saturate(1.5) blur(12px);border-bottom:1px solid var(--hair)}
+.mast{max-width:var(--w);margin:0 auto;padding:0 var(--gut);display:flex;align-items:center;gap:8px 20px;min-height:64px}
+.brand{display:inline-flex;align-items:center;gap:9px;min-height:44px;font-weight:700;font-size:19px;letter-spacing:-.02em;color:var(--ink);text-decoration:none}
+.brand i{width:14px;height:14px;border-radius:50%;background:conic-gradient(var(--ax0) 0 33.3%,var(--ax1) 0 66.6%,var(--ax2) 0)}
+.tagline{margin:0;font-size:var(--fs-cap);color:var(--muted)}
+.mast nav{margin-left:auto;display:flex;gap:2px}
+.mast nav a{display:inline-flex;align-items:center;min-height:44px;padding:0 13px;border-radius:var(--r-ctl);color:var(--ink2);text-decoration:none;font-size:15px;font-weight:500;white-space:nowrap;transition:background-color .15s,color .15s}
+.mast nav a:hover{background:var(--wash);color:var(--ink)}
+.mast nav a[aria-current=page]{color:var(--ink);font-weight:700;background:var(--panel);box-shadow:inset 0 0 0 1px var(--hair)}
+#app{max-width:var(--w);margin:0 auto;padding:0 var(--gut) 88px;min-height:60vh}
+.foot{max-width:var(--w);margin:0 auto;padding:20px var(--gut) 44px;border-top:1px solid var(--hair);font-size:var(--fs-cap);color:var(--muted);display:flex;flex-wrap:wrap;gap:8px 20px}
+.foot a{color:var(--ink2)}
+
+/* 페이지 제목: 위치(eyebrow) → 제목 → 한 줄 설명 → 자료 범위 */
+.ph{padding:40px 0 4px}
+.eyebrow{margin:0 0 8px;font-size:var(--fs-sm);font-weight:500;color:var(--muted)}
+.eyebrow a{color:var(--ink2);text-decoration:none}.eyebrow a:hover{text-decoration:underline}
+.eyebrow .sep{margin:0 6px;color:var(--hair)}
+.ph h1{margin:0;font-size:var(--fs-h1);line-height:1.25;font-weight:800;letter-spacing:-.03em}
+.lede{margin:12px 0 0;max-width:60ch;font-size:17px;line-height:1.65;color:var(--ink2)}
+.metas{list-style:none;display:flex;flex-wrap:wrap;gap:6px;margin:16px 0 0;padding:0}
+.metas li{font-size:var(--fs-cap);color:var(--ink2);background:var(--panel);border:1px solid var(--hair);border-radius:999px;padding:2px 11px;line-height:1.7;font-variant-numeric:tabular-nums}
+.pager{display:flex;justify-content:space-between;gap:12px;margin:32px 0 0}
+.pager a{display:inline-flex;align-items:center;min-height:44px;padding:0 16px;border:1px solid var(--hair);border-radius:var(--r-ctl);background:var(--panel);color:var(--ink);text-decoration:none;font-weight:500}
+.pager a:hover{border-color:var(--ink2)}
+
+/* 절 제목: 제목과 설명을 나눠 한 줄에 한 가지 정보 */
+.sh{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 16px;margin:56px 0 16px}
+h2.sec{margin:0;font-size:var(--fs-h2);font-weight:700;letter-spacing:-.02em;line-height:1.35}
+#app>h2.sec{margin:48px 0 14px}
+h2.sec .dim{font-size:var(--fs-sm);margin-left:8px}
+.sh-act{margin-left:auto;font-size:var(--fs-sm);font-weight:500}
+.sh-act a{text-decoration:none}.sh-act a:hover{text-decoration:underline}
+.sec-note{flex:0 0 100%;order:3;margin:0;font-size:var(--fs-sm);color:var(--ink2)}
+
+/* 한눈에 요약: 답을 먼저 */
+.sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:12px;margin:28px 0 0}
+.sumc{position:relative;background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-card);padding:16px 18px 14px;min-width:0;overflow:hidden}
+.sumc.pos::before,.sumc.neg::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--pos)}
+.sumc.neg::before{background:var(--neg)}
+.sumc .k{margin:0;font-size:var(--fs-cap);font-weight:600;color:var(--ink2)}
+.sumc .v{display:block;overflow-wrap:anywhere;margin:6px 0 4px;font-size:22px;font-weight:700;line-height:1.3;letter-spacing:-.02em;color:var(--ink);text-decoration:none;font-variant-numeric:tabular-nums}
+.sumc a.v:hover{text-decoration:underline}
+.sumc .d{margin:0;font-size:var(--fs-sm);color:var(--ink2);display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;font-variant-numeric:tabular-nums}
+
+/* 펼침 공통 */
+summary{cursor:pointer;list-style:none}
+summary::-webkit-details-marker{display:none}
+details.dirbrief>summary::before,details.more>summary::before,.sig details>summary::before{content:"";flex:none;width:7px;height:7px;border-right:2px solid var(--ink2);border-bottom:2px solid var(--ink2);transform:rotate(-45deg);transition:transform .15s;margin:0 4px 0 2px}
+details[open].dirbrief>summary::before,details[open].more>summary::before,.sig details[open]>summary::before{transform:rotate(45deg)}
+
+/* 쉬운 말 방향 브리프 */
+.dirlead{background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-card);padding:20px 24px}
+.dirlead .md{font-size:var(--fs-lg);line-height:1.75}
+.dirlead .md p:last-child{margin-bottom:0}
+details.dirbrief{margin:10px 0 0;background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-card)}
+details.dirbrief>summary{display:flex;align-items:center;gap:10px;min-height:52px;padding:0 20px;font-weight:600;border-radius:var(--r-card)}
+details.dirbrief>summary:hover{background:var(--wash)}
+details.dirbrief>summary .dim{font-size:var(--fs-sm)}
+details.dirbrief>div{padding:4px 24px 22px;border-top:1px solid var(--hair2)}
+
+/* 기호 읽는 법 */
+details.legend{margin:0 0 14px;font-size:var(--fs-sm)}
+details.legend>summary{display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:0 14px 0 8px;border-radius:999px;border:1px solid var(--hair);background:var(--panel);color:var(--ink2);font-weight:500}
+details.legend>summary:hover{color:var(--ink);border-color:var(--ink2)}
+details.legend>summary::before{content:"?";display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--wash);color:var(--ink);font-size:var(--fs-cap);font-weight:700}
+details.legend[open]>summary{color:var(--ink)}
+details.legend>div{margin:10px 0 0;padding:14px 18px;border-radius:var(--r-card);background:var(--panel);border:1px solid var(--hair);color:var(--ink2);line-height:1.8}
+.legend dl{display:grid;grid-template-columns:max-content 1fr;gap:8px 18px;margin:0}
+.legend dt{font-weight:600;color:var(--ink)}
+.legend dd{margin:0}
+@media (max-width:560px){.legend dl{grid-template-columns:1fr;gap:2px}.legend dd{margin-bottom:8px}}
 
 /* 표 */
-table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.55}
-th{font-size:12.5px;font-weight:500;color:var(--ink2);text-align:left;padding:8px 10px;border-bottom:1px solid var(--hair);white-space:nowrap;vertical-align:bottom}
-td{padding:9px 10px;border-bottom:1px solid var(--hair2);vertical-align:top}
+table{border-collapse:collapse;width:100%;font-size:var(--fs-sm);line-height:1.55}
+th{font-size:var(--fs-cap);font-weight:600;color:var(--ink2);text-align:left;padding:10px 12px;border-bottom:1px solid var(--hair);white-space:nowrap;vertical-align:bottom}
+td{padding:12px;border-bottom:1px solid var(--hair2);vertical-align:top}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:color-mix(in srgb,var(--wash) 55%,transparent)}
 td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
-.tbl{overflow-x:auto;margin:0 0 6px}
-.tbl.wide table{min-width:960px}
-th.fact,td.fact{min-width:360px}
+.tbl{overflow-x:auto;margin:0 0 6px;background:linear-gradient(to right,var(--panel) 30%,transparent),linear-gradient(to left,var(--panel) 30%,transparent) 100% 0,radial-gradient(farthest-side at 0 50%,rgba(0,0,0,.14),transparent),radial-gradient(farthest-side at 100% 50%,rgba(0,0,0,.14),transparent) 100% 0;background-repeat:no-repeat;background-size:40px 100%,40px 100%,12px 100%,12px 100%;background-attachment:local,local,scroll,scroll}
+.tbl.wide{background-color:var(--panel);border:1px solid var(--hair);border-radius:var(--r-card)}
+.tbl.wide table{min-width:1000px}
+th.fact,td.fact{min-width:380px}
 th.note,td.note{min-width:300px}
 td.date,td.nowrap,th.nowrap{white-space:nowrap;font-variant-numeric:tabular-nums}
-td.small{font-size:13px;color:var(--ink2)}
+td.small{font-size:var(--fs-cap);color:var(--ink2)}
 table.secs td{vertical-align:middle}
-table.secs td.axcell{min-width:96px}
+table.secs td.axcell{min-width:104px}
 table.secs td.num{white-space:nowrap}
+ul.plain{list-style:none;padding:0;margin:0;background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-card)}
+ul.plain li{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;min-height:48px;padding:8px 18px;border-bottom:1px solid var(--hair2);font-size:15px;font-variant-numeric:tabular-nums}
+ul.plain li:last-child{border-bottom:0}
 
-/* 필터·탭 */
-.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:16px 0 10px;font-size:14px}
-.filters label{color:var(--ink2)}
-select,input[type=search]{font:inherit;font-size:14px;padding:6px 10px;border:1px solid var(--hair);border-radius:6px;background:var(--ground);color:var(--ink)}
-input[type=search]{min-width:200px}
-.count{color:var(--ink2);font-size:13.5px}
-.seg{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:18px 0 0;font-size:14px}
-.seg a{padding:4px 13px;border:1px solid var(--hair);border-radius:999px;text-decoration:none;color:var(--ink2)}
+/* 필터 · 탭 */
+.filters{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin:28px 0 12px;padding:14px 16px;background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-card)}
+.filters label{display:flex;flex-direction:column;gap:4px;font-size:var(--fs-cap);font-weight:600;color:var(--ink2)}
+.filters .q{flex:1 1 240px}
+select,input[type=search]{font-size:15px;height:40px;padding:0 12px;border:1px solid var(--hair);border-radius:var(--r-ctl);background:var(--ground);color:var(--ink);min-width:0}
+select:hover,input[type=search]:hover{border-color:var(--ink2)}
+input[type=search]{width:100%}
+.count{font-size:var(--fs-sm);color:var(--ink2);min-height:40px;display:inline-flex;align-items:center;font-variant-numeric:tabular-nums}
+.seg{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:24px 0 0;font-size:var(--fs-sm)}
+.seg[role=tablist]{padding:0}
+.seg a{display:inline-flex;align-items:center;min-height:40px;padding:0 16px;border:1px solid var(--hair);border-radius:999px;text-decoration:none;color:var(--ink2);background:var(--panel);font-weight:600;transition:border-color .15s,background-color .15s}
+.seg a:hover{border-color:var(--ink2);color:var(--ink)}
 .seg a[aria-selected=true]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
-.seg .dim{margin-left:4px;font-size:13px}
-.seg button{font:inherit;font-size:12.5px;padding:2px 11px;border:1px solid var(--hair);border-radius:999px;background:transparent;color:var(--ink2);cursor:pointer}
+.seg .dim{font-size:var(--fs-cap);flex:1 1 280px}
+.seg button{font-size:var(--fs-sm);min-height:34px;padding:0 13px;border:1px solid var(--hair);border-radius:999px;background:var(--panel);color:var(--ink2);cursor:pointer;font-variant-numeric:tabular-nums}
+.seg button:hover{border-color:var(--ink2);color:var(--ink)}
 .seg button[aria-pressed=true]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
-.seg button[aria-pressed=true] i{display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--c);margin-right:6px;vertical-align:-1px}
+.seg button[aria-pressed=true] i{display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--c);margin-right:7px;vertical-align:-1px;box-shadow:0 0 0 1.5px var(--ground)}
 
-/* 배지 */
-.keys{font-size:13px;color:var(--ink2);margin:0 0 8px;line-height:1.8}
-.dir,.conf,.st{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;font-family:var(--sans);font-size:13px;font-weight:500;color:var(--ink)}
+/* 배지: 기호 + 글자 + 색 */
+.dir,.conf,.st{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;font-size:var(--fs-cap);font-weight:600;color:var(--ink)}
 .dir i,.conf i{font-style:normal}
 .dir i{font-size:11px;width:12px;text-align:center}
 .dir.up i{color:var(--pos)}.dir.down i{color:var(--neg)}.dir.both i{color:var(--both)}
+.conf{font-weight:500;color:var(--ink2)}
 .conf i{display:inline-flex;gap:3px;align-items:center}
 .conf s{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ink);text-decoration:none}
 .conf s.off{background:transparent;box-shadow:inset 0 0 0 1.5px var(--muted)}
-.st{padding:1px 8px;border-radius:999px;border:1px solid var(--hair);font-size:12px}
+.st{min-height:22px;padding:0 9px;border-radius:999px;border:1px solid var(--hair)}
 .st.yes{background:var(--ink);color:var(--ground);border-color:var(--ink)}
-.st.no{color:var(--ink2)}
+.st.no{color:var(--ink2);font-weight:500}
 .ax0{--c:var(--ax0)}.ax1{--c:var(--ax1)}.ax2{--c:var(--ax2)}
 .s0{--c:var(--s0)}.s1{--c:var(--s1)}.s2{--c:var(--s2)}.s3{--c:var(--s3)}.s4{--c:var(--s4)}.s5{--c:var(--s5)}.s6{--c:var(--s6)}.s7{--c:var(--s7)}
-.axtag{display:inline-block;padding:0 7px;border-radius:999px;font-size:12px;font-weight:500;color:var(--c);border:1px solid var(--c);white-space:nowrap;line-height:1.7}
-.lbl{display:inline-block;padding:0 8px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap;border:1px solid var(--hair);color:var(--ink2);line-height:1.8}
-.lbl-aligned3{background:var(--pos);color:#fff;border-color:var(--pos)}
-.lbl-aligned2{color:var(--pos);border-color:var(--pos)}
+.axtag{display:inline-flex;align-items:center;gap:6px;min-height:24px;padding:0 10px 0 8px;border-radius:999px;font-size:var(--fs-cap);font-weight:600;color:var(--ink);background:color-mix(in srgb,var(--c) 11%,var(--panel));border:1px solid color-mix(in srgb,var(--c) 38%,var(--hair));white-space:nowrap}
+.axtag::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--c)}
+.lbl{display:inline-flex;align-items:center;min-height:22px;padding:0 9px;border-radius:999px;font-size:var(--fs-cap);font-weight:600;white-space:nowrap;border:1px solid var(--hair);color:var(--ink2);background:var(--panel)}
+.lbl-aligned3{background:var(--pos-solid);color:#fff;border-color:var(--pos-solid)}
+.lbl-aligned2{color:var(--pos-ink);border-color:color-mix(in srgb,var(--pos) 60%,var(--hair))}
 .lbl-aligned1{color:var(--ink)}
-.lbl-headwind{color:var(--neg);border-color:var(--neg)}
-.lbl-mixed{color:var(--ink);border-style:dashed}
-.pct{font-variant-numeric:tabular-nums;font-weight:600}
-.pct.big{font-size:26px;line-height:1.2}
+.lbl-headwind{color:var(--neg-ink);border-color:color-mix(in srgb,var(--neg) 60%,var(--hair))}
+.lbl-mixed{color:var(--ink);border-style:dashed;border-color:var(--ink2)}
+.lbl.dim{color:var(--muted)}
 
-/* 축 점수 미니 막대 (−1 ~ +1) */
-.axes3{display:flex;flex-direction:column;gap:4px;margin:6px 0}
-.axb{display:grid;grid-template-columns:34px 1fr 44px;align-items:center;gap:8px;font-size:12.5px;line-height:1.4}
-.axb .axl{color:var(--ink2);white-space:nowrap}
-.axt{display:grid;grid-template-columns:1fr 1fr;height:9px}
-.axneg{display:flex;justify-content:flex-end;border-right:1px solid var(--hair)}
-.axneg i{display:block;height:100%;background:var(--neg);border-radius:3px 0 0 3px}
-.axpos i{display:block;height:100%;background:var(--pos);border-radius:0 3px 3px 0}
+/* 축 점수 막대 (−1 ~ +1): 가운데 선 기준 오른쪽 밀어줌, 왼쪽 막음 */
+.axes3{display:flex;flex-direction:column;gap:7px;margin:4px 0 14px}
+.axb{display:grid;grid-template-columns:34px 1fr 46px;align-items:center;gap:10px;font-size:var(--fs-cap);line-height:1.4}
+.axb .axl{color:var(--ink2);white-space:nowrap;font-weight:500}
+.axt{position:relative;display:grid;grid-template-columns:1fr 1fr;height:10px;border-radius:5px;background:var(--wash)}
+.axt::after{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--muted)}
+.axneg{display:flex;justify-content:flex-end}
+.axneg i{display:block;height:100%;background:var(--neg);border-radius:5px 0 0 5px}
+.axpos i{display:block;height:100%;background:var(--pos);border-radius:0 5px 5px 0}
 .axv{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .axcell .axt{height:8px}
 
-/* 패널·카드 */
-.dash{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0 0}
+/* 카드 · 패널 */
+.dash{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;margin:20px 0 0}
 .dash .full{grid-column:1/-1}
-.panel{border:1px solid var(--hair);border-radius:12px;padding:14px 16px 12px;background:var(--panel);min-width:0}
-.panel h3{font-size:14px;font-weight:600;margin:0 0 6px;display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap}
-.panel h3 .dim{font-size:12.5px}
-.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-.kpi{padding:10px 14px;border:1px solid var(--hair);border-radius:10px;background:var(--panel);min-width:0}
-.kpi b{display:block;font-size:24px;font-weight:600;line-height:1.25;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
-.kpi b.txt{font-size:17px}
-.kpi b small{font-size:13px;font-weight:500;color:var(--ink2)}
-.kpi span{font-size:12.5px;color:var(--ink2)}
-.dgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0 6px}
-.dcard{border:1px solid var(--hair);border-radius:12px;padding:14px 16px 12px;background:var(--panel);min-width:0}
-.dcard header{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
-.dcard h3{font-size:16px;font-weight:600;margin:0}
+.panel{background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-card);padding:18px 20px 16px;min-width:0}
+.panel h3{font-size:var(--fs-body);font-weight:700;margin:0 0 12px;display:flex;justify-content:space-between;gap:4px 12px;align-items:baseline;flex-wrap:wrap;line-height:1.45}
+.panel h3 .dim{font-size:var(--fs-cap)}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.kpi{padding:14px 16px;border:1px solid var(--hair);border-radius:var(--r-card);background:var(--panel);min-width:0;display:flex;flex-direction:column-reverse;justify-content:flex-end;gap:4px}
+.kpi b{display:block;font-size:26px;font-weight:700;line-height:1.25;letter-spacing:-.02em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.kpi b.txt{font-size:18px}
+.kpi b small{font-size:var(--fs-cap);font-weight:500;color:var(--ink2)}
+.kpi>span{font-size:var(--fs-cap);font-weight:600;color:var(--ink2)}
+.kpi b .small{font-size:inherit}
+.dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(310px,100%),1fr));gap:12px;margin:0}
+.dcard{background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-card);padding:18px 20px 16px;min-width:0;transition:border-color .15s,box-shadow .15s}
+.dcard:hover{border-color:color-mix(in srgb,var(--ink2) 40%,var(--hair));box-shadow:var(--shadow)}
+.dcard header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.dcard h3{font-size:var(--fs-lg);font-weight:700;margin:2px 0 0;letter-spacing:-.015em;line-height:1.35}
 .dcard h3 a{color:var(--ink);text-decoration:none}
-.dcard .meta{font-size:12.5px;color:var(--ink2);margin:2px 0 6px;display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center}
-.glance{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0 6px}
-.gl{border:1px solid var(--hair);border-radius:12px;padding:12px 14px;background:var(--panel);min-width:0}
-.gl h3{font-size:13.5px;font-weight:600;margin:0 0 6px}
-.gl ol{margin:0;padding-left:20px;font-size:14px;line-height:1.75}
-.chips{display:flex;flex-wrap:wrap;gap:6px 8px;margin:0}
-.chip{display:inline-flex;align-items:center;gap:7px;padding:2px 10px;border:1px solid var(--hair);border-radius:999px;font-size:13px;font-weight:500;white-space:nowrap;background:var(--ground);color:var(--ink);text-decoration:none}
+.dcard h3 a:hover{text-decoration:underline}
+.pct.big{font-size:32px;line-height:1.05;letter-spacing:-.03em}
+.dcard .meta{font-size:var(--fs-cap);color:var(--ink2);margin:8px 0 12px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-variant-numeric:tabular-nums}
+.glance{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;margin:0}
+.gl{background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-card);padding:16px 20px;min-width:0}
+.gl h3{font-size:var(--fs-body);font-weight:700;margin:0 0 6px;display:flex;align-items:center;gap:8px}
+.gl h3::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--pos)}
+.gl.neg h3::before{background:var(--neg)}
+.gl ol{margin:0;padding:0;list-style:none;counter-reset:r}
+.gl ol li{counter-increment:r;display:grid;grid-template-columns:20px 1fr auto;align-items:baseline;gap:10px;padding:9px 0;border-top:1px solid var(--hair2);font-size:15px}
+.gl ol li:first-child{border-top:0}
+.gl ol li::before{content:counter(r);color:var(--muted);font-size:var(--fs-cap);font-variant-numeric:tabular-nums}
+.gl ol li b{font-variant-numeric:tabular-nums}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:0}
+.chip{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 12px;border:1px solid var(--hair);border-radius:999px;font-size:var(--fs-sm);font-weight:500;white-space:nowrap;background:var(--ground);color:var(--ink);text-decoration:none;transition:border-color .15s}
+a.chip:hover{border-color:var(--ink2);background:var(--panel)}
 .chip b{font-variant-numeric:tabular-nums}
-.leg{display:flex;flex-wrap:wrap;gap:3px 14px;font-size:12px;color:var(--ink2);margin:0 0 6px}
-.leg i,.sw2{display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--c);vertical-align:-1px;margin-right:5px}
-.more{margin:10px 0 0;font-size:14px}
-.more summary{cursor:pointer;color:var(--ink2);padding:4px 0}
-@media (max-width:760px){.dash,.dgrid,.glance{grid-template-columns:1fr}}
-@media (max-width:560px){.kpis{grid-template-columns:1fr 1fr}.kpi b{font-size:20px}}
+.leg{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:var(--fs-cap);color:var(--ink2);margin:0 0 8px}
+.leg i,.sw2{display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--c);vertical-align:-1px;margin-right:6px}
+details.more{margin:16px 0 0;background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-card)}
+details.more>summary{display:flex;align-items:center;gap:10px;min-height:48px;padding:0 18px;color:var(--ink2);font-size:15px;font-weight:600;border-radius:var(--r-card)}
+details.more>summary:hover{background:var(--wash);color:var(--ink)}
+details.more>.md{padding:0 22px 12px;border-top:1px solid var(--hair2)}
 
 /* 차트 */
 .chart-box{min-height:120px;position:relative}
-svg.chart{display:block;width:100%;height:auto;font-family:var(--sans)}
+svg.chart{display:block;width:100%;height:auto;font-family:var(--font)}
 svg.chart .grid{stroke:var(--hair2);stroke-width:1}
-svg.chart .grid.zero{stroke:var(--hair);stroke-dasharray:3 3}
-svg.chart .tick{font-size:11px;fill:var(--muted)}
+svg.chart .grid.zero{stroke:var(--muted);stroke-dasharray:3 4;stroke-opacity:.6}
+svg.chart .tick{font-size:12px;fill:var(--muted);font-variant-numeric:tabular-nums}
 svg.chart .ln{fill:none;stroke:var(--c);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
-svg.chart .pt{fill:var(--c);stroke:var(--panel);stroke-width:1.5}
+svg.chart .pt{fill:var(--c);stroke:var(--panel);stroke-width:2}
 svg.chart .bar{fill:var(--c)}
-svg.chart .lab{font-size:12px;font-weight:500;fill:var(--c)}
+svg.chart .lab{font-size:13px;font-weight:600;fill:var(--ink)}
 svg.chart .hit{fill:transparent;cursor:crosshair}
-svg.chart .xh{stroke:var(--muted);stroke-width:1;stroke-dasharray:2 3;pointer-events:none}
-.tip{position:absolute;top:8px;left:0;pointer-events:none;background:var(--panel);border:1px solid var(--hair);border-radius:8px;padding:6px 10px;font-size:12.5px;line-height:1.6;box-shadow:0 4px 14px rgba(0,0,0,.12);white-space:nowrap;z-index:2}
-.tip .tipd{color:var(--ink2);font-variant-numeric:tabular-nums}
-.tip i{display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--c);margin-right:6px;vertical-align:-1px}
+svg.chart .xh{stroke:var(--ink2);stroke-width:1;stroke-dasharray:2 3;pointer-events:none}
+.tip{position:absolute;top:8px;left:0;pointer-events:none;background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-ctl);padding:8px 12px;font-size:var(--fs-cap);line-height:1.65;box-shadow:var(--shadow);white-space:nowrap;z-index:2}
+.tip .tipd{color:var(--ink2);font-variant-numeric:tabular-nums;font-weight:600}
+.tip b{font-variant-numeric:tabular-nums}
+.tip i{display:inline-block;width:9px;height:9px;border-radius:2px;background:var(--c);margin-right:7px;vertical-align:-1px}
 svg.spark{display:block;width:120px;height:28px}
-svg.spark .ln{fill:none;stroke:var(--accent);stroke-width:1.5;stroke-linejoin:round}
+svg.spark .ln{fill:none;stroke:var(--pos);stroke-width:1.75;stroke-linejoin:round}
 svg.spark .mid{stroke:var(--hair);stroke-width:1;stroke-dasharray:2 2}
-svg.spark .pt{fill:var(--accent)}
+svg.spark .pt{fill:var(--pos)}
 ul.feed{list-style:none;padding:0;margin:0}
-ul.feed li{padding:9px 0;border-bottom:1px solid var(--hair2);font-size:14px;line-height:1.6}
-ul.feed li:last-child{border-bottom:0}
-ul.feed .date{font-variant-numeric:tabular-nums;color:var(--ink2);font-size:13px;margin-right:4px}
-ul.feed .meta{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin-bottom:2px}
+ul.feed li{padding:14px 0;border-bottom:1px solid var(--hair2);font-size:15px;line-height:1.7}
+ul.feed li:first-child{padding-top:4px}
+ul.feed li:last-child{border-bottom:0;padding-bottom:0}
+ul.feed .date{font-variant-numeric:tabular-nums;color:var(--ink2);font-size:var(--fs-cap);font-weight:600;margin-right:2px}
+ul.feed .meta{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin-bottom:6px}
 
-/* 브리프 본문 (markdown) */
-.md{font-family:var(--serif);font-size:17px;line-height:1.85}
-.md>*:not(.tbl){max-width:74ch}
-.md h1{font-family:var(--sans);font-size:20px;font-weight:600;line-height:1.4;margin:6px 0 18px}
+/* 시장 반응 */
+.mkt{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;margin-top:10px;padding:7px 12px;border-radius:var(--r-ctl);background:var(--wash);font-size:var(--fs-sm);color:var(--ink2);font-variant-numeric:tabular-nums}
+.mkt b{font-weight:600}
+.mkt .lbl{min-height:20px}
+
+/* 본문 (markdown) */
+.md{font-size:var(--fs-body);line-height:1.8}
+.md>*:not(.tbl){max-width:68ch}
+.md h1{font-size:var(--fs-h2);font-weight:700;line-height:1.4;margin:6px 0 18px}
 .md>h1:first-child{display:none}
-.md>h1:first-child+h2{border-top:0;margin-top:4px}
-.md h2{font-family:var(--sans);font-size:15px;font-weight:600;margin:36px 0 10px;padding-top:12px;border-top:1px solid var(--hair)}
+.md>h1:first-child+h2{margin-top:4px}
+.md h2{font-size:var(--fs-lg);font-weight:700;line-height:1.45;letter-spacing:-.01em;margin:32px 0 10px}
+.md h3{font-size:var(--fs-body);font-weight:700;margin:24px 0 8px}
+.md>h2:first-child{margin-top:16px}
 .md p{margin:0 0 14px}
-.md ul{padding-left:20px;margin:0 0 14px}
-.md li{margin:5px 0}
-.md .tbl{margin:0 0 16px}
-.md table{font-family:var(--sans);font-size:14px;line-height:1.55;min-width:640px}
-.md td{font-size:14px}
-.md code{font-family:var(--sans);background:var(--wash);padding:1px 5px;border-radius:4px;font-size:.92em}
-.easy{background:var(--wash);border-radius:12px;padding:18px 22px 6px;margin:6px 0 26px}
-.easy>h2{font-family:var(--sans);font-size:15px;font-weight:600;margin:0 0 10px}
-.easy .md>ul{padding-left:0;list-style:none}
-.easy .md>ul>li{margin:0 0 16px}
-.easy .md>ul>li>ul{padding-left:18px;margin-top:4px}
-.easy .md strong{font-family:var(--sans);font-weight:600;font-size:15.5px}
-h3.axh{font-size:15px;font-weight:600;margin:22px 0 8px;display:flex;align-items:center;gap:8px}
-h3.axh .dim{font-size:13px}
-.sigs{display:grid;grid-template-columns:1fr;gap:12px;margin:6px 0 10px}
-.sig{border:1px solid var(--hair);border-radius:12px;padding:14px 16px;background:var(--panel)}
-.sig header{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin-bottom:4px}
-.sig h3{font-family:var(--sans);font-size:17px;font-weight:600;margin:2px 0 8px;line-height:1.4}
-.sig p{margin:0 0 6px;font-family:var(--serif);font-size:15.5px;line-height:1.75}
-.sig p b{font-family:var(--sans);font-weight:600;margin-right:4px;font-size:14px}
-.sig .chips{margin:6px 0 2px}
-.sig details{margin-top:8px;font-size:13.5px}.sig summary{cursor:pointer;color:var(--ink2)}
-.sig details p{font-size:14px;font-family:var(--sans)}
-pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.6;background:var(--wash);padding:16px 18px;border-radius:8px;overflow-x:auto;color:var(--ink)}
-.att{display:flex;flex-direction:column;gap:6px}
-.attrow{display:grid;grid-template-columns:minmax(150px,1.2fr) 2fr 110px;align-items:center;gap:8px;font-size:13.5px}
+.md ul,.md ol{padding-left:22px;margin:0 0 16px}
+.md li{margin:6px 0}
+.md li::marker{color:var(--muted)}
+.md strong{font-weight:700}
+.md .tbl{margin:0 0 18px}
+.md table{font-size:var(--fs-sm);line-height:1.55;min-width:640px}
+.md td{font-size:var(--fs-sm)}
+.md code{font-family:var(--mono);background:var(--wash);padding:1px 6px;border-radius:5px;font-size:.9em}
+.md hr{border:0;border-top:1px solid var(--hair);margin:28px 0}
+.easy{background:var(--wash);border-radius:var(--r-card);padding:18px 22px 6px;margin:6px 0 26px}
+.easy>h2{font-size:var(--fs-body);font-weight:700;margin:0 0 10px}
+
+/* 브리프 카드 */
+h3.axh{font-size:var(--fs-lg);font-weight:700;margin:32px 0 12px;display:flex;align-items:center;gap:10px}
+h3.axh .sw2{width:12px;height:12px;border-radius:50%;margin:0}
+h3.axh .dim{font-size:var(--fs-sm)}
+.sigs{display:grid;grid-template-columns:1fr;gap:12px;margin:0 0 10px}
+.sig{background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-card);padding:20px 22px 16px}
+.sig header{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin-bottom:10px}
+.sig header .small a{font-weight:600}
+.sig h3{font-size:20px;font-weight:700;margin:0 0 14px;line-height:1.4;letter-spacing:-.02em}
+.sig p{margin:0 0 12px;font-size:var(--fs-body);line-height:1.75;max-width:68ch}
+.sig p b{display:block;font-size:var(--fs-cap);font-weight:700;color:var(--ink2);margin:0 0 2px;letter-spacing:.01em}
+.sig .chips{margin:12px 0 0}
+.sig details{margin-top:14px;border-top:1px solid var(--hair2);padding-top:4px;font-size:var(--fs-sm)}
+.sig details>summary{display:flex;align-items:center;gap:8px;min-height:40px;color:var(--ink2);font-weight:600}
+.sig details>summary:hover{color:var(--ink)}
+.sig details p{font-size:var(--fs-sm);line-height:1.7}
+pre.yaml{font-family:var(--mono);font-size:var(--fs-cap);line-height:1.65;background:var(--panel);border:1px solid var(--hair);padding:16px 18px;border-radius:var(--r-card);overflow-x:auto;color:var(--ink);word-break:normal}
+
+/* 관심 */
+.att{display:flex;flex-direction:column;gap:8px}
+.attrow{display:grid;grid-template-columns:minmax(160px,1.2fr) 2fr 120px;align-items:center;gap:12px;font-size:var(--fs-sm)}
 .attlab{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.atttrack{height:12px;background:var(--wash);border-radius:3px;overflow:hidden}.atttrack i{display:block;height:100%;background:var(--accent);border-radius:3px}
+.atttrack{height:12px;background:var(--wash);border-radius:6px;overflow:hidden}
+.atttrack i{display:block;height:100%;background:var(--pos);border-radius:6px}
 .attval{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-@media (max-width:560px){.attrow{grid-template-columns:1fr 1.3fr 84px}}
-.warn{margin:18px 0 0;padding:10px 14px;border:1px solid var(--neg);border-radius:10px;background:color-mix(in srgb,var(--neg) 8%,var(--panel));font-size:13.5px}
-.warn ul{margin:4px 0 0;padding-left:18px}
+
+/* 경고 */
+.warn{margin:24px 0 0;padding:14px 18px;border:1px solid color-mix(in srgb,var(--neg) 55%,var(--hair));border-left-width:4px;border-radius:var(--r-card);background:color-mix(in srgb,var(--neg) 7%,var(--panel));font-size:var(--fs-sm)}
+.warn ul{margin:6px 0 0;padding-left:20px}
 .warn li{margin:2px 0}
+
+/* 좁은 화면 */
+@media (max-width:900px){.tagline{display:none}}
+@media (max-width:760px){
+  :root{--gut:16px;--fs-h1:25px;--fs-h2:19px}
+  .mast{flex-wrap:wrap;min-height:0;padding-top:8px;gap:0}
+  .mast nav{margin:0 calc(-1 * var(--gut));padding:0 var(--gut) 6px;width:calc(100% + 2 * var(--gut));overflow-x:auto;scrollbar-width:none;-webkit-mask-image:linear-gradient(to right,#000 88%,transparent)}
+  .mast nav::-webkit-scrollbar{display:none}
+  .mast nav a{padding:0 12px}
+  .ph{padding-top:28px}
+  .lede{font-size:var(--fs-body)}
+  .sh{margin-top:44px}
+  .dash,.glance{grid-template-columns:minmax(0,1fr)}
+  .dgrid{grid-template-columns:minmax(0,1fr)}
+  .sum{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .sumc{padding:14px}
+  .sumc .v{font-size:19px}
+  .kpis{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .kpi b{font-size:22px}
+  .dirlead{padding:16px 18px}
+  .dirlead .md{font-size:17px}
+  details.dirbrief>div,details.more>.md{padding-left:18px;padding-right:18px}
+  .sig{padding:16px 16px 12px}
+  .sig h3{font-size:18px}
+  .attrow{grid-template-columns:1fr 1.2fr 88px}
+  .filters label{flex:1 1 140px}
+  .filters select{width:100%}
+}
+@media (max-width:420px){.sum{grid-template-columns:minmax(0,1fr)}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
+@media (forced-colors:active){.axneg i,.axpos i,.atttrack i{forced-color-adjust:none}.lbl,.axtag,.st{border:1px solid CanvasText}}
 </style>
 </head>
 <body>
+<a class="skip" href="#app">본문으로 건너뛰기</a>
+<div class="top">
 <header class="mast">
-  <a class="brand" href="#/">radar</a>
+  <a class="brand" href="#/" aria-label="radar 홈"><i aria-hidden="true"></i>radar</a>
   <p class="tagline">기술 · 사회 · 정책 세 축으로 읽는 세상의 방향</p>
   <nav id="nav" aria-label="주 메뉴">
     <a href="#/" data-route="home">오늘</a>
@@ -236,7 +388,8 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     <a href="#/framework" data-route="framework">기준</a>
   </nav>
 </header>
-<main id="app"><p class="loading">불러오는 중</p></main>
+</div>
+<main id="app" tabindex="-1"><p class="loading">불러오는 중</p></main>
 <footer class="foot"><span id="gen"></span><a href="https://github.com/yukiadada/radar">저장소</a><span>판단 재료이지 매매 신호가 아닙니다</span></footer>
 <noscript><p style="padding:24px">이 페이지는 JavaScript 로 장부와 브리프를 읽습니다. data.json 과 briefs/ 는 저장소에서 직접 볼 수 있습니다.</p></noscript>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/18.0.12/lib/marked.umd.js"></script>
@@ -262,10 +415,22 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
   const axCls = a => 'ax' + axIdx(a);
   const axTag = a => `<span class="axtag ${axCls(a)}">${esc(a)}</span>`;
   const dots = n => `<i aria-hidden="true">${[1, 2, 3].map(k => `<s${k <= n ? '' : ' class="off"'}></s>`).join('')}</i>`;
+  /* 페이지 제목: 위치(eyebrow) → h1 → 한 줄 설명 → 자료 범위. 화면마다 같은 순서라 어디에 무엇이 있는지 외울 필요가 없다 */
+  const pageHead = ({ eyebrow = '', title, lede = '', meta = [] }) => `<header class="ph">${eyebrow ? `<p class="eyebrow">${eyebrow}</p>` : ''}<h1 tabindex="-1">${title}</h1>${lede ? `<p class="lede">${lede}</p>` : ''}${meta.length ? `<ul class="metas" aria-label="자료 범위">${meta.map(m => `<li>${m}</li>`).join('')}</ul>` : ''}</header>`;
+  const crumb = (href, label) => `<a href="${href}">${label}</a><span class="sep" aria-hidden="true">›</span>`;
+  const secHead = (title, note = '', action = '', id = '') => `<div class="sh"><h2 class="sec"${id ? ` id="${id}"` : ''}>${title}</h2>${action ? `<span class="sh-act">${action}</span>` : ''}${note ? `<p class="sec-note">${note}</p>` : ''}</div>`;
+  /* 기호 설명은 처음 보는 사람에게만 필요하다. 접어 두고 필요할 때 펼친다 */
+  const legendBox = (items, label = '기호 읽는 법') => `<details class="legend"><summary>${label}</summary><div><dl>${items.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl></div></details>`;
   const dirBadge = v => { const d = DIR[String(v).trim()]; return d ? `<span class="dir ${d[0]}" title="방향 ${esc(v)}"><i>${d[1]}</i>${d[2]}</span>` : esc(v); };
   const confBadge = v => { const c = CONF[String(Number(v))]; return c ? `<span class="conf ${c[0]}" title="확신 ${esc(v)}">${dots(c[1])}${c[2]}</span>` : esc(v); };
   const stBadge = v => { const t = String(v).trim().toLowerCase(); return t === 'true' ? `<span class="st yes" title="문서로 남은 확정 사실">확정</span>` : t === 'false' ? `<span class="st no" title="발언·보도·조사 단계">미확정</span>` : esc(v); };
-  const KEYS = `<p class="keys">구조적은 <span class="st yes">확정</span> 문서로 남은 것, <span class="st no">미확정</span> 발언·보도 단계. 방향은 그 섹터를 <span class="dir up"><i>▲</i>밀어줌</span> <span class="dir down"><i>▼</i>막음</span> <span class="dir both"><i>◆</i>양쪽</span>. 확신은 <span class="conf conf-low">${dots(1)}낮음 0.3</span> <span class="conf conf-mid">${dots(2)}보통 0.6</span> <span class="conf conf-high">${dots(3)}높음 0.8</span></p>`;
+  const KEY_ITEMS = [
+    ['구조적', `<span class="st yes">확정</span> 문서로 남은 것 · <span class="st no">미확정</span> 발언·보도 단계`],
+    ['방향', `그 섹터를 <span class="dir up"><i>▲</i>밀어줌</span> · <span class="dir down"><i>▼</i>막음</span> · <span class="dir both"><i>◆</i>양쪽</span>`],
+    ['확신', `사실이 맞는가. <span class="conf conf-low">${dots(1)}낮음 0.3</span> · <span class="conf conf-mid">${dots(2)}보통 0.6</span> · <span class="conf conf-high">${dots(3)}높음 0.8</span>`],
+  ];
+  const KEYS = legendBox(KEY_ITEMS);
+  const MARKET_KEY = ['시장 반응', '시그널 전날 종가 대비 시그널 티커 평균 수익률과 같은 기간 SPY. 판정은 끝난 가장 긴 구간(20 → 5 → 최근 3거래일 이상)에서 SPY 보다 방향대로 움직였는지 (±0.5%p 안은 보합). 판단 재료이지 매매 신호가 아닙니다.'];
   const fmtNet = v => (Math.abs(v) < 0.005 ? '0' : (v > 0 ? '+' : '') + v.toFixed(2));
   const netCls = v => (v > 0 ? 'gs' : v < 0 ? 'ss' : 'dim');
   const pctCls = s => (s == null ? 'dim' : s >= 60 ? 'gs' : s <= 40 ? 'ss' : 'ns');
@@ -326,6 +491,16 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     });
   }
 
+  /* ---- 방향 브리프 (briefs/direction.md). "한 줄 요약" 절은 바로 보이고, 나머지는 펼쳐 읽는다 ---- */
+  function dirBriefParts(text) {
+    const date = (text.match(/^# .*?— (\d{4}-\d{2}-\d{2})/m) || [])[1] || '';
+    const body = text.replace(/^# .*\n/, '');
+    const k = body.search(/^## /m), intro = (k < 0 ? body : body.slice(0, k)).trim();
+    const secs = splitSections(body), lead = secs.find(x => /^한 줄 요약/.test(x.title)), rest = secs.filter(x => x !== lead);
+    return { date, lead: lead ? lead.md.trim() : intro, full: (lead ? intro + '\n\n' : '') + rest.map(x => `## ${x.title}\n${x.md}`).join('\n'),
+      count: rest.filter(x => /^\d/.test(x.title)).length, minutes: Math.max(1, Math.round(body.length / 500)) };
+  }
+
   /* ---- 브리프. 카드는 build.py 가 구조화한 signals 로 그리고, 나머지 절만 마크다운으로 그린다 ---- */
   const briefCache = {};
   function fetchBrief(b) {
@@ -353,7 +528,7 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     }
     container.innerHTML = KEYS + cards + (b.none_today ? `<p class="keys">오늘 구조적 시그널 없음. 위 카드는 아직 확정되지 않은 재료입니다.</p>` : '');
     for (const x of secs.filter(x => !isAxis(x.title) && !isEasy(x.title))) container.appendChild(md('## ' + x.title + '\n' + x.md));
-    const dd = document.createElement('details'); dd.className = 'more'; dd.innerHTML = '<summary>원본 시그널 표·해석·확인 방법 메모</summary>';
+    const dd = document.createElement('details'); dd.className = 'more'; dd.innerHTML = '<summary>원본 시그널 표 · 해석 · 확인 방법 메모</summary>';
     for (const x of secs.filter(x => isAxis(x.title) || isEasy(x.title))) dd.appendChild(md('## ' + x.title + '\n' + x.md));
     container.appendChild(dd);
     decorateTables(container);
@@ -473,34 +648,73 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
   function home() {
     const B = D.board.w30, b = D.briefs[0];
     REDRAW = null;
-    const bits = [`최근 30일 장부 ${B.total}건`, `전체 ${D.ledger.length}건`, ledgerNote(), rawLine(b ? b.date : D.today)].filter(Boolean);
-    let h = `<p class="dateline">${fmtDate(D.today)}</p><p class="hero-sub">${bits.join(' · ')}</p>`;
     const dirs = B.directions.filter(x => x.n).sort((a, c) => (c.score - a.score) || (c.n - a.n)), quiet = B.directions.filter(x => !x.n);
-    h += `<h2 class="sec">지금 세상의 방향 <span class="dim">최근 30일 장부. 세 축이 같은 쪽을 가리킬수록 %가 높다 (50%가 중립) · <a href="#/sectors">섹터 →</a></span></h2>`;
+    const RANK = { aligned3: 0, aligned2: 1, aligned1: 2, neutral: 3, mixed: 4, headwind: 5, none: 6 };
+    const meta = [`최근 30일 장부 ${B.total}건`, `전체 ${D.ledger.length}건`, ledgerNote(), rawLine(b ? b.date : D.today)].filter(Boolean).map(esc);
+    let h = pageHead({ eyebrow: fmtDate(D.today), title: '지금 세상의 방향', lede: '기술 · 사회 · 정책 세 축이 같은 쪽을 가리킬수록 %가 높습니다. 50%가 중립, 100%는 세 축 모두 밀어줌입니다.', meta });
+
+    /* 한눈에: 가장 정렬된 방향, 가장 눌린 방향, 새 근거, 시장이 근거를 따라갔는지 */
+    if (dirs.length) {
+      const top = dirs.slice().sort((a, c) => (RANK[a.label] - RANK[c.label]) || (c.score - a.score))[0];
+      const low = dirs.slice().sort((a, c) => (a.score - c.score) || (RANK[c.label] - RANK[a.label]))[0];
+      const cut7 = new Date(Date.parse(D.today + 'T00:00:00Z') - 7 * 864e5).toISOString().slice(0, 10);
+      const n7 = D.ledger.filter(r => r.date > cut7).length;
+      const sumc = (cls, k, v, d) => `<div class="sumc ${cls}"><p class="k">${k}</p>${v}<p class="d">${d}</p></div>`;
+      const dirLink = x => `<a class="v" href="#/sectors">${esc(x.direction)}</a>`;
+      let cards = sumc('pos', top.label === 'aligned3' ? '세 축이 모인 방향' : '가장 정렬된 방향', dirLink(top), `<b class="pct ${pctCls(top.score)}">${pctText(top.score)}</b>${labelHtml(top.label)}`);
+      if (low !== top) cards += sumc(low.score < 50 ? 'neg' : '', '가장 눌린 방향', dirLink(low), `<b class="pct ${pctCls(low.score)}">${pctText(low.score)}</b>${labelHtml(low.label)}`);
+      cards += sumc('', '최근 7일 새 근거', `<span class="v">${n7}건</span>`, `<a href="#/ledger">장부에서 보기</a>`);
+      if (D.market_meta) {
+        const rows30 = D.ledger.filter(r => r.date >= B.from && r.date <= B.to && D.market[r.line]), cnt = {};
+        rows30.forEach(r => { const v = D.market[r.line].verdict || '±'; cnt[v] = (cnt[v] || 0) + 1; });
+        const up = cnt['방향대로'] || 0, dn = cnt['반대로'] || 0, rest = rows30.length - up - dn;
+        if (up + dn) cards += sumc('', '시장이 근거대로 움직인 비율', `<span class="v">${Math.round(up / (up + dn) * 100)}%</span>`, `방향대로 ${up} · 반대로 ${dn}${rest ? ` · 판정 전 ${rest}` : ''}`);
+      }
+      h += `<section class="sum" aria-label="한눈에 보기">${cards}</section>`;
+    }
+
+    /* 쉬운 말 방향 브리프: 요약은 바로, 전문은 펼쳐서 */
+    const DB = D.direction_brief ? dirBriefParts(D.direction_brief) : null;
+    if (DB) {
+      h += secHead('쉬운 말로 읽는 지금의 방향', `${DB.date ? `${DB.date} 기준 · ` : ''}중학생도 읽을 수 있게 쓴 요약입니다.`);
+      h += `<div class="dirlead" id="dirlead"></div><details class="dirbrief" id="dirbrief-d"><summary>전체 브리프 읽기 <span class="dim">${DB.count ? `방향 ${DB.count}개 · ` : ''}약 ${DB.minutes}분</span></summary><div id="dirbrief"></div></details>`;
+    }
+
+    /* 방향 카드 */
+    h += secHead('방향별 정렬', `최근 30일 ${B.from} ~ ${B.to}. 정렬 %가 높은 순서입니다.`, `<a href="#/sectors">섹터별로 보기 →</a>`);
+    h += legendBox([
+      ['정렬 %', '세 축 점수(−1~+1)의 평균을 0~100%로 바꾼 값. 50%가 중립, 60% 이상은 파랑, 40% 이하는 빨강 글자.'],
+      ['축 막대', '가운데 선에서 오른쪽 파랑은 그 축이 밀어줌, 왼쪽 빨강은 막음. 길이가 근거의 무게(크기 × 기간).'],
+      ['상태', '<span class="lbl lbl-aligned3">3축 정렬</span> · <span class="lbl lbl-aligned2">2축 정렬</span> · <span class="lbl lbl-aligned1">1축</span> 막는 축 없이 밀어주는 축의 수 · <span class="lbl lbl-mixed">엇갈림</span> 밀고 막는 축이 섞임 · <span class="lbl lbl-headwind">역풍</span> 막는 축만 · <span class="lbl">양쪽</span> 신호는 있지만 점수 0'],
+      ['7일', '일주일 전보다 몇 %p 바뀌었나. 신규는 일주일 전에는 신호가 없던 곳.'],
+      MARKET_KEY,
+    ]);
     h += dirs.length ? `<div class="dgrid">${dirs.map(x => dirCard(x, B, 30)).join('')}</div>` : `<p class="empty">아직 장부에 시그널이 없습니다.</p>`;
     if (quiet.length) h += `<p class="keys">신호 없는 방향: ${quiet.map(x => esc(x.direction)).join(', ')}</p>`;
-    if (D.direction_brief) h += `<details class="dirbrief" open><summary>방향 브리프 <span class="dim">쉬운 말로 읽는 지금의 방향 · ${esc((D.direction_brief.match(/^# .*?— (\d{4}-\d{2}-\d{2})/m) || [])[1] || '')}</span></summary><div id="dirbrief"></div></details>`;
+
+    /* 섹터 한눈에 */
     const secs = B.sectors.filter(x => x.n);
     const ups = secs.filter(x => ALIGNED.includes(x.label)).sort(byScore).slice(0, 5);
     const downs = secs.filter(x => CONTESTED.includes(x.label)).sort((a, c) => (a.score - c.score) || (c.n - a.n)).slice(0, 5);
     const neutral = secs.filter(x => x.label === 'neutral');
-    const li = x => `<li>${sectorLink(x.sector)} <b class="${pctCls(x.score)}">${x.score}%</b> <span class="dim small">${esc(D.labels[x.label])} · ${x.n}건</span></li>`;
-    h += `<section class="glance"><div class="gl"><h3>밀어주는 축만 있는 섹터</h3>${ups.length ? `<ol>${ups.map(li).join('')}</ol>` : '<p class="empty">없음</p>'}</div><div class="gl"><h3>역풍·엇갈림 섹터</h3>${downs.length ? `<ol>${downs.map(li).join('')}</ol>` : '<p class="empty">없음</p>'}${neutral.length ? `<p class="keys" style="margin:8px 0 0">양쪽(± 만 있어 축 점수 0): ${neutral.map(x => sectorLink(x.sector)).join(', ')}</p>` : ''}</div></section>`;
-    if (D.market_meta) {
-      const rows30 = D.ledger.filter(r => r.date >= B.from && r.date <= B.to && D.market[r.line]), cnt = {};
-      rows30.forEach(r => { const v = D.market[r.line].verdict || '±'; cnt[v] = (cnt[v] || 0) + 1; });
-      h += `<section class="glance"><div class="gl full"><h3>시장 반응 <span class="dim">최근 30일 시그널 ${rows30.length}건 · 사건 전날 종가 대비 티커 평균, SPY 대비 초과수익으로 판정 · 종가 ${D.market_meta.asof} 까지</span></h3>` +
-        (rows30.length ? `<p class="mkt-sum">${['방향대로', '반대로', '보합', '아직', '±'].filter(k => cnt[k]).map(k => `<span class="lbl ${VLBL[k] || ''}">${k === '±' ? '양쪽(판정 없음)' : k}</span> ${cnt[k]}건`).join(' · ')}</p>` : '<p class="empty">가격 자료가 닿는 시그널이 없습니다.</p>') +
-        `<p class="keys" style="margin:8px 0 0">시그널 뒤 1·5·20·60거래일 수익률은 각 시그널 카드와 <a href="#/ledger">장부</a>에 있습니다. 판단 재료이지 매매 신호가 아닙니다.</p></div></section>`;
-    }
-    if (b) h += `<h2 class="sec">${b.date === D.today ? '오늘의 브리프' : '최근 브리프'} <span class="dim">${b.date}</span></h2><div id="brief"></div>`;
-    else h += `<h2 class="sec">브리프</h2><p class="empty">아직 새 체계의 브리프가 없습니다. 다음 /brief 부터 쌓입니다.</p>`;
+    const li = x => `<li><span>${sectorLink(x.sector)} <span class="dim small">${esc(D.labels[x.label])} · ${x.n}건</span></span><b class="pct ${pctCls(x.score)}">${x.score}%</b></li>`;
+    h += secHead('섹터 한눈에', '최근 30일. 막는 축이 없는 섹터와, 막는 축이 있는 섹터를 나눴습니다.', `<a href="#/sectors">전체 섹터 →</a>`);
+    h += `<section class="glance"><div class="gl"><h3>밀어주는 축만 있는 섹터</h3>${ups.length ? `<ol>${ups.map(li).join('')}</ol>` : '<p class="empty">없음</p>'}</div><div class="gl neg"><h3>역풍 · 엇갈림 섹터</h3>${downs.length ? `<ol>${downs.map(li).join('')}</ol>` : '<p class="empty">없음</p>'}${neutral.length ? `<p class="keys">양쪽(± 만 있어 점수 0): ${neutral.map(x => sectorLink(x.sector)).join(', ')}</p>` : ''}</div></section>`;
+
+    /* 브리프 */
+    if (b) h += secHead(b.date === D.today ? '오늘의 브리프' : '최근 브리프', `${fmtDate(b.date)} · 구조적 ${b.none_today ? '없음' : b.structural + '건'}`, `<a href="#/brief/${b.date}">따로 열기 →</a>`) + `<div id="brief"></div>`;
+    else h += secHead('브리프') + `<p class="empty">아직 새 체계의 브리프가 없습니다. 다음 /brief 부터 쌓입니다.</p>`;
     if (D.briefs.length > 1) {
-      h += `<h2 class="sec">지난 브리프</h2><ul class="plain">` + D.briefs.slice(1, 8).map(x => `<li><a href="#/brief/${x.date}">${x.date}</a> <span class="dim">구조적 ${x.none_today ? '없음' : x.structural + '건'}</span></li>`).join('') + `</ul>`;
-      if (D.briefs.length > 8) h += `<p class="dim" style="font-size:14px"><a href="#/briefs">전체 브리프 ${D.briefs.length}건</a></p>`;
+      h += secHead('지난 브리프', '', D.briefs.length > 8 ? `<a href="#/briefs">전체 ${D.briefs.length}건 →</a>` : '') + `<ul class="plain">` + D.briefs.slice(1, 8).map(x => `<li><a href="#/brief/${x.date}">${fmtDate(x.date)}</a> <span class="dim small">구조적 ${x.none_today ? '없음' : x.structural + '건'}</span></li>`).join('') + `</ul>`;
     }
     app.innerHTML = h;
-    if (D.direction_brief) { const el = md(D.direction_brief.replace(/^# .*\n/, '')); document.getElementById('dirbrief').appendChild(el); }
+    if (DB) {
+      document.getElementById('dirlead').appendChild(md(DB.lead));
+      document.getElementById('dirbrief').appendChild(md(DB.full));
+      const det = document.getElementById('dirbrief-d');
+      try { if (localStorage.getItem('radar.dirbrief.open') === '1') det.open = true; } catch (e) { /* 저장소를 못 쓰면 접힌 채로 */ }
+      det.addEventListener('toggle', () => { try { localStorage.setItem('radar.dirbrief.open', det.open ? '1' : '0'); } catch (e) { /* 무시 */ } });
+    }
     if (b) mountBrief(document.getElementById('brief'), b);
   }
 
@@ -515,8 +729,14 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
   function sectors(arg) {
     const days = daysOf(arg), B = board(days), S = serOf(days), c = B.counts;
     REDRAW = null;
-    let h = `<p class="dateline">어느 섹터에 근거가 쌓이는가</p><p class="hero-sub">섹터마다 ${D.axes.join('·')} 세 축의 점수(−1~+1)와 정렬 %(50 + 50 × 세 축 평균)를 냅니다. 축 점수는 시그널의 방향 × 가중치(크기 × 기간) 합을 ${D.params.K}으로 나눈 것. 100%는 세 축 모두 밀어줌, 0%는 모두 역풍, 50%는 중립. 방향(내러티브)은 소속 섹터의 평균입니다. 점수는 근거의 누적이지 수익률 예측이 아닙니다.</p>`;
-    h += segTabs('#/sectors', days, `${B.from} ~ ${B.to}, ${B.total}건. 3축 정렬 ${c.aligned3} · 2축 ${c.aligned2} · 1축 ${c.aligned1} · 엇갈림 ${c.mixed} · 양쪽 ${c.neutral} · 역풍 ${c.headwind} · 신호 없음 ${c.none}${ledgerNote() ? ` · ${ledgerNote()}` : ''}`);
+    let h = pageHead({ eyebrow: '섹터', title: '어느 섹터에 근거가 쌓이는가', lede: `섹터마다 ${D.axes.join(' · ')} 세 축이 밀어주는지 막는지를 점수로 모았습니다. 점수는 근거의 누적이지 수익률 예측이 아닙니다.` });
+    h += segTabs('#/sectors', days, `${B.from} ~ ${B.to} · ${B.total}건 · 3축 정렬 ${c.aligned3} · 2축 ${c.aligned2} · 1축 ${c.aligned1} · 엇갈림 ${c.mixed} · 양쪽 ${c.neutral} · 역풍 ${c.headwind} · 신호 없음 ${c.none}${ledgerNote() ? ` · ${ledgerNote()}` : ''}`);
+    h += `<div style="margin-top:16px">` + legendBox([
+      ['축 점수', `시그널마다 방향(+1 / −1 / 0) × 가중치(크기 1~3 × 기간 분기 1 · 1년 2 · 다년 3)를 더해 ${D.params.K}으로 나누고 −1~+1 로 자릅니다.`],
+      ['정렬 %', '50 + 50 × 세 축 점수 평균. 100%는 세 축 모두 밀어줌, 0%는 모두 막음, 50%는 중립.'],
+      ['방향', '방향(내러티브)의 %는 신호가 있는 소속 섹터의 평균입니다.'],
+      ['추이', '날마다 그날 기준 창으로 다시 계산한 정렬 %. 가운데 점선이 50%.'],
+    ]) + `</div>`;
     h += `<section class="dash">`;
     for (const dir of B.directions) {
       const rows = dir.sectors.map(s => B.sectors.find(z => z.sector === s));
@@ -536,8 +756,9 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     const days = daysOf(arg), B = board(days), S = serOf(days), x = B.sectors.find(z => z.sector === name), cfg = D.sectors[name];
     if (!x || !cfg) { app.innerHTML = `<p class="empty">${esc(name)} 섹터가 sector_map 에 없습니다. <a href="#/sectors">섹터 목록</a></p>`; REDRAW = null; return; }
     const rows = D.ledger.filter(r => r.sector === name && r.date >= B.from && r.date <= B.to).sort((a, c) => c.date.localeCompare(a.date) || c.line - a.line);
-    let h = `<p class="dateline">${esc(name)}</p><p class="hero-sub">${esc(cfg.direction)} · ${cfg.tickers.map(esc).join(', ')}${cfg.note ? ` · ${esc(cfg.note)}` : ''}</p>`;
-    h += segTabs(`#/sector/${enc(name)}`, days, `${B.from} ~ ${B.to}, ${x.n}건${ledgerNote() ? ` · ${ledgerNote()}` : ''}`);
+    let h = pageHead({ eyebrow: crumb(`#/sectors${days === 90 ? '/90' : ''}`, '섹터') + esc(cfg.direction), title: esc(name), lede: cfg.note ? esc(cfg.note) : '', meta: cfg.tickers.map(esc) });
+    h += segTabs(`#/sector/${enc(name)}`, days, `${B.from} ~ ${B.to} · ${x.n}건${ledgerNote() ? ` · ${ledgerNote()}` : ''}`);
+    h += `<div style="margin-top:16px">${legendBox([...KEY_ITEMS, MARKET_KEY])}</div>`;
     h += `<section class="dash"><div class="kpis full">` + tile(`<span class="${pctCls(x.score)}">${pctText(x.score)}</span>`, `정렬 (최근 ${days}일)`) + tile(labelHtml(x.label), '상태', 'txt') + tile(x.n, `시그널 건수`) + tile(deltaHtml(x.delta, x.n).replace(/ small/, ''), '7일 변화', 'txt') + `</div>`;
     h += `<div class="panel full"><h3>정렬 % 추이 <span class="dim">날마다 그날 기준 최근 ${days}일 창으로 다시 계산. 신호 없는 날은 비어 있음</span></h3><div class="chart-box" data-chart="sector"></div></div>`;
     for (const a of D.axes) {
@@ -561,12 +782,12 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     for (const s of SEL) if (!activeNames.has(s)) SLOT.delete(s);
     SEL = SEL.filter(s => activeNames.has(s));
     SEL.forEach(slotOf);
-    let h = `<p class="dateline">추이</p><p class="hero-sub">기준일 ${D.today}, 장부 전체 ${D.ledger.length}건. 정렬 %는 날마다 그날 기준 창으로 다시 계산한 값입니다.${ledgerNote() ? ` ${ledgerNote()}.` : ''}</p>`;
+    let h = pageHead({ eyebrow: '추이', title: '근거는 어떻게 바뀌어 왔나', lede: '정렬 %를 날마다 그날 기준 창으로 다시 계산해 선으로 그렸습니다. 선 위에 마우스를 올리면 그날 값이 보입니다.', meta: [`기준일 ${D.today}`, `장부 전체 ${D.ledger.length}건`, ledgerNote()].filter(Boolean).map(esc) });
     if (!D.ledger.length) { app.innerHTML = h + `<p class="empty">장부가 비어 있습니다.</p>`; REDRAW = null; return; }
-    h += segTabs('#/trend', days, `${B.from} ~ ${B.to}, ${B.total}건`);
+    h += segTabs('#/trend', days, `${B.from} ~ ${B.to} · ${B.total}건`);
     h += `<section class="dash"><div class="kpis full">` + tile(B.total, `최근 ${days}일 구조적 시그널`) + tile(A.axes.map(x => `<span class="${axCls(x.axis)}" style="color:var(--c)">${x.count}</span>`).join(' <small>/</small> '), `${D.axes.join(' / ')} 건수`) +
       tile(`${c.aligned3 + c.aligned2} <small>3축 ${c.aligned3}</small>`, '2축 이상 정렬 섹터') + tile(`${c.headwind} <small>엇갈림 ${c.mixed}</small>`, '역풍 섹터') + `</div>`;
-    h += `<div class="panel full"><h3>섹터 정렬 % 추이 <span class="dim">칩을 눌러 섹터를 고른다. 최대 8개, 기본은 중립(50%)에서 먼 순. 선 위에 마우스를 올리면 그날 값</span></h3><div class="seg" style="margin:0 0 8px" role="group" aria-label="섹터 선택">` +
+    h += `<div class="panel full"><h3>섹터 정렬 % 추이 <span class="dim">섹터를 눌러 켜고 끕니다 (최대 8개). 처음에는 중립(50%)에서 먼 섹터가 켜져 있습니다.</span></h3><div class="seg" style="margin:0 0 8px" role="group" aria-label="섹터 선택">` +
       active.sort(byScore).map(x => `<button type="button" data-sel="${esc(x.sector)}" aria-pressed="${SEL.includes(x.sector)}" class="${SEL.includes(x.sector) ? slotOf(x.sector) : ''}"><i></i>${esc(x.sector)} ${x.score}%</button>`).join('') + `</div><div class="chart-box" data-chart="sectors"></div></div>`;
     h += `<div class="panel full"><h3>방향 정렬 % 추이 <span class="dim">소속 섹터의 평균</span></h3>${legend(B.directions.map((x, i) => [x.direction, SC[i % SC.length]]))}<div class="chart-box" data-chart="directions"></div></div>`;
     h += `<div class="panel full"><h3>일별 시그널 <span class="dim">축별로 쌓음</span></h3>${axisLegend()}<div class="chart-box" data-chart="daily"></div></div>`;
@@ -596,11 +817,11 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     const rows = [...D.ledger].sort((a, b) => b.date.localeCompare(a.date) || b.line - a.line);
     rows.forEach(r => { r._q = [r.sector, r.fact, r.note, (r.tickers || []).join(' ')].join(' ').toLowerCase(); });
     const sectorNames = [...new Set([...Object.keys(D.sectors), ...rows.map(r => r.sector).filter(Boolean)])];   // 맵에 없는 옛 섹터도 고를 수 있게
-    app.innerHTML = `<p class="dateline">장부</p><p class="hero-sub">구조적 시그널만 쌓입니다. 한 줄이 한 사건, 추가만 하고 고치지 않습니다.${D.market_meta ? ` 시장 반응은 사건 전날(장부 날짜 이틀 전) 종가 대비 시그널 티커 평균 수익률과 같은 기간 SPY, ${esc(D.market_meta.source.split(' (')[0])} 종가 ${D.market_meta.asof} 까지. 판정은 완료된 가장 긴 구간(20 → 5 → 최신 3거래일 이상)의 SPY 대비 초과수익 부호를 방향과 비교한 것(±0.5%p 안은 보합).` : ''}</p>` +
+    app.innerHTML = pageHead({ eyebrow: '장부', title: '쌓인 근거 전부', lede: '문서로 확정된 구조적 시그널만 쌓입니다. 한 줄이 한 사건이고, 추가만 하고 고치지 않습니다.', meta: [`전체 ${D.ledger.length}건`, D.first_date ? `${D.first_date}부터` : '', D.market_meta ? `종가 ${D.market_meta.asof} 까지 (${esc(D.market_meta.source.split(' (')[0])})` : ''].filter(Boolean) }) +
       `<div class="filters"><label>축 <select id="f-axis"><option value="">전체</option>${D.axes.map(a => `<option>${a}</option>`).join('')}</select></label>` +
       `<label>섹터 <select id="f-sector"><option value="">전체</option>${sectorNames.map(s => `<option>${esc(s)}</option>`).join('')}</select></label>` +
       `<label>기간 <select id="f-days"><option value="">전체</option><option value="30">최근 30일</option><option value="90">최근 90일</option></select></label>` +
-      `<input type="search" id="f-q" placeholder="섹터, 티커, 팩트 검색" aria-label="검색"><span class="count" id="f-count"></span></div>` + KEYS + `<div id="ledger-table"></div>`;
+      `<label class="q">검색 <input type="search" id="f-q" placeholder="섹터, 티커, 팩트"></label><span class="count" id="f-count" aria-live="polite"></span></div>` + legendBox([...KEY_ITEMS, MARKET_KEY]) + `<div id="ledger-table"></div>`;
     const meta = r => `${esc(r.horizon)} · 크기 ${esc(r.impact)} · ${esc(r.channel)}${r.reverses ? ` · 번복 줄 ${r.reverses}` : ''}`;
     const draw = () => {
       const ax = document.getElementById('f-axis').value, sc = document.getElementById('f-sector').value, days = Number(document.getElementById('f-days').value), q = document.getElementById('f-q').value.trim().toLowerCase();
@@ -618,9 +839,9 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
 
   function briefs() {
     REDRAW = null;
-    app.innerHTML = `<p class="dateline">브리프</p><p class="hero-sub">${D.briefs.length}건</p>` + (D.briefs.length ?
-      `<div class="tbl"><table><thead><tr><th>날짜</th><th class="num">구조적 시그널</th><th class="num">시그널 카드</th></tr></thead><tbody>` +
-      D.briefs.map(b => `<tr><td class="date"><a href="#/brief/${b.date}">${b.date}</a></td><td class="num">${b.none_today ? '없음' : b.structural}</td><td class="num">${b.signals.length}</td></tr>`).join('') + `</tbody></table></div>` :
+    app.innerHTML = pageHead({ eyebrow: '브리프', title: '일간 브리프', lede: '매일 아침 그날 뉴스를 세 축으로 나눠 쓴 브리프입니다.', meta: [`${D.briefs.length}건`] }) + (D.briefs.length ?
+      `<div class="tbl wide" style="margin-top:24px"><table style="min-width:0"><thead><tr><th>날짜</th><th class="num">구조적 시그널</th><th class="num">시그널 카드</th></tr></thead><tbody>` +
+      D.briefs.map(b => `<tr><td class="date"><a href="#/brief/${b.date}">${fmtDate(b.date)}</a></td><td class="num">${b.none_today ? '없음' : b.structural}</td><td class="num">${b.signals.length}</td></tr>`).join('') + `</tbody></table></div>` :
       `<p class="empty">아직 브리프가 없습니다. 다음 /brief 부터 쌓입니다.</p>`);
   }
   function brief(date) {
@@ -628,16 +849,15 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     if (i < 0) { app.innerHTML = `<p class="empty">${esc(date)} 브리프가 없습니다. <a href="#/briefs">브리프 목록</a></p>`; REDRAW = null; return; }
     REDRAW = null;
     const b = D.briefs[i], prev = D.briefs[i + 1], next = D.briefs[i - 1];
-    const meta = [`구조적 ${b.none_today ? '없음' : b.structural + '건'}`, rawLine(b.date)].filter(Boolean).join(', ');
-    app.innerHTML = `<p class="dateline">${fmtDate(b.date)} 브리프</p><p class="hero-sub">${esc(meta)}</p><div id="brief"></div>` +
-      `<nav class="pager" aria-label="브리프 이동"><span>${prev ? `<a href="#/brief/${prev.date}">이전 ${prev.date}</a>` : ''}</span><span>${next ? `<a href="#/brief/${next.date}">다음 ${next.date}</a>` : ''}</span></nav>`;
+    app.innerHTML = pageHead({ eyebrow: crumb('#/briefs', '브리프') + esc(b.date), title: `${fmtDate(b.date)} 브리프`, meta: [`구조적 ${b.none_today ? '없음' : b.structural + '건'}`, rawLine(b.date)].filter(Boolean).map(esc) }) + `<div id="brief" style="margin-top:24px"></div>` +
+      `<nav class="pager" aria-label="브리프 이동"><span>${prev ? `<a href="#/brief/${prev.date}" rel="prev">← 이전 ${prev.date}</a>` : ''}</span><span>${next ? `<a href="#/brief/${next.date}" rel="next">다음 ${next.date} →</a>` : ''}</span></nav>`;
     mountBrief(document.getElementById('brief'), b);
   }
   const fwCache = {};
   const fetchText = p => { if (!fwCache[p]) fwCache[p] = fetch(p, { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.text(); }); return fwCache[p]; };
   function framework() {
     REDRAW = null;
-    app.innerHTML = `<p class="dateline">판단 기준</p><p class="hero-sub">framework/axes.md, sector_map.yaml, sources.yaml 그대로. Ken 이 고칩니다. 점수 계산의 구현은 fetch/scoring.py 하나입니다 (K=${D.params.K}, 기간 가중 ${Object.entries(D.params.HW).map(([k, v]) => `${k} ${v}`).join(' · ')}).</p><div id="axes"><p class="loading">불러오는 중</p></div><h2 class="sec">방향·섹터·티커 <span class="dim">framework/sector_map.yaml</span></h2><pre class="yaml" id="smap"></pre><h2 class="sec">수집 소스 <span class="dim">framework/sources.yaml</span></h2><pre class="yaml" id="srcs"></pre>`;
+    app.innerHTML = pageHead({ eyebrow: '기준', title: '판단 기준', lede: 'framework/axes.md, sector_map.yaml, sources.yaml 을 그대로 보여줍니다. Ken 이 고칩니다.', meta: [`K = ${D.params.K}`, `기간 가중 ${Object.entries(D.params.HW).map(([k, v]) => `${k} ${v}`).join(' · ')}`, '구현 fetch/scoring.py'] }) + `<div id="axes" style="margin-top:24px"><p class="loading">불러오는 중</p></div><h2 class="sec">방향·섹터·티커 <span class="dim">framework/sector_map.yaml</span></h2><pre class="yaml" id="smap"></pre><h2 class="sec">수집 소스 <span class="dim">framework/sources.yaml</span></h2><pre class="yaml" id="srcs"></pre>`;
     Promise.all([fetchText('framework/axes.md'), fetchText('framework/sector_map.yaml'), fetchText('framework/sources.yaml')]).then(([a, s, r]) => {
       const ax = document.getElementById('axes'); if (!ax) return;
       ax.innerHTML = ''; ax.appendChild(md(a)); document.getElementById('smap').textContent = s; document.getElementById('srcs').textContent = r;
@@ -660,14 +880,16 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     if (name === 'sector') sector(arg, a2); else views[name](arg);
     app.insertAdjacentHTML('afterbegin', banner());
     window.scrollTo(0, 0);
+    if (NAVIGATED) { const h1 = app.querySelector('h1'); if (h1) h1.focus({ preventScroll: true }); }
   }
+  let NAVIGATED = false;
 
   fetch('data.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(j => {
     D = j;
     document.getElementById('gen').textContent = `빌드 ${j.generated_at.replace('T', ' ').slice(0, 16)} KST`;
     route();
   }).catch(e => { app.innerHTML = `<p class="empty">data.json 을 불러오지 못했습니다 (${esc(e.message)}). 빌드가 아직 안 됐거나 경로가 다릅니다.</p>`; });
-  window.addEventListener('hashchange', route);
+  window.addEventListener('hashchange', () => { NAVIGATED = true; route(); });
 })();
 </script>
 </body>
