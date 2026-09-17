@@ -54,6 +54,8 @@ ul.plain li{padding:6px 0;border-bottom:1px solid var(--hair2);font-size:15px}
 .dateline{font-family:var(--serif);font-size:26px;font-weight:600;line-height:1.35;margin:30px 0 2px}
 .hero-sub{color:var(--ink2);font-size:14px;margin:0;max-width:74ch}
 .gs{color:var(--pos);font-weight:500}.ss{color:var(--neg);font-weight:500}.ns{color:var(--ink)}
+.mkt{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;margin-top:6px;font-size:13px;color:var(--ink2)}.mkt b{font-weight:500}.mkt .lbl{line-height:1.6}
+.glance .gl.full{grid-column:1/-1}.mkt-sum{margin:8px 0 0;font-size:14px}
 @media (max-width:640px){.mast nav{margin-left:0;width:100%;gap:14px;overflow-x:auto;padding-bottom:2px}.tagline{display:none}.dateline{font-size:22px}}
 
 /* 표 */
@@ -274,7 +276,19 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
   const tile = (v, l, cls) => `<div class="kpi"><b${cls ? ` class="${cls}"` : ''}>${v}</b><span>${l}</span></div>`;
   const banner = () => (D.warnings && D.warnings.length ? `<div class="warn" role="alert"><b>빌드 경고 ${D.warnings.length}건</b> — 자료 일부가 빠진 채 만들어졌습니다.<ul>${D.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>` : '');
   /* 장부가 창보다 짧으면 30일·90일 창이 같은 자료다. 그 사실을 화면에 적는다 */
-  const ledgerNote = () => { if (!D.first_date) return ''; const same = D.first_date > D.board.w90.from; return `장부는 ${D.first_date}부터${same ? ' — 아직 90일이 안 돼 30일·90일 창이 같은 자료입니다' : ''}`; };
+  /* ---- 시장 반응: 장부 줄 번호 → 사건 전날(장부 날짜 이틀 전) 종가 대비 티커 평균 수익률과 SPY. build.py 가 fetch/market.py 로 계산 ---- */
+  const pctS = v => (v > 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
+  const rcls = v => v > 0.0005 ? 'gs' : v < -0.0005 ? 'ss' : 'ns';
+  const VLBL = { '방향대로': 'lbl-aligned2', '반대로': 'lbl-headwind', '보합': '', '아직': 'dim', '±': 'dim' };
+  function marketHtml(line) {
+    const x = D.market && D.market[line];
+    if (!x) return '';
+    const hs = Object.entries(x.h).filter(([, v]) => v).map(([h, v]) => `<span>${h}일 <b class="${rcls(v.r)}">${pctS(v.r)}</b> <span class="dim small">SPY ${pctS(v.spy)}</span></span>`);
+    if (!hs.length && x.latest) hs.push(`<span>${x.latest.days}거래일 <b class="${rcls(x.latest.r)}">${pctS(x.latest.r)}</b> <span class="dim small">SPY ${pctS(x.latest.spy)}</span></span>`);
+    const v = x.verdict ? `<span class="lbl ${VLBL[x.verdict] || ''}">${x.verdict}</span>` : '';
+    return `<div class="mkt"><span class="dim small">시장 반응 · ${x.base.slice(5).replace('-', '/')} 종가 기준</span>${hs.length ? hs.join('') : '<span class="dim small">아직 거래일 없음</span>'}${v}</div>`;
+  }
+  const ledgerNote = () => { if (!D.first_date) return ''; const short30 = D.first_date > D.board.w30.from, short90 = D.first_date > D.board.w90.from; return `장부는 ${D.first_date}부터${short30 ? ' — 아직 30일이 안 돼 30일·90일 창이 같은 자료입니다' : short90 ? ' (90일 창은 그날부터)' : ''}`; };
 
   /* 축 점수 미니 막대: −1 ~ +1. 왼쪽(빨강) 막음, 오른쪽(파랑) 밀어줌 */
   function axisBar(a, net, n, withLabel = true) {
@@ -323,7 +337,7 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     const title = s.easy ? s.easy.name : firstSentence(plain(s.fact)).slice(0, 70);
     return `<article class="sig"><header>${axTag(s.axis)}${s.structural == null ? '' : stBadge(s.structural)}${dirBadge(s.direction)}${confBadge(s.confidence)}<span class="dim small">${sectorLink(s.sector)}</span></header><h3>${esc(title)}</h3>` +
       (s.easy ? s.easy.parts.map(([k, v]) => `<p><b>${esc(k)}</b>${inlineMd(v)}</p>`).join('') : '') +
-      (s.tickers.length ? `<div class="chips">${s.tickers.map(t => `<span class="chip">${esc(t)}</span>`).join('')}</div>` : '') +
+      (s.tickers.length ? `<div class="chips">${s.tickers.map(t => `<span class="chip">${esc(t)}</span>`).join('')}</div>` : '') + (s.line ? marketHtml(s.line) : '') +
       `<details><summary>근거와 출처</summary><p>${inlineMd(s.fact)}</p>${s.interp ? `<p class="dim">${inlineMd(s.interp)}</p>` : ''}</details></article>`;
   }
   function renderBrief(container, b, text) {
@@ -444,7 +458,8 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     const day = D.raw[date];
     if (!day) return '';
     const names = Object.keys(day).filter(k => day[k].current !== false), zero = names.filter(k => !day[k].count || day[k].error);
-    return `수집 ${names.length}개 소스${zero.length ? `, 0건 ${zero.join(', ')}` : ''}`;
+    const bf = names.filter(k => day[k].backfill).length;
+    return `수집 ${names.length}개 소스${bf ? ` (소급 ${bf})` : ''}${zero.length ? `, 0건 ${zero.join(', ')}` : ''}`;
   }
   const byScore = (a, b) => (b.score - a.score) || (b.n - a.n) || a.sector.localeCompare(b.sector);
 
@@ -469,6 +484,13 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     const neutral = secs.filter(x => x.label === 'neutral');
     const li = x => `<li>${sectorLink(x.sector)} <b class="${pctCls(x.score)}">${x.score}%</b> <span class="dim small">${esc(D.labels[x.label])} · ${x.n}건</span></li>`;
     h += `<section class="glance"><div class="gl"><h3>밀어주는 축만 있는 섹터</h3>${ups.length ? `<ol>${ups.map(li).join('')}</ol>` : '<p class="empty">없음</p>'}</div><div class="gl"><h3>역풍·엇갈림 섹터</h3>${downs.length ? `<ol>${downs.map(li).join('')}</ol>` : '<p class="empty">없음</p>'}${neutral.length ? `<p class="keys" style="margin:8px 0 0">양쪽(± 만 있어 축 점수 0): ${neutral.map(x => sectorLink(x.sector)).join(', ')}</p>` : ''}</div></section>`;
+    if (D.market_meta) {
+      const rows30 = D.ledger.filter(r => r.date >= B.from && r.date <= B.to && D.market[r.line]), cnt = {};
+      rows30.forEach(r => { const v = D.market[r.line].verdict || '±'; cnt[v] = (cnt[v] || 0) + 1; });
+      h += `<section class="glance"><div class="gl full"><h3>시장 반응 <span class="dim">최근 30일 시그널 ${rows30.length}건 · 사건 전날 종가 대비 티커 평균, SPY 대비 초과수익으로 판정 · 종가 ${D.market_meta.asof} 까지</span></h3>` +
+        (rows30.length ? `<p class="mkt-sum">${['방향대로', '반대로', '보합', '아직', '±'].filter(k => cnt[k]).map(k => `<span class="lbl ${VLBL[k] || ''}">${k === '±' ? '양쪽(판정 없음)' : k}</span> ${cnt[k]}건`).join(' · ')}</p>` : '<p class="empty">가격 자료가 닿는 시그널이 없습니다.</p>') +
+        `<p class="keys" style="margin:8px 0 0">시그널 뒤 1·5·20·60거래일 수익률은 각 시그널 카드와 <a href="#/ledger">장부</a>에 있습니다. 판단 재료이지 매매 신호가 아닙니다.</p></div></section>`;
+    }
     if (b) h += `<h2 class="sec">${b.date === D.today ? '오늘의 브리프' : '최근 브리프'} <span class="dim">${b.date}</span></h2><div id="brief"></div>`;
     else h += `<h2 class="sec">브리프</h2><p class="empty">아직 새 체계의 브리프가 없습니다. 다음 /brief 부터 쌓입니다.</p>`;
     if (D.briefs.length > 1) {
@@ -518,7 +540,7 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     for (const a of D.axes) {
       const ax = x.axes[a], ev = rows.filter(r => r.axis === a);
       h += `<div class="panel full"><h3><span>${axTag(a)} <span class="${netCls(ax.net)}">${fmtNet(ax.net)}</span></span><span class="dim">${ax.n}건 · <span class="dir up"><i>▲</i>${ax.up}</span> <span class="dir down"><i>▼</i>${ax.down}</span> <span class="dir both"><i>◆</i>${ax.both}</span> · 가중 합 ${ax.raw > 0 ? '+' : ''}${ax.raw}</span></h3>` +
-        (ev.length ? `<ul class="feed">` + ev.map(r => `<li><div class="meta"><span class="date">${r.date}</span>${dirBadge(r.direction)}${confBadge(r.confidence)}<span class="dim small">${esc(r.horizon)} · 크기 ${esc(r.impact)} · ${esc(r.channel)}${r.reverses ? ` · 번복 줄 ${r.reverses}` : ''}</span><span class="dim small">${(r.tickers || []).map(esc).join(', ')}</span></div>${esc(r.fact)} <a href="${esc(r.source)}" target="_blank" rel="noopener">출처</a><br><span class="small dim">${esc(r.note)}</span></li>`).join('') + `</ul>` : `<p class="empty">이 축의 근거가 아직 없습니다. "아직 모른다"이지 "아니다"가 아닙니다.</p>`) + `</div>`;
+        (ev.length ? `<ul class="feed">` + ev.map(r => `<li><div class="meta"><span class="date">${r.date}</span>${dirBadge(r.direction)}${confBadge(r.confidence)}<span class="dim small">${esc(r.horizon)} · 크기 ${esc(r.impact)} · ${esc(r.channel)}${r.reverses ? ` · 번복 줄 ${r.reverses}` : ''}</span><span class="dim small">${(r.tickers || []).map(esc).join(', ')}</span></div>${esc(r.fact)} <a href="${esc(r.source)}" target="_blank" rel="noopener">출처</a><br><span class="small dim">${esc(r.note)}</span>${marketHtml(r.line)}</li>`).join('') + `</ul>` : `<p class="empty">이 축의 근거가 아직 없습니다. "아직 모른다"이지 "아니다"가 아닙니다.</p>`) + `</div>`;
     }
     h += `</section>`;
     app.innerHTML = h;
@@ -571,7 +593,7 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
     const rows = [...D.ledger].sort((a, b) => b.date.localeCompare(a.date) || b.line - a.line);
     rows.forEach(r => { r._q = [r.sector, r.fact, r.note, (r.tickers || []).join(' ')].join(' ').toLowerCase(); });
     const sectorNames = [...new Set([...Object.keys(D.sectors), ...rows.map(r => r.sector).filter(Boolean)])];   // 맵에 없는 옛 섹터도 고를 수 있게
-    app.innerHTML = `<p class="dateline">장부</p><p class="hero-sub">구조적 시그널만 쌓입니다. 한 줄이 한 사건, 추가만 하고 고치지 않습니다.</p>` +
+    app.innerHTML = `<p class="dateline">장부</p><p class="hero-sub">구조적 시그널만 쌓입니다. 한 줄이 한 사건, 추가만 하고 고치지 않습니다.${D.market_meta ? ` 시장 반응은 사건 전날(장부 날짜 이틀 전) 종가 대비 시그널 티커 평균 수익률과 같은 기간 SPY, ${esc(D.market_meta.source.split(' (')[0])} 종가 ${D.market_meta.asof} 까지. 판정은 완료된 가장 긴 구간(20 → 5 → 최신 3거래일 이상)의 SPY 대비 초과수익 부호를 방향과 비교한 것(±0.5%p 안은 보합).` : ''}</p>` +
       `<div class="filters"><label>축 <select id="f-axis"><option value="">전체</option>${D.axes.map(a => `<option>${a}</option>`).join('')}</select></label>` +
       `<label>섹터 <select id="f-sector"><option value="">전체</option>${sectorNames.map(s => `<option>${esc(s)}</option>`).join('')}</select></label>` +
       `<label>기간 <select id="f-days"><option value="">전체</option><option value="30">최근 30일</option><option value="90">최근 90일</option></select></label>` +
@@ -583,7 +605,7 @@ pre.yaml{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
       const sel = rows.filter(r => (!ax || r.axis === ax) && (!sc || r.sector === sc) && (!cut || r.date > cut) && (!q || r._q.includes(q)));
       document.getElementById('f-count').textContent = `${sel.length}건`;
       document.getElementById('ledger-table').innerHTML = sel.length ? `<div class="tbl wide"><table><thead><tr><th>날짜</th><th>축</th><th>섹터</th><th class="fact">팩트</th><th>티커</th><th>방향</th><th>확신</th><th>기간 · 크기 · 경로</th><th class="note">해석</th></tr></thead><tbody>` +
-        sel.map(r => `<tr><td class="date">${r.date}<br><span class="dim small">줄 ${r.line}</span></td><td class="nowrap">${axTag(r.axis)}</td><td class="nowrap">${sectorLink(r.sector)}</td><td class="fact">${esc(r.fact)} <a href="${esc(r.source)}" target="_blank" rel="noopener">출처</a></td><td class="nowrap">${(r.tickers || []).map(esc).join(', ')}</td><td>${dirBadge(r.direction)}</td><td>${confBadge(r.confidence)}</td><td class="small nowrap">${meta(r)}</td><td class="small note">${esc(r.note)}</td></tr>`).join('') +
+        sel.map(r => `<tr><td class="date">${r.date}<br><span class="dim small">줄 ${r.line}</span></td><td class="nowrap">${axTag(r.axis)}</td><td class="nowrap">${sectorLink(r.sector)}</td><td class="fact">${esc(r.fact)} <a href="${esc(r.source)}" target="_blank" rel="noopener">출처</a>${marketHtml(r.line)}</td><td class="nowrap">${(r.tickers || []).map(esc).join(', ')}</td><td>${dirBadge(r.direction)}</td><td>${confBadge(r.confidence)}</td><td class="small nowrap">${meta(r)}</td><td class="small note">${esc(r.note)}</td></tr>`).join('') +
         `</tbody></table></div>` : `<p class="empty">조건에 맞는 줄이 없습니다.</p>`;
     };
     ['f-axis', 'f-sector', 'f-days'].forEach(id => document.getElementById(id).addEventListener('change', draw));

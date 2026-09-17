@@ -10,7 +10,8 @@ data.json:
   today, generated_at, first_date, axes, labels, params, sectors{이름: {direction, tickers, note}}
   ledger[행 + line], board{w30, w90}(scoring.alignment + delta + orphans), series{w30, w90}(scoring.series)
   activity{w30, w90}(축별 건수·방향·상위 섹터), attention(scoring.attention), briefs[{date, structural, none_today, signals, md(최신 것만)}]
-  raw{날짜: {소스: {count, error, current}}}, warnings[]
+  raw{날짜: {소스: {count, error, current, backfill}}}, market{장부 줄: 시장 반응(market.reaction)}, market_meta{source, asof, updated_at} | null, warnings[]
+  브리프 signals 에는 장부와 (날짜, 출처 URL, 섹터) 가 같은 행의 line 을 붙인다 (카드에 시장 반응을 보이기 위해).
 브리프 카드는 여기서 마크다운을 구조화(parse_brief)해 signals 로 준다. 사이트는 나머지 절만 마크다운으로 그린다.
 """
 from __future__ import annotations
@@ -30,9 +31,11 @@ sys.path.insert(0, str(ROOT / "fetch"))
 from config import AXES, load_sector_map, load_sources  # noqa: E402
 from ledger import load_existing  # noqa: E402
 from scoring import LABELS, PARAMS, alignment, attach_deltas, attention, in_window, raw_scan, series  # noqa: E402
+from market import SOURCE as PRICE_SOURCE, asof as price_asof, load_prices, reactions  # noqa: E402
 
 SITE = ROOT / "site"
 OUT = SITE / "out"
+URL_IN = re.compile(r"\((https?://[^)\s]+)\)")   # 브리프 팩트 셀의 ([출처](URL)) 에서 URL
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 EASY_KEYS = ("무슨 일", "왜 중요", "누가 이득·손해")
 
@@ -155,6 +158,19 @@ def main(argv=None) -> int:
         warnings.append(f"framework/sources.yaml: {e}")
         current = None
     briefs = load_briefs(warnings)
+    prices = load_prices()
+    market = reactions(rows, prices)
+    market_meta = None
+    if prices:
+        pa = price_asof(prices)
+        market_meta = {"source": PRICE_SOURCE, "asof": pa, "updated_at": prices.get("updated_at"), "n": len(market)}
+        if pa and (today - d(pa)).days > 5:
+            warnings.append(f"가격 자료(prices/prices.json)가 {pa} 까지라 시장 반응이 오래됐다. fetch.yml 의 market.py --update 를 확인")
+    by_key = {(r["date"], r["source"], r["sector"]): r["line"] for r in rows}
+    for b in briefs:
+        for s in b["signals"]:
+            m = URL_IN.search(s["fact"])
+            s["line"] = by_key.get((b["date"], m.group(1), s["sector"])) if m else None
     ser = {f"w{n}": series(rows, today, n, PARAMS["span_days"], smap) for n in PARAMS["windows"]}
     board = {f"w{n}": attach_deltas(alignment(rows, today, n, smap), ser[f"w{n}"]) for n in PARAMS["windows"]}
     for n in PARAMS["windows"]:
@@ -178,6 +194,8 @@ def main(argv=None) -> int:
         "attention": attention(scan, smap),
         "briefs": [{k: v for k, v in b.items() if k != "md" or b is briefs[0]} for b in briefs],   # 본문은 최신 브리프만 싣는다 (홈 첫 화면용)
         "raw": scan["days"],
+        "market": market,
+        "market_meta": market_meta,
         "warnings": warnings,
     }
 

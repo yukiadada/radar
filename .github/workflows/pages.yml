@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: 최근 14일 raw 폴더 목록
+      - name: 최근 14일 raw 폴더 목록 (prices 는 아래 sparse-checkout 에 같이)
         run: |
           { echo "RAW_DIRS<<EOF"; for i in $(seq 0 13); do date -d "-$i day" +raw/%F; done; echo "EOF"; } >> "$GITHUB_ENV"
       - name: radar-raw 체크아웃 (수집 현황용, 실패해도 계속)
@@ -38,10 +38,13 @@ jobs:
           path: radar-raw
           fetch-depth: 1
           filter: blob:none
-          sparse-checkout: ${{ env.RAW_DIRS }}
+          sparse-checkout: |
+            ${{ env.RAW_DIRS }}
+            prices
       - name: raw 연결
         run: |
           if [ -d radar-raw/raw ]; then rm -rf raw && ln -s "$GITHUB_WORKSPACE/radar-raw/raw" raw && echo "raw 연결됨: $(ls raw | wc -l) 일치"; else echo "radar-raw 없음, 수집 현황 없이 빌드"; fi
+          if [ -f radar-raw/prices/prices.json ]; then rm -rf prices && ln -s "$GITHUB_WORKSPACE/radar-raw/prices" prices && echo "prices 연결됨"; else echo "prices 없음, 시장 반응 없이 빌드"; fi
       - name: Build site/out (ubuntu-latest 의 python3. build.py 는 표준 라이브러리만)
         run: python3 --version && python3 site/build.py
       - uses: actions/configure-pages@v5

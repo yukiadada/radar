@@ -5,6 +5,7 @@ name: Fetch raw feeds
 # 워크플로는 멱등이라 두 번째 실행은 새 항목이 있을 때만 커밋한다. 그래도 없으면 06:20 KST 클라우드 루틴이 workflow_dispatch 로 직접 실행한다.
 # 공개 저장소(여기)에는 raw 를 남기지 않는다. radar-raw 의 오늘 폴더를 먼저 받아 그 위에서 fetch.py 를 실행하므로
 # 같은 날 다시 돌려도 실패한 소스는 이전 정상 파일이 유지된다.
+# 수집 뒤 fetch/market.py --update 로 sector_map 티커의 종가(Cboe 지연 시세)를 radar-raw 의 prices/prices.json 에 갱신한다 (시장 반응 계산용).
 on:
   schedule:
     - cron: "30 19 * * *"
@@ -36,7 +37,9 @@ jobs:
           path: radar-raw
           fetch-depth: 1
           filter: blob:none
-          sparse-checkout: raw/${{ env.DATE }}
+          sparse-checkout: |
+            raw/${{ env.DATE }}
+            prices
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -57,12 +60,18 @@ jobs:
           echo "저장된 파일 $n 개 (소스 $expected 개), fetch.py exit $rc"
           if [ "$n" -lt "$expected" ]; then echo "::warning::소스 $expected 개 중 $n 개만 저장됨. 없는 소스는 루틴 요약에 나온다"; fi
           if [ "$rc" -ge 2 ] || [ "$n" -eq 0 ]; then echo "::error::수집 실패 (exit $rc, 파일 $n 개). 인자·환경·sources.yaml 오류이거나 전 소스 실패"; exit 1; fi
+      - name: 종가 갱신 (radar-raw/prices/prices.json, 실패해도 수집은 커밋)
+        run: |
+          mkdir -p radar-raw/prices
+          rm -rf prices && ln -s "$GITHUB_WORKSPACE/radar-raw/prices" prices
+          python3 fetch/market.py --update 2>&1 | tee market.log || echo "::warning::종가 갱신 실패 (exit ${PIPESTATUS[0]}). 시장 반응은 이전 자료로 계산된다"
+          grep -E '^\[fail\]' market.log | while IFS= read -r line; do echo "::warning::$line"; done || true
       - name: radar-raw 커밋·push
         working-directory: radar-raw
         run: |
           git config user.name "radar fetch"
           git config user.email "radar-fetch@users.noreply.github.com"
-          git add "raw/$DATE"
+          git add "raw/$DATE" prices
           if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
           git commit -q -m "raw $DATE: 자동 수집 (actions)"
           git pull -q --rebase origin main || { git rebase --abort 2>/dev/null || true; echo "::error::radar-raw rebase 실패. 이 날 raw 를 push 하지 못함"; exit 1; }

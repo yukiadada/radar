@@ -211,7 +211,8 @@ def _title_key(t: str) -> str:
 
 def raw_scan(today: datetime.date, days: int = 14, raw_dir: Path = ROOT / "raw", current: set[str] | None = None) -> dict:
     """raw/<날짜>/*.json 을 한 번만 읽어 날짜별 소스 현황과 제목을 돌려준다.
-    {"dates": [오래된 순], "present": [자료 있는 날짜], "days": {날짜: {소스: {count, error, current}}}, "titles": {날짜: [제목...]}}.
+    {"dates": [오래된 순], "present": [자료 있는 날짜], "days": {날짜: {소스: {count, error, current, backfill}}}, "titles": {날짜: [제목...]}}.
+    backfill 은 fetch/backfill.py 가 소급 수집한 파일 (그날 수집분보다 성기다).
     current 를 주면 그 목록에 없는 소스(옛 sources.yaml 의 소스, 예: gnews_co_*)는 current=false 로 표시하고 제목 집계에서 뺀다."""
     dates = [(today - datetime.timedelta(days=i)).isoformat() for i in range(days - 1, -1, -1)]
     out = {"dates": dates, "present": [], "days": {}, "titles": {}}
@@ -233,7 +234,7 @@ def raw_scan(today: datetime.date, days: int = 14, raw_dir: Path = ROOT / "raw",
             name = j.get("source", f.stem)
             cur = current is None or name in current
             items = j.get("items", [])
-            srcs[name] = {"count": j.get("count", len(items)), "error": j.get("error"), "current": cur}
+            srcs[name] = {"count": j.get("count", len(items)), "error": j.get("error"), "current": cur, "backfill": bool(j.get("backfill"))}
             if not cur:
                 continue
             for it in items:

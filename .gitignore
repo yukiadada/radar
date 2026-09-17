@@ -9,3 +9,6 @@ raw
 raw/
 logs
 logs/
+
+# 가격 자료 (radar-raw/prices 심볼릭 링크)
+prices

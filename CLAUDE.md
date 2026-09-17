@@ -29,8 +29,10 @@ CLAUDE.md                  이 파일. 프레임워크와 규칙
 framework/axes.md          3축 정의, 축별 질문·밀어줌/막음 신호·구조적 판정, 정렬 % 계산식 (Ken 이 큐레이션)
 framework/sector_map.yaml  방향(내러티브) → 섹터 → 티커·keywords (Ken 이 큐레이션)
 framework/sources.yaml     수집 소스 (RSS·Google News 검색어) 와 축 힌트 (Ken 이 큐레이션)
-fetch/                     fetch.py 수집, ledger.py 장부 검증·추가(장부에 쓰는 유일한 수단), scoring.py 정렬 %·추이·관심, config.py yaml 파서, gn_decode.py
-raw/YYYY-MM-DD/            당일 수집 원문. 비공개 저장소 radar-raw 에만 커밋 (여기서는 git 미추적)
+fetch/                     fetch.py 수집, ledger.py 장부 검증·추가(장부에 쓰는 유일한 수단), scoring.py 정렬 %·추이·관심, config.py yaml 파서, gn_decode.py,
+                           market.py 종가 갱신·시장 반응 계산(--update / --report), backfill.py 과거 raw 소급 수집
+raw/YYYY-MM-DD/            당일 수집 원문. 비공개 저장소 radar-raw 에만 커밋 (여기서는 ../radar-raw/raw 심볼릭 링크, git 미추적). 2026-06-19~09-16 은 backfill.py 소급분(backfill:true, 그날 수집보다 성김)
+prices/prices.json         sector_map 티커 + SPY 일별 종가 (Cboe 지연 시세). radar-raw 의 prices/ 심볼릭 링크. fetch.yml 이 매일 갱신·커밋
 briefs/YYYY-MM-DD.md       일간 브리프 (축별 기사 + 쉬운 말로 + 섹터 정렬 표)
 ledger/signals.jsonl       구조적 시그널 누적 장부 (append only)
 .claude/commands/          /brief, /trend, /review
@@ -40,7 +42,7 @@ backlog/                   2026-09-17 이전의 4축(정치·기술·자본·코
 logs/                      세션 로그 (/save 가 만듦, git 미추적)
 ```
 
-매일 흐름 (시각은 여기에만 적는다): 04:30 KST GitHub Actions(fetch.yml) 예약 수집(05:15 KST 에 한 번 더. 워크플로는 멱등) → 비공개 radar-raw 커밋 → 06:20 KST 클라우드 루틴(claude.ai/code/routines)이 radar 와 radar-raw 를 함께 받아 /brief 실행·push → Pages 갱신(07:00 KST 에 한 번 더 빌드). GitHub 예약은 1~2시간 늦을 수 있어 루틴은 raw 가 없으면 fetch.yml 을 직접 실행하고 기다린다. 사이트 https://yukiadada.github.io/radar/. 로컬에서 작업하기 전에 `git pull` 부터 한다. 로컬에서 /brief 를 돌리려면 `python3 fetch/fetch.py` 로 raw/ 를 만들면 된다(미추적, feedparser 필요).
+매일 흐름 (시각은 여기에만 적는다): 04:30 KST GitHub Actions(fetch.yml) 예약 수집 + 종가 갱신(market.py --update)(05:15 KST 에 한 번 더. 워크플로는 멱등) → 비공개 radar-raw 커밋 → 06:20 KST 클라우드 루틴(claude.ai/code/routines)이 radar 와 radar-raw 를 함께 받아 /brief 실행·push → Pages 갱신(07:00 KST 에 한 번 더 빌드). GitHub 예약은 1~2시간 늦을 수 있어 루틴은 raw 가 없으면 fetch.yml 을 직접 실행하고 기다린다. 사이트 https://yukiadada.github.io/radar/. 로컬에서 작업하기 전에 `git pull` 부터 한다. 로컬에서 /brief 를 돌리려면 `python3 fetch/fetch.py` 로 raw/ 를 만들면 된다(미추적, feedparser 필요).
 
 ## 워크플로
 
@@ -48,7 +50,7 @@ logs/                      세션 로그 (/save 가 만듦, git 미추적)
 1. `raw/오늘/` 전체를 읽는다. 없으면 `fetch/` 스크립트 실행을 먼저 제안한다.
 2. 3축으로 분류 → 축별 후보 시그널 추출. 축은 사건의 주체로 정한다: 정부가 한 일이면 정책, 통계·수용·채택이면 사회, 기술·공급·capex·계약이면 기술.
 3. 각 후보에 structural 판정과 섹터·티커·방향(섹터 기준 +/−/±)을 정한다. 기준은 `framework/axes.md`. 함께 horizon(분기/1년/다년)·impact(1~3)·channel(실적/멀티플/수급)을 정한다.
-4. structural=true 시그널을 `fetch/ledger.py` 로 검증하고(append 없이) 30일 누적과 섹터 정렬 표를 받는다.
+4. structural=true 시그널을 `fetch/ledger.py` 로 검증하고(append 없이) 30일 누적과 섹터 정렬 표를 받는다. `fetch/market.py --report` 로 최근 30일 시그널의 시장 반응 표를 받는다.
 5. `briefs/오늘.md` 작성 (아래 템플릿). 섹터 정렬 표는 4의 출력을 그대로 붙인다.
 6. 같은 rows 로 `fetch/ledger.py --append`.
 7. `python3 site/build.py` 로 빌드가 되는지 확인한다 (경고가 있으면 채팅 요약에 적는다). 빌드 실패는 사이트가 조용히 멈추는 원인이라 push 전에 잡는다.
@@ -94,6 +96,7 @@ logs/                      세션 로그 (/save 가 만듦, git 미추적)
 - `channel`: 실적 | 멀티플 | 수급.
 - `reverses`: 이전 시그널을 뒤집는 행이면 그 줄 번호, 아니면 null. 뒤집는 행은 이전 줄과 반대 방향이어야 한다 (ledger.py 가 검사).
 - 정렬 % 계산: 가중치 w = impact × horizon(분기 1, 1년 2, 다년 3). 축 점수 = clamp(Σ 방향×w ÷ 6, −1, +1). 정렬 % = 50 + 50 × 세 축 평균 (axes.md "3축 정렬"). 상태는 3축 정렬 / 2축 정렬 / 1축 / 엇갈림 / 양쪽 / 역풍 / 신호 없음. `fetch/scoring.py` 가 유일한 구현이다.
+- 시장 반응: 시그널마다 사건 전날(장부 날짜 이틀 전) 종가 대비 시그널 티커 평균의 1·5·20·60거래일 수익률과 같은 기간 SPY 를 `fetch/market.py` 가 계산한다 (Cboe 지연 시세, prices/prices.json). 판정(방향대로/반대로/보합/아직)은 완료된 가장 긴 구간의 SPY 대비 초과수익 부호를 방향과 비교한 것이고 ± 시그널은 판정하지 않는다. 사이트 카드·장부·섹터 상세와 브리프 "시장 반응" 절에 보인다. 과거 반응은 판단 재료이지 매매 신호가 아니다 (규칙 6).
 - 사이트 빌드(site/build.py)는 자료 문제(깨진 장부 줄, sector_map 오류, 맵에 없는 섹터, 브리프 형식)로 멈추지 않고 data.json 의 warnings 에 적어 사이트 상단 배너로 보여준다. 배너가 보이면 그 자료를 고친다.
 - 장부 1~11번 줄은 backlog 의 4축 장부 11건을 2026-09-17 에 3축으로 다시 분류해 `fetch/ledger.py --append` 로 날짜별로 옮긴 것이다 (note 끝 "(이관: 구 장부 n번 줄)"). 이관 시 부여한 기간·크기·경로는 이관 판단이다. 이 11줄은 팩트 첫 문장 40자 규칙과 note 접미어 규칙(확인 등급 접미어가 맨 끝) 이전에 쓰인 것이라 그 규칙에 어긋나지만 append only 라 그대로 둔다. 12번 줄부터는 ledger.py 가 두 규칙을 검사한다.
 
@@ -132,6 +135,9 @@ logs/                      세션 로그 (/save 가 만듦, git 미추적)
 - 사회: n건 (+x / -y / ±z)
 - 정책: n건 (+x / -y / ±z)
 
+## 시장 반응 (최근 30일 시그널)
+(market.py --report 출력 그대로)
+
 ## 맵 수정 제안 (있을 때만)
 ```
 
@@ -149,22 +155,23 @@ logs/                      세션 로그 (/save 가 만듦, git 미추적)
 
 ## 현재 상태
 
-> /save 자동 업데이트 — 2026-09-17 16:47
+> /save 자동 업데이트 — 2026-09-17 18:41
 
 **브랜치:** main
-**마지막 커밋:** 95db048 docs: session log 2026-09-17 (3) — 세션 종료 (로그는 로컬 보관)
+**마지막 커밋:** a6446c5 docs: session log 2026-09-17 (4) — 1차 출처 피드 10개 추가, 소스별 UA, brief 확인 등급 (로그는 로컬 보관)
 
 **미완료 항목:**
-- 9/18 04:30 KST 수집부터 새 소스 10개(정책 wh_actions·sec_press·ftc_press·doj_antitrust·ustr_press·doe_news·court_opinions, 사회 bea_releases·census_indicators·pew_research)가 돈다. ftc_press(ua: browser)가 GitHub Actions IP 에서도 열리는지 fetch 로그로 확인. 막히면 error 파일이 남고 사이트 raw 표에 표시
-- 9/18 06:20 KST 루틴이 새 /brief(빌드 확인 단계, 1차 출처 피드 항목은 검색 교차 없이 0.6 본문 확인 등급)를 정상 실행하는지 확인. 루틴 프롬프트가 옛 파일(companies 등)을 언급하면 수정. 루틴 로그 claude.ai/code/routines
-- 9/18 raw 의 fetch 로그([ok] fetched vs older)로 OR 검색어 괄호 + when:2d 가 먹는지 확인. gnews 소스 7개와 새 피드 10개의 품질을 첫 주에 보고 sources.yaml 조정. court_opinions 의 키워드·법원 목록, pew_research 의 소음(하루 10~30건)이 조정 후보
-- 못 쓰는 소스는 sources.yaml 머리말에 기록(BLS·NY Fed·Commerce·FCC 403, NRC 503, Gallup sitemap 뿐, Treasury·BIS 피드 없음, Census 보도자료 link 없음). 다시 찾지 않는다
-- 사회 축은 구조적 시그널이 드물다(공식 통계·정기 조사·공시만). BEA·Census·Pew 피드를 넣었으니 첫 달 장부에서 사회 축 건수를 보고 기준 조정
-- 사이트 상단에 빌드 경고 배너가 보이면 그 자료(장부 줄·sector_map·브리프 형식)를 고친다. 빌드는 멈추지 않는다
+- 9/18 04:30 KST fetch.yml: 새 소스 10개 수집 + 종가 갱신 단계(market.py --update, Cboe 가 Actions IP 에서 열리는지) + radar-raw prices 커밋을 로그로 확인. ftc_press(ua: browser)가 Actions 에서 열리는지도. 막히면 error 파일이 남고 사이트 raw 표에 표시
+- 9/18 06:20 KST 루틴: 새 /brief(빌드 확인, 1차 출처 피드 항목은 검색 교차 없이 0.6, "## 시장 반응" 절)가 정상 실행되는지 확인. 루틴 프롬프트가 옛 파일(companies 등)을 언급하면 수정. 루틴 로그 claude.ai/code/routines
+- pages.yml 이 radar-raw 의 prices 를 받아 시장 반응이 매일 갱신되는지 확인 (data.json market_meta.asof)
+- 장부 12~91번 줄(80건, 2026-06-25~09-16)은 2026-09-17 에 에이전트가 소급 작성한 행(1차 출처 본문 확인, ledger.py 검증). Ken 이 훑어보고 어긋난 행은 반대 방향 행(reverses)으로 처리, 기존 줄은 고치지 않는다
+- 시장 반응 판정 "반대로" 30건은 첫 /review(10월 초)에서 근거가 틀렸는지·이미 반영됐는지·다른 힘이 컸는지 본다. 표본이 쌓이면 축·섹터별 비율
+- 9/18 raw 의 fetch 로그로 OR 검색어 괄호 + when:2d 확인. gnews 7개·새 피드 10개 품질 첫 주 점검 후 sources.yaml 조정. court_opinions 키워드·법원 목록, pew_research 소음(하루 10~30건)이 조정 후보
+- raw/2026-06-19~09-16 은 backfill.py 소급분(backfill:true, gnews 2일 청크 100건 캡이라 성김). 관심의 지난주 비교는 실제 수집분이 쌓이는 9/23 께부터. 키워드는 sector_map.yaml 의 keywords 에서 Ken 이 조정
+- 못 쓰는 소스는 sources.yaml 머리말에 기록(BLS·NY Fed·Commerce·FCC 403, NRC 503, Gallup sitemap 뿐, Treasury·BIS 피드 없음, Census 보도자료 link 없음). 가격은 Stooq(JS 차단)·Yahoo(429) 대신 Cboe. FRED 는 이 환경에서 연결 실패
+- 사이트 상단에 빌드 경고 배너가 보이면 그 자료(장부 줄·sector_map·브리프 형식·가격 자료 5일 이상 오래됨)를 고친다. 빌드는 멈추지 않는다
 - 장부 1~11번 줄은 옛 장부의 3축 재분류(이관 판단). 첫 문장 40자·note 접미어 규칙의 예외. 12번 줄부터 ledger.py 가 검사
 - 기업 관찰(SpaceX·BITO·Microsoft)은 새 스펙에 없어 뺐다. 필요하면 backlog 에서 복원
-- 관심의 지난주 비교는 raw 14일이 쌓이는 9/23 께부터. 키워드는 sector_map.yaml 의 keywords 에서 Ken 이 조정
-- 첫 /review 는 10월 초 (확인 대기 점검 + 맵·소스 제안)
 - Ken: claude.ai/code Default 환경 네트워크 접근 확대 (WebFetch EGRESS_BLOCKED 해제 시 1차 출처 본문 확인 가능 → confidence 0.8)
-- 로컬 작업 전 `git pull` (../radar-raw 도). 로컬 raw 는 ../radar-raw/raw 심볼릭 링크(이 머신에는 없음). 장부는 `fetch/ledger.py --append` 로만
-- 저장소: https://github.com/yukiadada/radar (public), https://github.com/yukiadada/radar-raw (private, raw). 사이트 https://yukiadada.github.io/radar/
+- 로컬 작업 전 `git pull` (../radar-raw 도). 로컬 raw·prices 는 ../radar-raw/raw, ../radar-raw/prices 심볼릭 링크. 장부는 `fetch/ledger.py --append` 로만
+- 저장소: https://github.com/yukiadada/radar (public), https://github.com/yukiadada/radar-raw (private, raw·prices). 사이트 https://yukiadada.github.io/radar/
