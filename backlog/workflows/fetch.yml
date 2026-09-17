@@ -1,7 +1,7 @@
 name: Fetch raw feeds
 
-# 매일 04:30 KST(19:30 UTC)와 05:15 KST(20:15 UTC) 예약으로 소스 전부(framework/sources.yaml, fetch.py --list)를 수집해
-# 비공개 저장소 radar-raw 의 raw/<KST 날짜>/ 에 커밋한다. 두 번 도는 이유: GitHub 예약 실행은 1~2시간 늦거나 빠질 수 있다.
+# 매일 04:30 KST(19:30 UTC)와 05:15 KST(20:15 UTC) 예약으로 소스 전부(fetch.py --list)를 수집해 비공개 저장소 radar-raw 의
+# raw/<KST 날짜>/ 에 커밋한다. 두 번 도는 이유: GitHub 예약 실행은 1~2시간 늦거나 빠질 수 있다(9/12 첫 실행이 2시간 11분 지연).
 # 워크플로는 멱등이라 두 번째 실행은 새 항목이 있을 때만 커밋한다. 그래도 없으면 06:20 KST 클라우드 루틴이 workflow_dispatch 로 직접 실행한다.
 # 공개 저장소(여기)에는 raw 를 남기지 않는다. radar-raw 의 오늘 폴더를 먼저 받아 그 위에서 fetch.py 를 실행하므로
 # 같은 날 다시 돌려도 실패한 소스는 이전 정상 파일이 유지된다.
@@ -56,7 +56,7 @@ jobs:
           expected=$(python3 fetch/fetch.py --list | wc -l | tr -d ' ')
           echo "저장된 파일 $n 개 (소스 $expected 개), fetch.py exit $rc"
           if [ "$n" -lt "$expected" ]; then echo "::warning::소스 $expected 개 중 $n 개만 저장됨. 없는 소스는 루틴 요약에 나온다"; fi
-          if [ "$rc" -ge 2 ] || [ "$n" -eq 0 ]; then echo "::error::수집 실패 (exit $rc, 파일 $n 개). 인자·환경·sources.yaml 오류이거나 전 소스 실패"; exit 1; fi
+          if [ "$rc" -ge 2 ] || [ "$n" -eq 0 ]; then echo "::error::수집 실패 (exit $rc, 파일 $n 개). 인자·환경 오류이거나 전 소스 실패"; exit 1; fi
       - name: radar-raw 커밋·push
         working-directory: radar-raw
         run: |

@@ -1,0 +1,70 @@
+# 수집 소스. fetch/fetch.py 가 이 파일대로 raw/<날짜>/<이름>.json 을 만든다. Ken 이 큐레이션.
+# 이름은 소문자·숫자·밑줄. type 은 rss(url 그대로) 또는 gnews(Google News 검색어 query).
+# axis 는 어느 축의 입력인지 힌트일 뿐이다. 분류는 /brief 가 기사 내용으로 한다.
+# gnews 는 관련도순 상위 100건만 주고 fetch.py 가 when:Nd 를 붙여 최근 것만 받는다. OR 와 따옴표 구문을 쓸 수 있다.
+# 값 안에 ' #' 을 쓰면 주석으로 잘린다. 이름을 바꾸면 그날부터 raw 파일 이름이 바뀐다 (사이트의 관심 집계는 제목만 보므로 영향 없음).
+
+# 정책 — 문서가 나오는 곳
+federal_register:
+  type: rss
+  url: https://www.federalregister.gov/api/v1/documents.rss
+  axis: 정책
+  note: 연방관보. 행정명령·최종 규칙·관세 포고. 최근 발행순 200건 캡
+fed_press:
+  type: rss
+  url: https://www.federalreserve.gov/feeds/press_all.xml
+  axis: 정책
+  note: 연준 보도자료. FOMC 성명·규제 규칙
+gnews_tariff:
+  type: gnews
+  query: tariff
+  axis: 정책
+gnews_fed_rate:
+  type: gnews
+  query: Fed rate
+  axis: 정책
+gnews_big_tech_antitrust:
+  type: gnews
+  query: Big Tech antitrust
+  axis: 정책
+gnews_policy:
+  type: gnews
+  query: "executive order" OR "export controls" OR "subsidy" OR "CHIPS Act" OR "crypto regulation"
+  axis: 정책
+  note: 관세·금리·반독점 밖의 산업정책·수출통제·코인 규제
+
+# 기술 — 무엇이 가능해졌는가
+gnews_ai_infra:
+  type: gnews
+  query: "AI infrastructure" OR "data center" OR "hyperscaler"
+  axis: 기술
+gnews_semiconductor:
+  type: gnews
+  query: semiconductor OR Nvidia OR TSMC OR "chip export"
+  axis: 기술
+gnews_frontier:
+  type: gnews
+  query: humanoid OR robotics OR "autonomous vehicle" OR SpaceX OR Starlink OR "quantum computing"
+  axis: 기술
+  note: 피지컬 AI·우주·양자. 데모·로드맵은 대부분 미확정
+
+# 사회 — 사람들이 받아들이는가
+gnews_consumer:
+  type: gnews
+  query: "consumer spending" OR "retail sales" OR "consumer sentiment"
+  axis: 사회
+gnews_adoption:
+  type: gnews
+  query: "AI adoption" OR "weekly active users" OR "monthly active users" OR "adoption rate"
+  axis: 사회
+  note: 이용자·침투율 숫자. 공시·공식 통계로 확인된 것만 구조적
+gnews_society:
+  type: gnews
+  query: "Pew Research" OR Gallup OR "Census Bureau" OR "aging population" OR "GLP-1"
+  axis: 사회
+  note: 정기 여론조사·인구 통계·건강 트렌드
+gnews_bitcoin_etf:
+  type: gnews
+  query: bitcoin ETF
+  axis: 사회
+  note: 코인 ETF 자금흐름·상품 출시. 기관 수용은 사회, SEC 승인은 정책

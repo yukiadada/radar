@@ -1,158 +1,140 @@
-# market-brief
+# radar
 
 ## 목적
 
-시장을 큰 그림으로 본다.
-코인 / 기술권력(빅테크) / 정치권력(트럼프 행정부·의회) / 자본권력(월스트리트) 네 축 중
-**어느 쪽이 점점 커지고 있는가**를 매일 관찰하고 장부에 누적해서,
-3~4년 이상의 큰 흐름 안에서 어떤 시장이 상방이 크고 손익비가 좋은지 판단할 재료를 만든다.
+"현재 세상은 이 방향으로 흐르고 있고, 그에 해당하는 섹터는 어디인가?"
+
+세상의 방향(내러티브)은 **기술 · 사회적 트렌드 · 정책** 세 축으로 읽는다. 매일 뉴스를 세 축으로 분류해 장부에 누적하고,
+장부(과거 데이터)를 근거로 섹터마다 **세 축이 얼마나 같은 쪽을 가리키는지를 %로** 내고, 그 추이를 라인 그래프로 본다.
+기술이 혁신적이고, 사회가 그 기술을 원하며, 정부까지 밀어주는 분야 — 세 축이 하나로 정렬되는 순간 그 분야에 돈이 몰리는 것은 거의 필연에 가깝다.
 
 이 레포의 산출물은 **판단 재료**이지 매매 신호가 아니다.
 
 ## 절대 규칙
 
-1. 모든 뉴스는 `framework/axes.md`의 4축 중 하나로 분류한다. 어느 축에도 안 걸리면 버린다.
+1. 모든 뉴스는 `framework/axes.md`의 3축(기술 / 사회 / 정책) 중 하나로 분류한다. 어느 축에도 안 걸리면 버린다.
 2. 팩트 / 해석 / 영향 섹터를 항상 분리해서 쓴다. 섞지 않는다.
-3. 모든 시그널에 `structural: true|false` 태그를 단다. **4축 장부(`ledger/signals.jsonl`)에는 structural=true만 올린다.** 기업 관찰 장부(`ledger/companies.jsonl`)는 예외로 false 도 태그를 달아 올리되, 집계는 true 를 따로 센다.
-4. 영향 티커는 `framework/sector_map.yaml`에 있는 것만 인용한다. 목록에 없는 티커가 필요하면 브리프 하단 "맵 수정 제안"에만 적고 장부에는 넣지 않는다.
+3. 모든 시그널에 `structural: true|false` 태그를 단다. **장부(`ledger/signals.jsonl`)에는 structural=true 만 올린다.**
+4. 섹터 이름과 티커는 `framework/sector_map.yaml`에 있는 것만 쓴다. 없는 티커가 필요하면 브리프 하단 "맵 수정 제안"에만 적는다.
 5. 출처 URL이 없는 팩트는 쓰지 않는다. 기억이나 추정으로 팩트를 만들지 않는다.
 6. "사라", "팔아라", "지금이 기회" 류 표현 금지. 영향은 항상 "가설"로 서술한다.
-7. 브리프는 짧게. 시그널 3~5개. 구조적 시그널이 없는 날은 "오늘 구조적 시그널 없음"이 정답이다. 억지로 채우지 않는다.
+7. 브리프는 짧게. 시그널은 하루 최대 6개(축당 2개 안팎). 구조적 시그널이 없는 날은 "오늘 구조적 시그널 없음"이 정답이다. 억지로 채우지 않는다.
 8. 미국 시장(미장) 영향 기준으로 판단한다. 한국 시장 영향은 부수적으로만 언급한다.
+9. 장부는 append only. 쓰는 유일한 수단은 `fetch/ledger.py --append`. 기존 줄은 어떤 이유로도 고치지 않는다.
 
 ## 파일 구조
 
 ```
 CLAUDE.md                  이 파일. 프레임워크와 규칙
-framework/axes.md          4축 정의, "커진다/작아진다" 판단 기준
-framework/sector_map.yaml  축 → 테마 → ETF/티커 매핑과 테마별 헤드라인 keywords (Ken이 큐레이션)
-framework/thesis.md        3~5년 논지 T1… 와 확인·반증 신호 (Ken이 큐레이션. /review 가 상태 변경 제안)
-framework/backdrop.md      월 1회 배경 지표 (실질금리·신용·EPS·P/E). /review 가 출처와 함께 채움
-framework/companies.yaml   기업 관찰 대상(현재 SpaceX·BITO·Microsoft)의 검색어·티커 (Ken이 큐레이션)
-fetch/                     fetch.py 수집, ledger.py 장부 검증·추가(장부에 쓰는 유일한 수단), config.py framework/*.yaml 파서, scoring.py 섹터 보드·관심 테마 계산, gn_decode.py
+framework/axes.md          3축 정의, 축별 질문·밀어줌/막음 신호·구조적 판정, 정렬 % 계산식 (Ken 이 큐레이션)
+framework/sector_map.yaml  방향(내러티브) → 섹터 → 티커·keywords (Ken 이 큐레이션)
+framework/sources.yaml     수집 소스 (RSS·Google News 검색어) 와 축 힌트 (Ken 이 큐레이션)
+fetch/                     fetch.py 수집, ledger.py 장부 검증·추가(장부에 쓰는 유일한 수단), scoring.py 정렬 %·추이·관심, config.py yaml 파서, gn_decode.py
 raw/YYYY-MM-DD/            당일 수집 원문. 비공개 저장소 radar-raw 에만 커밋 (여기서는 git 미추적)
-briefs/YYYY-MM-DD.md       일간 브리프
-ledger/signals.jsonl       구조적 시그널 누적 장부 (append only, 수정 금지)
-ledger/companies.jsonl     기업 관찰 장부. 기업 뉴스가 4축에 미치는 영향 (append only, structural 태그로 true/false 둘 다)
+briefs/YYYY-MM-DD.md       일간 브리프 (축별 기사 + 쉬운 말로 + 섹터 정렬 표)
+ledger/signals.jsonl       구조적 시그널 누적 장부 (append only)
 .claude/commands/          /brief, /trend, /review
-logs/                      세션 로그 (/save 가 만듦, git 미추적)
-site/                      웹페이지. build.py 가 briefs·ledger·framework 를 site/out/ 로 빌드, index.html 이 렌더
+site/                      웹페이지. build.py 가 briefs·ledger·framework·raw 를 site/out/ 로 빌드, index.html 이 렌더
 .github/workflows/         fetch.yml 수집, pages.yml 사이트 빌드·배포
+backlog/                   2026-09-17 이전의 4축(정치·기술·자본·코인) 체계 보관본. 실행되지 않는다. backlog/README.md 참고
+logs/                      세션 로그 (/save 가 만듦, git 미추적)
 ```
 
-매일 흐름 (시각은 여기에만 적는다): 04:30 KST GitHub Actions(fetch.yml) 예약 수집(05:15 KST 에 한 번 더. 워크플로는 멱등) → 비공개 radar-raw 커밋 → 06:20 KST 클라우드 루틴(claude.ai/code/routines)이 radar 와 radar-raw 를 함께 받아 /brief 실행·push → Pages 갱신(07:00 KST 에 한 번 더 빌드). GitHub 예약은 1~2시간 늦을 수 있어 루틴은 raw 가 없으면 fetch.yml 을 직접 실행하고 기다린다. 사이트 https://yukiadada.github.io/radar/. 로컬에서 작업하기 전에 `git pull` 부터 한다. 로컬에서 /brief 를 돌리려면 `python3 fetch/fetch.py` 로 raw/ 를 만들면 된다(미추적).
+매일 흐름 (시각은 여기에만 적는다): 04:30 KST GitHub Actions(fetch.yml) 예약 수집(05:15 KST 에 한 번 더. 워크플로는 멱등) → 비공개 radar-raw 커밋 → 06:20 KST 클라우드 루틴(claude.ai/code/routines)이 radar 와 radar-raw 를 함께 받아 /brief 실행·push → Pages 갱신(07:00 KST 에 한 번 더 빌드). GitHub 예약은 1~2시간 늦을 수 있어 루틴은 raw 가 없으면 fetch.yml 을 직접 실행하고 기다린다. 사이트 https://yukiadada.github.io/radar/. 로컬에서 작업하기 전에 `git pull` 부터 한다. 로컬에서 /brief 를 돌리려면 `python3 fetch/fetch.py` 로 raw/ 를 만들면 된다(미추적, feedparser 필요).
 
 ## 워크플로
 
 ### /brief (매일)
 1. `raw/오늘/` 전체를 읽는다. 없으면 `fetch/` 스크립트 실행을 먼저 제안한다.
-2. 4축으로 분류 → 축별 후보 시그널 추출.
-3. 각 후보에 structural 판정. 기준은 `framework/axes.md` 참고. 함께 horizon(분기/1년/다년)·impact(1~3)·channel(실적/멀티플/수급)을 정한다 (axes.md "공통 규칙").
-4. `briefs/오늘.md` 작성 (아래 템플릿).
-5. structural=true 시그널만 `ledger/signals.jsonl`에 append (`fetch/ledger.py --append` 로만).
-6. "논지 점검" 섹션: 오늘 시그널이 `framework/thesis.md`의 어느 논지를 확인·반증하는지 번호로 한 줄씩. 대부분 "해당 없음"이어야 정상. 논지 자체는 고치지 않는다. (템플릿 순서상 "맵 수정 제안"이 그 뒤에 온다)
-7. 기업 관찰: `framework/companies.yaml`의 기업마다 4축에 영향을 주는 뉴스를 하루 최대 3건 골라 "기업 관찰" 표에 쓰고 `ledger/companies.jsonl`에 append. 방향은 회사 기준, 커짐/작아짐은 축 기준.
+2. 3축으로 분류 → 축별 후보 시그널 추출. 축은 사건의 주체로 정한다: 정부가 한 일이면 정책, 통계·수용·채택이면 사회, 기술·공급·capex·계약이면 기술.
+3. 각 후보에 structural 판정과 섹터·티커·방향(섹터 기준 +/−/±)을 정한다. 기준은 `framework/axes.md`. 함께 horizon(분기/1년/다년)·impact(1~3)·channel(실적/멀티플/수급)을 정한다.
+4. structural=true 시그널을 `fetch/ledger.py` 로 검증하고(append 없이) 30일 누적과 섹터 정렬 표를 받는다.
+5. `briefs/오늘.md` 작성 (아래 템플릿). 섹터 정렬 표는 4의 출력을 그대로 붙인다.
+6. 같은 rows 로 `fetch/ledger.py --append`.
 
 ### /trend (주 1회 또는 요청 시)
-1. `ledger/signals.jsonl`에서 최근 30일 / 90일을 읽는다.
-2. 축별 시그널 수, 방향(+/-) 비율, 자주 등장하는 섹터를 집계한다. 시그널에 언급된 티커는 횟수를 세고 같은 섹터(테마)끼리 묶는다.
-3. impact × horizon(분기 1, 1년 2, 다년 3) 가중 집계를 건수와 나란히 본다. 건수는 관심도이지 크기가 아니다.
-4. "어느 축이 커지고 있는가"를 집계 숫자 근거로 한 문단 서술한다.
-5. 축 간 충돌(예: 정치권력 vs 자본권력)이 반복되면 별도로 표시한다.
-6. 논지별 증거(`thesis` 필드의 확인/반증 건수), 번복 행(`reverses`), 확인 대기(30일 넘은 커짐 시그널)를 표시한다.
-7. 섹터 보드: 4축 시그널과 기업 관찰의 방향을 섹터(테마)·티커별로 합친 점수(방향 × 크기 × 기간. 기업 관찰은 구조적 1, 미확정 0.5)로 "유리 신호가 쌓이는 섹터 / 불리 / 엇갈림 / 신호 없음"을 낸다. 관심 테마는 수집 헤드라인에서 sector_map 의 keywords 가 나온 건수(기업 검색어 소스 제외)다. 둘 다 사이트 "섹터" 탭과 같다. 점수는 근거의 누적이지 수익률 예측이 아니다.
+1. 장부 최근 30일 / 90일: 축별 건수와 방향(+/−/±), 섹터별 정렬 %(기술·사회·정책 축 점수, 상태, 7일·30일 변화), 방향별 %.
+2. "지금 세상은 어느 방향으로 흐르는가"를 집계 숫자 근거로 한 문단 서술한다. 3축 정렬 섹터 / 엇갈림 섹터 / 역풍 섹터를 나눈다.
+3. 관심(수집 헤드라인 keywords 언급량)과 붙여 "관심은 높은데 근거는 없는 곳 / 관심은 낮은데 근거가 쌓이는 곳"을 짚는다.
+4. 번복 행(`reverses`), 확인 대기(30일 넘은 + 시그널), 맵 수정 제안 반복 횟수를 표시한다.
 
 ### /review (월 1회)
-1. `framework/backdrop.md`에 이달 배경 지표를 출처 URL과 함께 한 행 추가한다.
-2. 확인 대기 시그널의 예상 결과가 실제로 나타났는지 확인한다. 뒤집혔으면 반대 방향 행을 /brief 로 올리자고 제안한다 (`reverses`에 이전 줄 번호).
-3. `framework/thesis.md` 상태 변경을 제안한다. Ken 이 승인해야 고친다.
+1. 확인 대기 시그널의 예상 결과가 실제로 나타났는지 확인한다. 뒤집혔으면 반대 방향 행을 /brief 로 올리자고 제안한다 (`reverses`에 이전 줄 번호).
+2. 방향·섹터 맵(sector_map.yaml)과 소스(sources.yaml)의 수정을 제안한다. Ken 이 승인해야 고친다.
 
 ## 시그널 스키마 (ledger/signals.jsonl 한 줄)
 
 ```json
 {
-  "date": "2026-09-08",
-  "axis": "정치권력",
-  "theme": "관세/리쇼어링",
+  "date": "2026-09-18",
+  "axis": "정책",
+  "sector": "AI 반도체",
   "fact": "한 문장. 출처에 있는 내용만.",
   "source": "https://...",
   "structural": true,
-  "sectors": ["XLI", "PWR"],
+  "tickers": ["SMH", "NVDA"],
   "direction": "+",
   "confidence": 0.6,
-  "note": "해석. 왜 구조적인지 한 줄.",
+  "note": "해석. 왜 이 축이 이 섹터를 밀거나 막는지, 왜 구조적인지 한 줄.",
   "horizon": "1년",
   "impact": 2,
   "channel": "실적",
-  "thesis": ["T4+"],
   "reverses": null
 }
 ```
 
-- `axis`: 코인 | 기술권력 | 정치권력 | 자본권력
-- `theme`: sector_map.yaml의 테마 키와 일치
-- `direction`: 해당 섹터에 + / - / ± (양방향·불확실). 섹터 기준이지 축 기준이 아니다.
-- `note`: `커짐.` / `작아짐.` / `유보.` 중 하나로 시작한다 (그 축이 커지는지). 그 뒤에 왜 구조적인지 한 줄. /trend가 이 첫 단어를 집계한다.
-- 축 간 충돌이면 note 맨 앞에 `[충돌: A vs B] `를 붙이고 그 뒤에 커짐/작아짐/유보를 잇는다. A, B는 서로 다른 축, 순서는 정치권력 > 기술권력 > 자본권력 > 코인. 예: `[충돌: 정치권력 vs 자본권력] 유보. 인하 압박 vs 동결, 9/16 FOMC가 판정.`
-- `confidence`: 0.3 낮음 / 0.6 보통 / 0.8 높음. 0.9 이상은 쓰지 않는다. "사실이 맞는가"의 확신이지 중요도가 아니다.
+- `axis`: 기술 | 사회 | 정책
+- `sector`: sector_map.yaml 의 섹터 키와 일치. 같은 사건이 두 섹터에 반대로 작용하면 섹터마다 한 줄.
+- `tickers`: 그 섹터의 티커 1~3개. 다른 섹터의 티커를 쓰면 note 에 이유.
+- `direction`: 그 섹터에 + / - / ± (양방향·불확실). 섹터 기준이지 축 기준이 아니다.
+- `confidence`: 0.3 낮음 / 0.6 보통 / 0.8 높음. 0.9 이상은 쓰지 않는다. "사실이 맞는가"의 확신이지 중요도가 아니다. structural=true 는 0.6 이상.
 - `horizon`: 분기 | 1년 | 다년. axes.md "지속성 사다리"로 정한다.
-- `impact`: 1 단일 기업·좁은 규칙 / 2 산업·테마 / 3 시장 전체 또는 논지 직결.
-- `channel`: 실적 | 멀티플 | 수급. 권력 변화가 시장에 닿는 길 하나.
-- `thesis`: thesis.md 번호 + 방향. `T1+` 확인, `T1-` 반증. 해당 없으면 `[]`.
-- `reverses`: 이전 시그널을 뒤집는 행이면 그 줄 번호, 아니면 null. 장부는 수정하지 않으므로 번복은 새 행으로 남긴다.
-- 장부 1~6번 줄(2026-09-12 스키마 확장 전에 기록)에는 뒤의 다섯 필드가 없다. 집계는 없는 값을 "미표기"로 다루고 가중 1로 센다. 장부는 수정하지 않으므로 그대로 둔다.
-
-## 기업 관찰 스키마 (ledger/companies.jsonl 한 줄)
-
-```json
-{"date": "2026-09-13", "company": "Google", "axis": "정치권력", "fact": "한 문장. 출처에 있는 내용만.", "source": "https://...", "structural": false, "direction": "-", "confidence": 0.3, "note": "커짐. 왜 그런지 한 줄.", "tickers": ["GOOGL"]}
-```
-
-- `company`: companies.yaml 의 키. `axis`: 그 뉴스가 건드리는 축 하나.
-- `direction`: **회사에** + / - / ±. `note` 첫 단어 커짐/작아짐/유보는 **그 축**이 그 뉴스로 커지는지.
-- `tickers`: companies.yaml 의 그 기업 티커만. 비상장이면 `[]`. companies.yaml 의 티커는 sector_map 에도 있어야 한다(규칙 4).
-- 기업당 하루 최대 3건. 중복 키는 (company, source).
+- `impact`: 1 단일 기업·좁은 규칙 / 2 산업·섹터 / 3 시장 전체 또는 방향 자체.
+- `channel`: 실적 | 멀티플 | 수급.
+- `reverses`: 이전 시그널을 뒤집는 행이면 그 줄 번호, 아니면 null.
+- 정렬 % 계산: 가중치 w = impact × horizon(분기 1, 1년 2, 다년 3). 축 점수 = clamp(Σ 방향×w ÷ 6, −1, +1). 정렬 % = 50 + 50 × 세 축 평균 (axes.md "3축 정렬"). `fetch/scoring.py` 가 유일한 구현이다.
+- 장부 1~11번 줄은 backlog 의 4축 장부 11건을 2026-09-17 에 3축으로 다시 분류해 옮긴 것이다 (note 끝 "이관: 구 장부 n번 줄"). 이관 시 부여한 기간·크기·경로는 이관 판단이다.
 
 ## 일간 브리프 템플릿
 
 ```markdown
-# 2026-09-08 브리프
+# 2026-09-18 브리프
 
-## 오늘의 축 시그널
-| 축 | 팩트 (출처) | 구조적 | 영향 섹터·티커 | 방향 | 확신 |
-|---|---|---|---|---|---|
+## 기술
+| 팩트 (출처) | 구조적 | 섹터 · 티커 | 방향 | 확신 |
+|---|---|---|---|---|
 
-- 해석 (축/테마): 행마다 한 줄. 커짐/작아짐과 이유. 팩트 셀에는 해석을 넣지 않는다.
+- 해석: 행마다 한 줄. 왜 이 축이 이 섹터를 밀거나 막는지. (기간 · 크기 · 경로)
+
+## 사회
+해당 없음
+
+## 정책
+(같은 표)
 
 ## 쉬운 말로
 - **시그널 짧은 이름**
   - 무슨 일: 중학생이 읽어도 되게. 전문용어는 괄호로 풀이
-  - 왜 중요: 어느 축이 왜 커지거나 작아지는지
+  - 왜 중요: 어느 축이 어느 섹터를 왜 밀거나 막는지
   - 누가 이득·손해: 섹터·티커를 쉬운 이름과 함께
 
-## 누가 유리하고 불리한가
-| 티커 | 무엇 | 방향 | 확신 | 왜 |
-|---|---|---|---|---|
-
-## 기업 관찰
-| 기업 | 축 | 팩트 (출처) | 구조적 | 회사에 | 확신 | 축은 |
+## 섹터 정렬 (최근 30일)
+| 섹터 | 기술 | 사회 | 정책 | 정렬 | 상태 | 7일 변화 |
 |---|---|---|---|---|---|---|
-
-해당 없음: (뉴스 없는 기업)
+(ledger.py 출력 그대로)
 
 ## 버린 뉴스 (한 줄씩, 왜 버렸는지)
 
 ## 30일 누적
-- 정치권력: n건 (+x / -y / ±z)
-- 기술권력: n건 (+x / -y / ±z)
-- 자본권력: n건 (+x / -y / ±z)
-- 코인: n건 (+x / -y / ±z)
-
-## 논지 점검
-해당 없음 / T번호 확인·반증: 한 줄씩
+- 기술: n건 (+x / -y / ±z)
+- 사회: n건 (+x / -y / ±z)
+- 정책: n건 (+x / -y / ±z)
 
 ## 맵 수정 제안 (있을 때만)
 ```
+
+- 축 절에 시그널이 없으면 표 대신 `해당 없음` 한 줄. 세 축 모두 구조적 시그널이 없으면 "정책" 절 아래에 `오늘 구조적 시그널 없음` 한 줄을 더 쓴다.
+- "쉬운 말로" 항목은 세 축 표의 행을 기술 → 사회 → 정책 순서로 이어 붙인 순서와 같다 (사이트가 그 순서로 카드를 만든다).
 
 ## 작성 스타일
 
@@ -161,22 +143,20 @@ site/                      웹페이지. build.py 가 briefs·ledger·framework 
 - 형용사 줄이고 숫자와 출처로 말한다.
 - 시그널 표의 팩트 셀은 첫 문장을 40자 안팎으로 "누가 무엇을 했다"로 쓴다. 문서 번호·조항·시각·세부 숫자는 두 번째 문장부터. 사이트가 첫 문장을 카드 제목으로 쓴다.
 - 모르면 "확인 안 됨"이라고 쓴다.
-- "쉬운 말로"와 "누가 유리하고 불리한가"는 중학생 기준으로 쓴다. 관세, ETF, 연준, 반독점 같은 용어는 처음 나올 때 괄호로 한 줄 풀이. 환율 환산 같은 추정 숫자는 만들지 않는다.
+- "쉬운 말로"는 중학생 기준으로 쓴다. 관세, ETF, 연준, 반독점 같은 용어는 처음 나올 때 괄호로 한 줄 풀이. 환율 환산 같은 추정 숫자는 만들지 않는다.
 
 ## 현재 상태
 
-> /save 자동 업데이트 — 2026-09-16 00:26
+> 2026-09-17 리뉴얼 직후. /save 가 이 절을 갱신한다.
 
 **브랜치:** main
-**마지막 커밋:** aa5a8d5 섹터 탭: 유리·불리 막대 캡션을 풀어 씀
 
 **미완료 항목:**
-- 9/16 06:20 KST 루틴 확인 (팩트 첫 문장 40자 규칙, "## 기업 관찰" 제목, BITO 관찰). 루틴 로그 claude.ai/code/routines/trig_01564MDnvQH3DtPRvCiqfaDY
-- 관심 테마의 지난주 비교는 raw 14일이 쌓이는 9/23 께부터. 키워드는 sector_map.yaml 의 keywords 에서 Ken 이 조정
-- 기존 Google 관찰 행 7건은 companies.yaml 에 없어 기업 탭에서 제외(섹터 보드에는 GOOGL 로 반영). append only 라 유지
-- 첫 /review 는 10월 초 (9월 backdrop.md 행 + 확인 대기 점검). thesis.md 상태 변경은 Ken 승인 후에만
+- 9/18 06:20 KST 루틴이 새 /brief 를 정상 실행하는지 확인 (루틴 프롬프트가 옛 파일 이름을 참조하면 수정). 루틴 로그 claude.ai/code/routines
+- 새 소스 7개(gnews_policy, gnews_ai_infra, gnews_semiconductor, gnews_frontier, gnews_consumer, gnews_adoption, gnews_society)의 수집 품질을 첫 주에 보고 sources.yaml 조정
+- 사회 축은 구조적 시그널이 드물다(공식 통계·정기 조사·공시만). 첫 달 장부에서 사회 축 건수를 보고 소스·기준을 조정
+- 관심의 지난주 비교는 raw 14일이 쌓이는 9/23 께부터. 키워드는 sector_map.yaml 의 keywords 에서 Ken 이 조정
+- 첫 /review 는 10월 초 (확인 대기 점검 + 맵·소스 제안)
 - Ken: claude.ai/code Default 환경 네트워크 접근 확대 (WebFetch EGRESS_BLOCKED 해제 시 1차 출처 본문 확인 가능)
-- 장부 1~6번 줄에는 새 필드 없음, 9/11 4번째 줄은 구 규칙. append only 라 유지
 - 로컬 작업 전 `git pull` (../radar-raw 도). 로컬 raw 는 ../radar-raw/raw 심볼릭 링크. 장부는 `fetch/ledger.py --append` 로만
-- 루틴 사용량 매일 누적(실행당 opus-5 약 8~13분). 부담되면 sonnet-5 로 변경
 - 저장소: https://github.com/yukiadada/radar (public), https://github.com/yukiadada/radar-raw (private, raw). 사이트 https://yukiadada.github.io/radar/

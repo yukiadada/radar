@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""radar 수집 스크립트. framework/sources.yaml 의 소스를 받아 raw/YYYY-MM-DD/{source}.json 에 저장한다.
+"""market-brief 수집 스크립트.
 
-소스 목록은 framework/sources.yaml 이 정한다 (`--list` 로 이름만 출력).
-  type: rss    피드 URL 그대로 (Federal Register, 연준 보도자료)
-  type: gnews  Google News RSS 검색. 관련도순 상위 100건만 주므로 쿼리에 when:Nd (N = 시간창/24) 를 붙여 최근 것만 받는다
+소스 (4축 소스 6개는 여기 고정, 기업 소스는 framework/companies.yaml 이 정한다. `--list` 로 전체 목록):
+  federal_register          Federal Register documents RSS
+  fed_press                 Federal Reserve Board 보도자료 RSS (press_all)
+  gnews_tariff              Google News RSS 검색 "tariff"
+  gnews_fed_rate            Google News RSS 검색 "Fed rate"
+  gnews_big_tech_antitrust  Google News RSS 검색 "Big Tech antitrust"
+  gnews_bitcoin_etf         Google News RSS 검색 "bitcoin ETF"
+  gnews_co_<기업>           companies.yaml 의 기업마다 하나 (source/query 필드)
 
 출력: raw/YYYY-MM-DD/{source}.json
   {
@@ -15,10 +20,11 @@
 
 시간창:
   --hours N 이내에 발행된 항목만 저장한다. 기본은 48, 월요일(로컬)은 72 (금요일 ET 를 덮기 위해).
-  --hours 0 이면 필터도 when: 도 없이 피드가 주는 전부를 저장한다.
-  Federal Register 피드는 최근 발행일 순 200건 캡이 있다. 200건이 차면 경고한다.
+  Google News 검색은 관련도순 상위 100건만 주므로, 쿼리에 when:Nd (N = 시간창/24) 를 붙여
+  최근 것만 받게 한다. --hours 0 이면 필터도 when: 도 없이 피드가 주는 전부를 저장한다.
+  Federal Register 피드는 최근 발행일 순 200건 캡이 있다 (per_page 무시). 200건이 차면 경고한다.
 
-의존성: 표준 라이브러리 + feedparser (Python 3.10 이상)
+의존성: 표준 라이브러리 + feedparser (feedparser 는 Python 3.10 이상)
   python3 -m pip install --user --break-system-packages feedparser
 
 사용:
@@ -27,10 +33,11 @@
   python3 fetch/fetch.py --date 2026-09-08 --only gnews_tariff,fed_press
   python3 fetch/fetch.py --list                           소스 이름만 한 줄씩 출력 (수집 안 함)
 
-소스는 동시에 받는다 (스레드 풀). 출력 순서는 sources.yaml 순서로 고정한다.
+소스는 동시에 받는다 (스레드 풀). 출력 순서는 소스 목록 순서로 고정한다.
+
 같은 날 다시 실행하면 그 날 파일을 덮어쓴다 (실패한 소스의 기존 파일은 남긴다).
-환경변수 RADAR_UA 로 User-Agent 를 바꿀 수 있다.
-종료 코드: 0 전부 성공 / 1 일부 피드 실패 / 2 인자·환경·sources.yaml 오류
+환경변수 MARKET_BRIEF_UA 로 User-Agent 를 바꿀 수 있다.
+종료 코드: 0 전부 성공 / 1 일부 피드 실패 또는 companies.yaml 항목 오류 / 2 인자·환경 오류
 """
 from __future__ import annotations
 
@@ -52,28 +59,43 @@ from urllib.parse import quote_plus
 
 try:
     import feedparser
-except ImportError:  # --list 는 feedparser 없이도 된다. 실제 수집은 main 에서 막는다
-    feedparser = None
+except ImportError:
+    sys.stderr.write(
+        "feedparser 없음. 설치: python3 -m pip install --user --break-system-packages feedparser\n"
+    )
+    sys.exit(2)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RAW_DIR = REPO_ROOT / "raw"
+
+FR_URL = "https://www.federalregister.gov/api/v1/documents.rss"
+FED_URL = "https://www.federalreserve.gov/feeds/press_all.xml"
 GNEWS_TMPL = "https://news.google.com/rss/search?q={q}&hl=en-US&gl=US&ceid=US:en"
-FR_FEED_CAP = 200
-
+GNEWS_QUERIES = {
+    "gnews_tariff": "tariff",
+    "gnews_fed_rate": "Fed rate",
+    "gnews_big_tech_antitrust": "Big Tech antitrust",
+    "gnews_bitcoin_etf": "bitcoin ETF",
+}
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config import load_sources  # noqa: E402  (framework/sources.yaml 공용 파서)
+from config import load_companies  # noqa: E402  (framework/companies.yaml 공용 파서)
 
+CONFIG_ERRORS: list[str] = []   # companies.yaml 항목 오류. 수집은 계속하고 main 이 [fail] 로 알린다
 try:
-    SOURCES = {s["name"]: s for s in load_sources()}
-except (ValueError, OSError) as _e:
-    sys.stderr.write(f"framework/sources.yaml 읽기 실패: {_e}\n")
-    sys.exit(2)
-SOURCE_NAMES = list(SOURCES)
+    for _c in load_companies():
+        if _c["error"]:
+            CONFIG_ERRORS.append(f"{_c['name']}: {_c['error']}")
+        else:
+            GNEWS_QUERIES[_c["source"]] = _c["query"]
+except ValueError as _e:
+    CONFIG_ERRORS.append(str(_e))
+SOURCE_NAMES = ["federal_register", "fed_press", *GNEWS_QUERIES]
+FR_FEED_CAP = 200
 
 # federalreserve.gov 는 User-Agent 를 가린다 (2026-09-08 확인):
 #   Python 기본 UA -> 403, 브라우저형 UA -> 404, feedparser 형 UA -> 200
 USER_AGENT = os.environ.get(
-    "RADAR_UA", f"feedparser/{getattr(feedparser, '__version__', '6')} +https://github.com/kurtmckee/feedparser/"
+    "MARKET_BRIEF_UA", f"feedparser/{feedparser.__version__} +https://github.com/kurtmckee/feedparser/"
 )
 ACCEPT = "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.5"
 
@@ -84,7 +106,9 @@ def gnews_url(query: str, hours: int) -> str:
 
 
 def build_sources(hours: int) -> dict[str, str]:
-    return {name: (s["url"] if s["type"] == "rss" else gnews_url(s["query"], hours)) for name, s in SOURCES.items()}
+    urls = {"federal_register": FR_URL, "fed_press": FED_URL}
+    urls.update({name: gnews_url(q, hours) for name, q in GNEWS_QUERIES.items()})
+    return urls
 
 
 def default_hours() -> int:
@@ -248,7 +272,7 @@ def write_json(path: Path, payload: dict) -> None:
 
 # ---------------------------------------------------------------- main
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="radar RSS 수집 → raw/YYYY-MM-DD/{source}.json")
+    ap = argparse.ArgumentParser(description="market-brief RSS 수집 → raw/YYYY-MM-DD/{source}.json")
     ap.add_argument("--date", default=datetime.now().strftime("%Y-%m-%d"),
                     help="저장 폴더 날짜 YYYY-MM-DD (기본: 오늘, 로컬 시간 기준)")
     ap.add_argument("--hours", type=int, default=None,
@@ -261,9 +285,6 @@ def main(argv: list[str] | None = None) -> int:
     if args.list:
         print("\n".join(SOURCE_NAMES))
         return 0
-    if feedparser is None:
-        sys.stderr.write("feedparser 없음. 설치: python3 -m pip install --user --break-system-packages feedparser\n")
-        return 2
 
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", args.date):
         ap.error("--date 는 YYYY-MM-DD 형식 (0 을 채운다)")
@@ -292,7 +313,7 @@ def main(argv: list[str] | None = None) -> int:
     def work(name: str):
         data = fetch_bytes(sources[name], args.timeout, args.retries)
         items, warn = parse_items(data)
-        kept, n_old, n_dup = select(items, args.hours, now, dedup_title=SOURCES[name]["type"] == "gnews")
+        kept, n_old, n_dup = select(items, args.hours, now, dedup_title=name.startswith("gnews_"))
         return items, warn, kept, n_old, n_dup
 
     results: dict[str, tuple[str, object]] = {}
@@ -322,7 +343,7 @@ def main(argv: list[str] | None = None) -> int:
                   f"({len(items)} fetched, {n_old} older than {args.hours}h, {n_dup} dup) -> {rel}")
             if warn:
                 print(f"       {name}: {warn}", file=sys.stderr)
-            if "federalregister.gov" in url and len(items) >= FR_FEED_CAP and n_old == 0:
+            if name == "federal_register" and len(items) >= FR_FEED_CAP and n_old == 0:
                 print(f"       {name}: 피드 캡 {FR_FEED_CAP}건이 전부 시간창 안. 당일 문서가 잘렸을 수 있음", file=sys.stderr)
         else:
             e = payload
@@ -335,6 +356,9 @@ def main(argv: list[str] | None = None) -> int:
                     "window_hours": args.hours, "count": 0, "error": str(e), "items": [],
                 })
                 print(f"[fail] {name:<24} {e}  -> {rel} (error 표시 파일)", file=sys.stderr)
+    for err in CONFIG_ERRORS:
+        print(f"[fail] companies.yaml {err}  (이 기업은 수집하지 않음)", file=sys.stderr)
+        failed.append("companies.yaml")
 
     if failed:
         print(f"{len(failed)}/{len(names)} failed: {', '.join(failed)}", file=sys.stderr)
