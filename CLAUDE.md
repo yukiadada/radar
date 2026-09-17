@@ -155,12 +155,13 @@ logs/                      세션 로그 (/save 가 만듦, git 미추적)
 
 ## 현재 상태
 
-> /save 자동 업데이트 — 2026-09-17 18:48
+> /save 자동 업데이트 — 2026-09-17 19:27
 
 **브랜치:** main
-**마지막 커밋:** 2f32e47 지난 90일 소급(raw·장부 80건) + 시그널별 시장 반응 (session log 2026-09-17 (5), 로그는 로컬 보관)
+**마지막 커밋:** 424cdbb 방향 브리프: briefs/direction.md (쉬운 말로 읽는 지금의 방향) 를 홈 "지금 세상의 방향" 아래에 표시
 
 **미완료 항목:**
+- briefs/direction.md(홈 "방향 브리프")는 2026-09-17 w30 숫자로 쓴 손글씨 문서. 자동 갱신 없음. 장부가 쌓이면 카드 숫자와 어긋나므로 /trend 때 같이 다시 쓸지 Ken 판단
 - 9/18 04:30 KST fetch.yml: 새 소스 10개 수집 + 종가 갱신 단계(market.py --update, Cboe 가 Actions IP 에서 열리는지) + radar-raw prices 커밋을 로그로 확인. ftc_press(ua: browser)가 Actions 에서 열리는지도. 막히면 error 파일이 남고 사이트 raw 표에 표시
 - 9/18 06:20 KST 루틴: 새 /brief(빌드 확인, 1차 출처 피드 항목은 검색 교차 없이 0.6, "## 시장 반응" 절)가 정상 실행되는지 확인. 루틴 프롬프트가 옛 파일(companies 등)을 언급하면 수정. 루틴 로그 claude.ai/code/routines
 - pages.yml 이 radar-raw 의 prices 를 받아 시장 반응이 매일 갱신되는지 확인 (data.json market_meta.asof)
