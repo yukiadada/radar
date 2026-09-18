@@ -138,9 +138,9 @@ details.dirbrief>summary:hover{background:var(--wash)}
 details.dirbrief>summary .dim{font-size:var(--fs-sm)}
 details.dirbrief>div{padding:4px 24px 22px;border-top:1px solid var(--hair2)}
 
-/* 접은 내용 + 더 보기 (홈의 오늘의 브리프) */
+/* 접은 내용 + 더 보기 (홈의 오늘의 브리프 카드) */
 .clamp{max-height:var(--clamp-h,130px);overflow:hidden;-webkit-mask-image:linear-gradient(#000 calc(100% - 48px),transparent);mask-image:linear-gradient(#000 calc(100% - 48px),transparent)}
-.more-btn{display:inline-flex;align-items:center;gap:6px;min-height:36px;margin:10px 0 0;padding:0 14px;border-radius:var(--r-ctl);border:1px solid var(--hair);background:var(--panel);color:var(--ink2);font:inherit;font-size:var(--fs-sm);font-weight:500;cursor:pointer}
+.more-btn{display:inline-flex;align-items:center;gap:6px;min-height:36px;margin:8px 0 0;padding:0 14px;border-radius:var(--r-ctl);border:1px solid var(--hair);background:var(--panel);color:var(--ink2);font:inherit;font-size:var(--fs-sm);font-weight:500;cursor:pointer}
 .more-btn:hover{color:var(--ink);border-color:var(--ink2)}
 .more-btn::after{content:"";width:7px;height:7px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-2px) rotate(45deg)}
 .more-btn[aria-expanded="true"]::after{transform:translateY(2px) rotate(-135deg)}
@@ -559,7 +559,7 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
     container.appendChild(dd);
     decorateTables(container);
   }
-  /* 내용이 max px 를 넘으면 접고 아래에 "더 보기"를 붙인다. 펼치면 "접기" */
+  /* 내용이 max px 를 넘으면 접고 바로 아래에 "더 보기"를 붙인다. 펼치면 "접기" */
   function clampBox(el, max) {
     const old = el.nextElementSibling; if (old && old.classList.contains('more-btn')) old.remove();
     el.classList.remove('clamp'); el.style.setProperty('--clamp-h', max + 'px');
@@ -575,9 +575,20 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
     });
     el.after(btn);
   }
+  /* 카드 박스 높이가 max px 를 넘으면 박스를 max px 로 줄이고 박스 안 아래에 "더 보기". 안 넘으면 그대로 */
+  function clampCard(card, max) {
+    let body = card.querySelector(':scope > .sig-body');
+    if (!body) { body = document.createElement('div'); body.className = 'sig-body'; while (card.firstChild) body.appendChild(card.firstChild); card.appendChild(body); }
+    const cs = getComputedStyle(card), frame = ['paddingTop', 'paddingBottom', 'borderTopWidth', 'borderBottomWidth'].reduce((a, k) => a + parseFloat(cs[k] || 0), 0);
+    clampBox(body, Math.max(40, max - frame));
+  }
   function mountBrief(container, b, opts = {}) {
     container.innerHTML = `<p class="loading">브리프 불러오는 중</p>`;
-    fetchBrief(b).then(text => { if (container.isConnected) { renderBrief(container, b, text, opts.compact); if (opts.clamp) clampBox(container, opts.clamp); } })
+    fetchBrief(b).then(text => {
+      if (!container.isConnected) return;
+      renderBrief(container, b, text, opts.compact);
+      if (opts.clamp) (document.fonts ? document.fonts.ready : Promise.resolve()).then(() => container.querySelectorAll('.sig').forEach(c => clampCard(c, opts.clamp)));
+    })
       .catch(e => { container.innerHTML = `<p class="empty">briefs/${esc(b.date)}.md 를 불러오지 못했습니다 (${esc(e.message)}).</p>`; });
   }
 
@@ -740,7 +751,7 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
       try { if (localStorage.getItem('radar.dirbrief.open') === '1') det.open = true; } catch (e) { /* 저장소를 못 쓰면 접힌 채로 */ }
       det.addEventListener('toggle', () => { try { localStorage.setItem('radar.dirbrief.open', det.open ? '1' : '0'); } catch (e) { /* 무시 */ } });
     }
-    if (b) mountBrief(document.getElementById('brief'), b, { clamp: 130, compact: true });   // 홈: 축별 카드만, 130px 로 접고 "더 보기"
+    if (b) mountBrief(document.getElementById('brief'), b, { clamp: 130, compact: true });   // 홈: 축별 카드만. 카드가 130px 을 넘으면 접고 "더 보기"
   }
 
   function attentionPanel(A, limit) {
