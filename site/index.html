@@ -121,12 +121,6 @@ h2.sec .dim{font-size:var(--fs-sm);margin-left:8px}
 .sec-note{flex:0 0 100%;order:3;margin:0;font-size:var(--fs-sm);color:var(--ink2)}
 
 /* 한눈에 요약: 답을 먼저 */
-.sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:12px;margin:28px 0 0}
-.sumc{position:relative;background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-card);padding:16px 18px 14px;min-width:0;overflow:hidden}
-.sumc .k{margin:0;font-size:var(--fs-cap);font-weight:600;color:var(--ink2)}
-.sumc .v{display:block;overflow-wrap:anywhere;margin:6px 0 4px;font-size:22px;font-weight:700;line-height:1.3;letter-spacing:-.02em;color:var(--ink);text-decoration:none;font-variant-numeric:tabular-nums}
-.sumc a.v:hover{text-decoration:underline}
-.sumc .d{margin:0;font-size:var(--fs-sm);color:var(--ink2);display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;font-variant-numeric:tabular-nums}
 
 /* 펼침 공통 */
 summary{cursor:pointer;list-style:none}
@@ -380,9 +374,6 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
   .sh{margin-top:44px}
   .dash,.glance{grid-template-columns:minmax(0,1fr)}
   .dgrid{grid-template-columns:minmax(0,1fr)}
-  .sum{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
-  .sumc{padding:14px}
-  .sumc .v{font-size:19px}
   .kpis{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
   .kpi b{font-size:22px}
   .dirlead{padding:16px 18px}
@@ -394,7 +385,6 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
   .filters label{flex:1 1 140px}
   .filters select{width:100%}
 }
-@media (max-width:420px){.sum{grid-template-columns:minmax(0,1fr)}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
 @media (forced-colors:active){.axneg i,.axpos i,.atttrack i{forced-color-adjust:none}.lbl,.axtag,.st{border:1px solid CanvasText}}
 </style>
@@ -679,37 +669,12 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
     const B = D.board.w30, b = D.briefs[0];
     REDRAW = null;
     const dirs = B.directions.filter(x => x.n).sort((a, c) => (c.score - a.score) || (c.n - a.n)), quiet = B.directions.filter(x => !x.n);
-    const RANK = { aligned3: 0, aligned2: 1, aligned1: 2, neutral: 3, mixed: 4, headwind: 5, none: 6 };
     const meta = [`최근 30일 장부 ${B.total}건`, `전체 ${D.ledger.length}건`, ledgerNote(), rawLine(b ? b.date : D.today)].filter(Boolean).map(esc);
     let h = pageHead({ eyebrow: fmtDate(D.today), title: '지금 세상의 방향', lede: '기술 · 사회 · 정책 세 축이 같은 쪽을 가리킬수록 %가 높습니다. 50%가 중립, 100%는 세 축 모두 밀어줌입니다.', meta });
 
-    /* 한눈에: 가장 정렬된 방향, 가장 눌린 방향, 새 근거, 시장이 근거를 따라갔는지 */
-    if (dirs.length) {
-      const top = dirs.slice().sort((a, c) => (RANK[a.label] - RANK[c.label]) || (c.score - a.score))[0];
-      const low = dirs.slice().sort((a, c) => (a.score - c.score) || (RANK[c.label] - RANK[a.label]))[0];
-      const cut7 = new Date(Date.parse(D.today + 'T00:00:00Z') - 7 * 864e5).toISOString().slice(0, 10);
-      const n7 = D.ledger.filter(r => r.date > cut7).length;
-      const sumc = (cls, k, v, d) => `<div class="sumc ${cls}"><p class="k">${k}</p>${v}<p class="d">${d}</p></div>`;
-      const dirLink = x => `<a class="v" href="#/sectors">${esc(x.direction)}</a>`;
-      let cards = sumc('pos', top.label === 'aligned3' ? '세 축이 모인 방향' : '가장 정렬된 방향', dirLink(top), `<b class="pct ${pctCls(top.score)}">${pctText(top.score)}</b>${labelHtml(top.label)}`);
-      if (low !== top) cards += sumc(low.score < 50 ? 'neg' : '', '가장 눌린 방향', dirLink(low), `<b class="pct ${pctCls(low.score)}">${pctText(low.score)}</b>${labelHtml(low.label)}`);
-      cards += sumc('', '최근 7일 새 근거', `<span class="v">${n7}건</span>`, `<a href="#/ledger">장부에서 보기</a>`);
-      if (D.market_meta) {
-        const rows30 = D.ledger.filter(r => r.date >= B.from && r.date <= B.to && D.market[r.line]), cnt = {};
-        rows30.forEach(r => { const v = D.market[r.line].verdict || '±'; cnt[v] = (cnt[v] || 0) + 1; });
-        const up = cnt['방향대로'] || 0, dn = cnt['반대로'] || 0, rest = rows30.length - up - dn;
-        if (up + dn) cards += sumc('', '시장이 근거대로 움직인 비율', `<span class="v">${Math.round(up / (up + dn) * 100)}%</span>`, `방향대로 ${up} · 반대로 ${dn}${rest ? ` · 판정 전 ${rest}` : ''}`);
-      }
-      h += `<section class="sum" aria-label="한눈에 보기">${cards}</section>`;
-    }
-
-    /* 쉬운 말 방향 브리프: 요약은 바로, 전문은 펼쳐서 */
-    const DB = D.direction_brief ? dirBriefParts(D.direction_brief) : null;
-    if (DB) {
-      h += secHead('쉬운 말로 읽는 지금의 방향', `${DB.date ? `${DB.date} 기준 · ` : ''}중학생도 읽을 수 있게 쓴 요약입니다.`);
-      h += `<div class="dirlead" id="dirlead"></div><details class="dirbrief" id="dirbrief-d"><summary>전체 브리프 읽기 <span class="dim">${DB.count ? `방향 ${DB.count}개 · ` : ''}약 ${DB.minutes}분</span></summary><div id="dirbrief"></div></details>`;
-    }
-
+    /* 오늘의 브리프: 방향별 정렬 위 */
+    if (b) h += secHead(b.date === D.today ? '오늘의 브리프' : '최근 브리프', `${fmtDate(b.date)} · 구조적 ${b.none_today ? '없음' : b.structural + '건'}`, `<a href="#/brief/${b.date}">따로 열기 →</a>`) + `<div id="brief"></div>`;
+    else h += secHead('브리프') + `<p class="empty">아직 새 체계의 브리프가 없습니다. 다음 /brief 부터 쌓입니다.</p>`;
     /* 방향 카드 */
     h += secHead('방향별 정렬', `최근 30일 ${B.from} ~ ${B.to}. 정렬 %가 높은 순서입니다.`, `<a href="#/sectors">섹터별로 보기 →</a>`);
     h += legendBox([
@@ -722,6 +687,13 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
     h += dirs.length ? `<div class="dgrid">${dirs.map(x => dirCard(x, B, 30)).join('')}</div>` : `<p class="empty">아직 장부에 시그널이 없습니다.</p>`;
     if (quiet.length) h += `<p class="keys">신호 없는 방향: ${quiet.map(x => esc(x.direction)).join(', ')}</p>`;
 
+    /* 쉬운 말 방향 브리프: 방향별 정렬 아래. 요약은 바로, 전문은 펼쳐서 */
+    const DB = D.direction_brief ? dirBriefParts(D.direction_brief) : null;
+    if (DB) {
+      h += secHead('쉬운 말로 읽는 지금의 방향', `${DB.date ? `${DB.date} 기준 · ` : ''}중학생도 읽을 수 있게 쓴 요약입니다.`);
+      h += `<div class="dirlead" id="dirlead"></div><details class="dirbrief" id="dirbrief-d"><summary>전체 브리프 읽기 <span class="dim">${DB.count ? `방향 ${DB.count}개 · ` : ''}약 ${DB.minutes}분</span></summary><div id="dirbrief"></div></details>`;
+    }
+
     /* 섹터 한눈에 */
     const secs = B.sectors.filter(x => x.n);
     const ups = secs.filter(x => ALIGNED.includes(x.label)).sort(byScore).slice(0, 5);
@@ -731,9 +703,6 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
     h += secHead('섹터 한눈에', '최근 30일. 막는 축이 없는 섹터와, 막는 축이 있는 섹터를 나눴습니다.', `<a href="#/sectors">전체 섹터 →</a>`);
     h += `<section class="glance"><div class="gl"><h3>밀어주는 축만 있는 섹터</h3>${ups.length ? `<ol>${ups.map(li).join('')}</ol>` : '<p class="empty">없음</p>'}</div><div class="gl neg"><h3>역풍 · 엇갈림 섹터</h3>${downs.length ? `<ol>${downs.map(li).join('')}</ol>` : '<p class="empty">없음</p>'}${neutral.length ? `<p class="keys">양쪽(± 만 있어 점수 0): ${neutral.map(x => sectorLink(x.sector)).join(', ')}</p>` : ''}</div></section>`;
 
-    /* 브리프 */
-    if (b) h += secHead(b.date === D.today ? '오늘의 브리프' : '최근 브리프', `${fmtDate(b.date)} · 구조적 ${b.none_today ? '없음' : b.structural + '건'}`, `<a href="#/brief/${b.date}">따로 열기 →</a>`) + `<div id="brief"></div>`;
-    else h += secHead('브리프') + `<p class="empty">아직 새 체계의 브리프가 없습니다. 다음 /brief 부터 쌓입니다.</p>`;
     if (D.briefs.length > 1) {
       h += secHead('지난 브리프', '', D.briefs.length > 8 ? `<a href="#/briefs">전체 ${D.briefs.length}건 →</a>` : '') + `<ul class="plain">` + D.briefs.slice(1, 8).map(x => `<li><a href="#/brief/${x.date}">${fmtDate(x.date)}</a> <span class="dim small">구조적 ${x.none_today ? '없음' : x.structural + '건'}</span></li>`).join('') + `</ul>`;
     }
