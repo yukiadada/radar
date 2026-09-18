@@ -141,7 +141,7 @@ details.dirbrief>summary .dim{font-size:var(--fs-sm)}
 details.dirbrief>div{padding:4px 24px 22px;border-top:1px solid var(--hair2)}
 
 /* 접은 카드 + 더 보기 (홈의 오늘의 브리프). 카드 아래쪽을 위→아래로 짙어지는 그라데이션으로 덮고 가운데에 글자 버튼 */
-.sig.folded{max-height:var(--fold-h,154px);overflow:hidden}
+.sig.folded{max-height:var(--fold-h,200px);overflow:hidden}
 .more-txt{display:block;width:100%;margin:10px 0 0;padding:8px 0 2px;border:0;background:none;color:var(--ink);font:inherit;font-size:var(--fs-body);font-weight:700;text-align:center;cursor:pointer}
 .sig.folded>.more-txt{position:absolute;left:0;right:0;bottom:0;height:76px;margin:0;padding:0 0 16px;display:flex;align-items:flex-end;justify-content:center;background:linear-gradient(to bottom,var(--fold-0) 0%,var(--panel) 35%,var(--fold-end) 100%)}
 .more-txt:hover{text-decoration:underline;text-underline-offset:4px}
@@ -752,7 +752,7 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
       try { if (localStorage.getItem('radar.dirbrief.open') === '1') det.open = true; } catch (e) { /* 저장소를 못 쓰면 접힌 채로 */ }
       det.addEventListener('toggle', () => { try { localStorage.setItem('radar.dirbrief.open', det.open ? '1' : '0'); } catch (e) { /* 무시 */ } });
     }
-    if (b) mountBrief(document.getElementById('brief'), b, { clamp: 130, compact: true });   // 홈: 축별 카드만. 카드가 130px 을 넘으면 접고 "더 보기"
+    if (b) mountBrief(document.getElementById('brief'), b, { clamp: 200, compact: true });   // 홈: 축별 카드만. 카드가 200px 을 넘으면 접고 "더 보기"
   }
 
   function attentionPanel(A, limit) {
