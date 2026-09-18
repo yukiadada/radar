@@ -437,9 +437,18 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
   const enc = s => encodeURIComponent(s);
   const fmtDate = s => { const [y, m, d] = s.split('-').map(Number); const w = '일월화수목금토'[new Date(y, m - 1, d).getDay()]; return `${y}년 ${m}월 ${d}일 ${w}요일`; };
   const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
-  const daysOf = arg => (arg === '90' ? 90 : 30);
-  const board = days => (days === 90 ? D.board.w90 : D.board.w30);
-  const serOf = days => (days === 90 ? D.series.w90 : D.series.w30);
+  /* 기준(mode): 'live' 누적(유효기간 안의 시그널, 기본) 또는 'w30'·'w90'… 열린 창. 주소 끝의 /30, /90 이 창, 없으면 누적 */
+  const modeOf = arg => (arg && D.board['w' + arg] ? 'w' + arg : 'live');
+  const sfx = mode => (mode && mode !== 'live' ? '/' + mode.slice(1) : '');
+  const board = mode => D.board[mode] || D.board.live;
+  const serOf = mode => D.series[mode] || D.series.live;
+  const winName = n => (n === 365 ? '1년' : `${n}일`);
+  const modeName = mode => (mode === 'live' ? '누적' : `최근 ${winName(Number(mode.slice(1)))}`);
+  const validityText = () => Object.entries(D.params.validity).map(([h, n]) => `${h} ${n}일`).join(' · ');
+  const spanText = B => (B.mode === 'live' ? `${B.to} 기준 살아 있는 시그널 ${B.total}건` : `${B.from} ~ ${B.to} · ${B.total}건`);
+  /* 시그널의 남은 비중 0~1: 당일 1, 유효기간 끝에 0. scoring.remaining 과 같은 식 */
+  const remainOf = r => { const v = D.params.validity[r.horizon] || D.params.validity['분기']; const age = Math.round((new Date(D.today) - new Date(r.date)) / 864e5); return age < 0 || age >= v ? 0 : 1 - age / v; };
+  const LIVE_KEY = ['누적', () => `시그널은 기간에 따라 ${validityText()} 동안 살아 있고, 그동안 가중치가 서서히 0으로 줄어듭니다. 지난 시그널은 장부에 남지만 점수에서 빠집니다. "최근 30일"은 새로 들어온 근거만 그대로 센 값입니다.`];
   const firstSentence = t => { const m = t.match(/^[\s\S]*?(다\.|\. )(?=\s|$)/); return (m ? m[0] : t).trim(); };   // 옛 Safari 를 위해 lookbehind 는 쓰지 않는다
 
   const DIR = { '+': ['up', '▲', '밀어줌'], '-': ['down', '▼', '막음'], '±': ['both', '◆', '양쪽'] };
@@ -473,10 +482,10 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
   /* 7일 변화. 값이 없는데 신호는 있으면 7일 전에는 점수가 없던 섹터 = 신규 */
   const deltaHtml = (v, n) => (v == null ? `<span class="dim small">${n ? '신규' : '–'}</span>` : `<span class="small ${v > 0 ? 'gs' : v < 0 ? 'ss' : 'dim'}">${v > 0 ? '+' : ''}${v}p</span>`);
   const labelHtml = l => `<span class="lbl lbl-${esc(l)}">${esc(D.labels[l] || l)}</span>`;
-  const sectorLink = (s, days) => (D.sectors[s] ? `<a href="#/sector/${enc(s)}${days === 90 ? '/90' : ''}">${esc(s)}</a>` : `<span title="sector_map 에 없는 섹터">${esc(s)}</span>`);
+  const sectorLink = (s, mode) => (D.sectors[s] ? `<a href="#/sector/${enc(s)}${sfx(mode)}">${esc(s)}</a>` : `<span title="sector_map 에 없는 섹터">${esc(s)}</span>`);
   const tile = (v, l, cls) => `<div class="kpi"><b${cls ? ` class="${cls}"` : ''}>${v}</b><span>${l}</span></div>`;
   const banner = () => (D.warnings && D.warnings.length ? `<div class="warn" role="alert"><b>빌드 경고 ${D.warnings.length}건.</b> 자료 일부가 빠진 채 만들어졌습니다.<ul>${D.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>` : '');
-  /* 장부가 창보다 짧으면 30일·90일 창이 같은 자료다. 그 사실을 화면에 적는다 */
+  /* 장부가 창보다 짧으면 그 창은 장부 첫날부터다. 그 사실을 화면에 적는다 */
   /* ---- 시장 반응: 장부 줄 번호 → 사건 전날(장부 날짜 이틀 전) 종가 대비 티커 평균 수익률과 SPY. build.py 가 fetch/market.py 로 계산 ---- */
   const pctS = v => (v > 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
   const rcls = v => v > 0.0005 ? 'gs' : v < -0.0005 ? 'ss' : 'ns';
@@ -489,7 +498,7 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
     const v = x.verdict ? `<span class="lbl ${VLBL[x.verdict] || ''}">${x.verdict}</span>` : '';
     return `<div class="mkt"><span class="dim small">시장 반응 · ${x.base.slice(5).replace('-', '/')} 종가 기준</span>${hs.length ? hs.join('') : '<span class="dim small">아직 거래일 없음</span>'}${v}</div>`;
   }
-  const ledgerNote = () => { if (!D.first_date) return ''; const short30 = D.first_date > D.board.w30.from, short90 = D.first_date > D.board.w90.from; return `장부는 ${D.first_date}부터${short30 ? '. 아직 30일이 안 돼 30일·90일 창이 같은 자료입니다' : short90 ? ' (90일 창은 그날부터)' : ''}`; };
+  const ledgerNote = () => { if (!D.first_date) return ''; const short = D.params.windows.filter(n => D.board['w' + n] && D.first_date > D.board['w' + n].from); return `장부는 ${D.first_date}부터${short.length ? ` (${short.map(winName).join('·')} 창은 그날부터)` : ''}`; };
 
   /* 축 점수 미니 막대: −1 ~ +1. 왼쪽(빨강) 막음, 오른쪽(파랑) 밀어줌 */
   function axisBar(a, net, n, withLabel = true) {
@@ -702,11 +711,12 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
 
   let REDRAW = null;
   window.addEventListener('resize', debounce(() => { if (REDRAW) REDRAW(); }, 150));
-  const periodTabs = (base, days) => [30, 90].map(n => `<a role="tab" aria-selected="${n === days}" href="${base}${n === 90 ? '/90' : ''}">최근 ${n}일</a>`).join('');
+  /* 누적이 기본. 창은 build.py 가 장부 길이에 맞춰 연 것만 (params.windows) */
+  const periodTabs = (base, mode) => [['live', '누적'], ...D.params.windows.map(n => ['w' + n, `최근 ${winName(n)}`])].map(([m, l]) => `<a role="tab" aria-selected="${m === mode}" href="${base}${sfx(m)}">${l}</a>`).join('');
   /* sticky: 탭만 머리글 아래에 고정하고 설명은 그 아래 일반 줄로 둔다. 고정 줄 높이가 변하지 않아 스크롤 중 본문이 튀지 않는다 */
-  const segTabs = (base, days, note, sticky = false) => sticky
-    ? `<div class="seg sticky" role="tablist" aria-label="기간">${periodTabs(base, days)}</div>${note ? `<p class="seg-note">${note}</p>` : ''}`
-    : `<div class="seg" role="tablist" aria-label="기간">${periodTabs(base, days)}<span class="dim">${note}</span></div>`;
+  const segTabs = (base, mode, note, sticky = false) => sticky
+    ? `<div class="seg sticky" role="tablist" aria-label="기준">${periodTabs(base, mode)}</div>${note ? `<p class="seg-note">${note}</p>` : ''}`
+    : `<div class="seg" role="tablist" aria-label="기준">${periodTabs(base, mode)}<span class="dim">${note}</span></div>`;
   const legend = items => `<div class="leg">${items.map(([name, cls]) => `<span class="${cls}"><i></i>${esc(name)}</span>`).join('')}</div>`;
   const axisLegend = () => legend(D.axes.map(a => [a, axCls(a)]));
   function rawLine(date) {
@@ -719,13 +729,13 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
   const byScore = (a, b) => (b.score - a.score) || (b.n - a.n) || a.sector.localeCompare(b.sector);
 
   /* ---- 화면 ---- */
-  function dirCard(x, B, days) {
-    const chips = x.sectors.map(s => { const sb = B.sectors.find(z => z.sector === s); return `<a class="chip" href="#/sector/${enc(s)}${days === 90 ? '/90' : ''}">${esc(s)} <b class="${pctCls(sb.score)}">${pctText(sb.score)}</b></a>`; }).join('');
-    return `<article class="dcard"><header><h3><a href="#/sectors${days === 90 ? '/90' : ''}">${esc(x.direction)}</a></h3><b class="pct big ${pctCls(x.score)}">${pctText(x.score)}</b></header>` +
+  function dirCard(x, B, mode) {
+    const chips = x.sectors.map(s => { const sb = B.sectors.find(z => z.sector === s); return `<a class="chip" href="#/sector/${enc(s)}${sfx(mode)}">${esc(s)} <b class="${pctCls(sb.score)}">${pctText(sb.score)}</b></a>`; }).join('');
+    return `<article class="dcard"><header><h3><a href="#/sectors${sfx(mode)}">${esc(x.direction)}</a></h3><b class="pct big ${pctCls(x.score)}">${pctText(x.score)}</b></header>` +
       `<div class="meta">${labelHtml(x.label)}<span>${x.n}건 · 섹터 ${x.active}/${x.sectors.length}</span><span>7일 ${deltaHtml(x.delta, x.n)}</span></div>${axes3(x.axes)}<div class="chips">${chips}</div></article>`;
   }
   function home() {
-    const B = D.board.w30, b = D.briefs[0];
+    const B = D.board.live, b = D.briefs[0];
     REDRAW = null;
     const dirs = B.directions.filter(x => x.n).sort((a, c) => (c.score - a.score) || (c.n - a.n)), quiet = B.directions.filter(x => !x.n);
     let h = pageHead({ title: '지금 세상의 방향', lede: '기술 · 사회 · 정책 세 축이 같은 쪽을 가리킬수록 %가 높습니다. 50%가 중립, 100%는 세 축 모두 밀어줌입니다.' });
@@ -734,15 +744,16 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
     if (b) h += secHead(b.date === D.today ? '오늘의 브리프' : '최근 브리프', `${fmtDate(b.date)} · 구조적 ${b.none_today ? '없음' : b.structural + '건'}`, `<a href="#/brief/${b.date}">따로 열기 →</a>`) + `<div id="brief"></div>`;
     else h += secHead('브리프') + `<p class="empty">아직 새 체계의 브리프가 없습니다. 다음 /brief 부터 쌓입니다.</p>`;
     /* 방향 카드 */
-    h += secHead('방향별 정렬', `최근 30일 ${B.from} ~ ${B.to}. 정렬 %가 높은 순서입니다.`, `<a href="#/sectors">섹터별로 보기 →</a>`);
+    h += secHead('방향별 정렬', `${spanText(B)}. 정렬 %가 높은 순서입니다.`, `<a href="#/sectors">섹터별로 보기 →</a>`);
     h += legendBox([
       ['정렬 %', '세 축 점수(−1~+1)의 평균을 0~100%로 바꾼 값. 50%가 중립, 60% 이상은 파랑, 40% 이하는 빨강 글자.'],
       ['축 막대', '가운데 선에서 오른쪽 파랑은 그 축이 밀어줌, 왼쪽 빨강은 막음. 길이가 근거의 무게(크기 × 기간).'],
       ['상태', '<span class="lbl lbl-aligned3">3축 정렬</span> · <span class="lbl lbl-aligned2">2축 정렬</span> · <span class="lbl lbl-aligned1">1축</span> 막는 축 없이 밀어주는 축의 수 · <span class="lbl lbl-mixed">엇갈림</span> 밀고 막는 축이 섞임 · <span class="lbl lbl-headwind">역풍</span> 막는 축만 · <span class="lbl">양쪽</span> 신호는 있지만 점수 0'],
       ['7일', '일주일 전보다 몇 %p 바뀌었나. 신규는 일주일 전에는 신호가 없던 곳.'],
+      [LIVE_KEY[0], LIVE_KEY[1]()],
       MARKET_KEY,
     ]);
-    h += dirs.length ? `<div class="dgrid">${dirs.map(x => dirCard(x, B, 30)).join('')}</div>` : `<p class="empty">아직 장부에 시그널이 없습니다.</p>`;
+    h += dirs.length ? `<div class="dgrid">${dirs.map(x => dirCard(x, B, 'live')).join('')}</div>` : `<p class="empty">아직 장부에 시그널이 없습니다.</p>`;
     if (quiet.length) h += `<p class="keys">신호 없는 방향: ${quiet.map(x => esc(x.direction)).join(', ')}</p>`;
 
     /* 쉬운 말 방향 브리프: 방향별 정렬 아래. 요약은 바로, 전문은 펼쳐서 */
@@ -758,7 +769,7 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
     const downs = secs.filter(x => CONTESTED.includes(x.label)).sort((a, c) => (a.score - c.score) || (c.n - a.n)).slice(0, 5);
     const neutral = secs.filter(x => x.label === 'neutral');
     const li = x => `<li><span>${sectorLink(x.sector)} <span class="dim small">${esc(D.labels[x.label])} · ${x.n}건</span></span><b class="pct ${pctCls(x.score)}">${x.score}%</b></li>`;
-    h += secHead('섹터 한눈에', '최근 30일. 막는 축이 없는 섹터와, 막는 축이 있는 섹터를 나눴습니다.', `<a href="#/sectors">전체 섹터 →</a>`);
+    h += secHead('섹터 한눈에', '살아 있는 시그널 기준. 막는 축이 없는 섹터와, 막는 축이 있는 섹터를 나눴습니다.', `<a href="#/sectors">전체 섹터 →</a>`);
     h += `<section class="glance"><div class="gl"><h3>밀어주는 축만 있는 섹터</h3>${ups.length ? `<ol>${ups.map(li).join('')}</ol>` : '<p class="empty">없음</p>'}</div><div class="gl neg"><h3>역풍 · 엇갈림 섹터</h3>${downs.length ? `<ol>${downs.map(li).join('')}</ol>` : '<p class="empty">없음</p>'}${neutral.length ? `<p class="keys">양쪽(± 만 있어 점수 0): ${neutral.map(x => sectorLink(x.sector)).join(', ')}</p>` : ''}</div></section>`;
 
     if (D.briefs.length > 1) {
@@ -784,15 +795,17 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
       `</div><p class="keys" style="margin:8px 0 0">관심은 언급량이라 방향이 없습니다. 검색어 때문에 편향이 있으니 절대량보다 순위와 주간 변화를 봅니다. 관심은 높은데 근거(정렬)가 없는 곳, 관심은 낮은데 근거가 쌓이는 곳을 찾는 용도입니다.</p></div>`;
   }
   function sectors(arg) {
-    const days = daysOf(arg), B = board(days), S = serOf(days), c = B.counts;
+    const mode = modeOf(arg), B = board(mode), S = serOf(mode), c = B.counts;
     REDRAW = null;
     let h = pageHead({ eyebrow: '섹터', title: '어느 섹터에 근거가 쌓이는가', lede: `섹터마다 ${D.axes.join(' · ')} 세 축이 밀어주는지 막는지를 점수로 모았습니다. 점수는 근거의 누적이지 수익률 예측이 아닙니다.` });
-    h += segTabs('#/sectors', days, `${B.from} ~ ${B.to} · ${B.total}건 · 3축 정렬 ${c.aligned3} · 2축 ${c.aligned2} · 1축 ${c.aligned1} · 엇갈림 ${c.mixed} · 양쪽 ${c.neutral} · 역풍 ${c.headwind} · 신호 없음 ${c.none}${ledgerNote() ? ` · ${ledgerNote()}` : ''}`, true);
+    h += segTabs('#/sectors', mode, `${spanText(B)} · 3축 정렬 ${c.aligned3} · 2축 ${c.aligned2} · 1축 ${c.aligned1} · 엇갈림 ${c.mixed} · 양쪽 ${c.neutral} · 역풍 ${c.headwind} · 신호 없음 ${c.none}${ledgerNote() ? ` · ${ledgerNote()}` : ''}`, true);
     h += `<div style="margin-top:16px">` + legendBox([
       ['축 점수', `시그널마다 방향(+1 / −1 / 0) × 가중치(크기 1~3 × 기간 분기 1 · 1년 2 · 다년 3)를 더해 ${D.params.K}으로 나누고 −1~+1 로 자릅니다.`],
       ['정렬 %', '50 + 50 × 세 축 점수 평균. 100%는 세 축 모두 밀어줌, 0%는 모두 막음, 50%는 중립.'],
+      [LIVE_KEY[0], LIVE_KEY[1]()],
+      ['창', '최근 30일·90일 … 은 그 기간에 들어온 시그널만 줄이지 않고 그대로 센 값. 긴 창은 장부가 그만큼 쌓이면 저절로 열립니다.'],
       ['방향', '방향(내러티브)의 %는 신호가 있는 소속 섹터의 평균입니다.'],
-      ['추이', '날마다 그날 기준 창으로 다시 계산한 정렬 %. 가운데 점선이 50%.'],
+      ['추이', '날마다 그날 기준으로 다시 계산한 정렬 %. 가운데 점선이 50%.'],
     ]) + `</div>`;
     h += `<section class="dash">`;
     for (const dir of B.directions) {
@@ -800,7 +813,7 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
       h += `<div class="panel full"><h3><span>${esc(dir.direction)} <b class="pct ${pctCls(dir.score)}">${pctText(dir.score)}</b> ${labelHtml(dir.label)}</span><span class="dim">${dir.n}건 · 섹터 ${dir.active}/${dir.sectors.length} · 7일 ${deltaHtml(dir.delta, dir.n)}</span></h3>` +
         (dir.n ? axes3(dir.axes) : '') +
         `<div class="tbl"><table class="secs"><thead><tr><th>섹터</th><th>티커</th>${D.axes.map(a => `<th class="${axCls(a)}"><i class="sw2"></i>${esc(a)}</th>`).join('')}<th class="num">정렬</th><th>상태</th><th class="num">건수</th><th class="num">7일</th><th>추이</th></tr></thead><tbody>` +
-        rows.map(x => `<tr><td class="nowrap"><b>${sectorLink(x.sector, days)}</b></td><td class="small">${x.tickers.map(esc).join(', ')}</td>` +
+        rows.map(x => `<tr><td class="nowrap"><b>${sectorLink(x.sector, mode)}</b></td><td class="small">${x.tickers.map(esc).join(', ')}</td>` +
           D.axes.map(a => `<td class="axcell">${x.n ? axisBar(a, x.axes[a].net, x.axes[a].n, false) : '<span class="dim small">–</span>'}</td>`).join('') +
           `<td class="num"><b class="pct ${pctCls(x.score)}">${pctText(x.score)}</b></td><td>${labelHtml(x.label)}</td><td class="num">${x.n}</td><td class="num">${deltaHtml(x.delta, x.n)}</td><td>${x.n ? spark(S.sectors[x.sector]) : ''}</td></tr>`).join('') +
         `</tbody></table></div></div>`;
@@ -810,18 +823,19 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
   }
 
   function sector(name, arg) {
-    const days = daysOf(arg), B = board(days), S = serOf(days), x = B.sectors.find(z => z.sector === name), cfg = D.sectors[name];
+    const mode = modeOf(arg), B = board(mode), S = serOf(mode), x = B.sectors.find(z => z.sector === name), cfg = D.sectors[name];
     if (!x || !cfg) { app.innerHTML = `<p class="empty">${esc(name)} 섹터가 sector_map 에 없습니다. <a href="#/sectors">섹터 목록</a></p>`; REDRAW = null; return; }
-    const rows = D.ledger.filter(r => r.sector === name && r.date >= B.from && r.date <= B.to).sort((a, c) => c.date.localeCompare(a.date) || c.line - a.line);
-    let h = pageHead({ eyebrow: crumb(`#/sectors${days === 90 ? '/90' : ''}`, '섹터') + esc(cfg.direction), title: esc(name), lede: cfg.note ? esc(cfg.note) : '', meta: cfg.tickers.map(esc) });
-    h += segTabs(`#/sector/${enc(name)}`, days, `${B.from} ~ ${B.to} · ${x.n}건${ledgerNote() ? ` · ${ledgerNote()}` : ''}`, true);
-    h += `<div style="margin-top:16px">${legendBox([...KEY_ITEMS, MARKET_KEY])}</div>`;
-    h += `<section class="dash"><div class="kpis full">` + tile(`<span class="${pctCls(x.score)}">${pctText(x.score)}</span>`, `정렬 (최근 ${days}일)`) + tile(labelHtml(x.label), '상태', 'txt') + tile(x.n, `시그널 건수`) + tile(deltaHtml(x.delta, x.n).replace(/ small/, ''), '7일 변화', 'txt') + `</div>`;
-    h += `<div class="panel full"><h3>정렬 % 추이 <span class="dim">날마다 그날 기준 최근 ${days}일 창으로 다시 계산. 신호 없는 날은 비어 있음</span></h3><div class="chart-box" data-chart="sector"></div></div>`;
+    const live = mode === 'live';
+    const rows = D.ledger.filter(r => r.sector === name && (live ? remainOf(r) > 0 : r.date >= B.from && r.date <= B.to)).sort((a, c) => c.date.localeCompare(a.date) || c.line - a.line);
+    let h = pageHead({ eyebrow: crumb(`#/sectors${sfx(mode)}`, '섹터') + esc(cfg.direction), title: esc(name), lede: cfg.note ? esc(cfg.note) : '', meta: cfg.tickers.map(esc) });
+    h += segTabs(`#/sector/${enc(name)}`, mode, `${live ? `${B.to} 기준 살아 있는 시그널` : `${B.from} ~ ${B.to} ·`} ${x.n}건${ledgerNote() ? ` · ${ledgerNote()}` : ''}`, true);
+    h += `<div style="margin-top:16px">${legendBox([...KEY_ITEMS, [LIVE_KEY[0], LIVE_KEY[1]()], MARKET_KEY])}</div>`;
+    h += `<section class="dash"><div class="kpis full">` + tile(`<span class="${pctCls(x.score)}">${pctText(x.score)}</span>`, `정렬 (${modeName(mode)})`) + tile(labelHtml(x.label), '상태', 'txt') + tile(x.n, `시그널 건수`) + tile(deltaHtml(x.delta, x.n).replace(/ small/, ''), '7일 변화', 'txt') + `</div>`;
+    h += `<div class="panel full"><h3>정렬 % 추이 <span class="dim">날마다 그날 기준으로 다시 계산 (${modeName(mode)}). 신호 없는 날은 비어 있음</span></h3><div class="chart-box" data-chart="sector"></div></div>`;
     for (const a of D.axes) {
       const ax = x.axes[a], ev = rows.filter(r => r.axis === a);
       h += `<div class="panel full"><h3><span>${axTag(a)} <span class="${netCls(ax.net)}">${fmtNet(ax.net)}</span></span><span class="dim">${ax.n}건 · <span class="dir up"><i>▲</i>${ax.up}</span> <span class="dir down"><i>▼</i>${ax.down}</span> <span class="dir both"><i>◆</i>${ax.both}</span> · 가중 합 ${ax.raw > 0 ? '+' : ''}${ax.raw}</span></h3>` +
-        (ev.length ? `<ul class="feed">` + ev.map(r => `<li><div class="meta"><span class="date">${r.date}</span>${dirBadge(r.direction)}${confBadge(r.confidence)}<span class="dim small">${esc(r.horizon)} · 크기 ${esc(r.impact)} · ${esc(r.channel)}${r.reverses ? ` · 번복 줄 ${r.reverses}` : ''}</span><span class="dim small">${(r.tickers || []).map(esc).join(', ')}</span></div>${esc(r.fact)} <a href="${esc(r.source)}" target="_blank" rel="noopener">출처</a><br><span class="small dim">${esc(r.note)}</span>${marketHtml(r.line)}</li>`).join('') + `</ul>` : `<p class="empty">이 축의 근거가 아직 없습니다. "아직 모른다"이지 "아니다"가 아닙니다.</p>`) + `</div>`;
+        (ev.length ? `<ul class="feed">` + ev.map(r => `<li><div class="meta"><span class="date">${r.date}</span>${dirBadge(r.direction)}${confBadge(r.confidence)}<span class="dim small">${esc(r.horizon)} · 크기 ${esc(r.impact)} · ${esc(r.channel)}${r.reverses ? ` · 번복 줄 ${r.reverses}` : ''}${live ? ` · 남은 비중 ${Math.round(remainOf(r) * 100)}%` : ''}</span><span class="dim small">${(r.tickers || []).map(esc).join(', ')}</span></div>${esc(r.fact)} <a href="${esc(r.source)}" target="_blank" rel="noopener">출처</a><br><span class="small dim">${esc(r.note)}</span>${marketHtml(r.line)}</li>`).join('') + `</ul>` : `<p class="empty">이 축의 근거가 아직 없습니다. "아직 모른다"이지 "아니다"가 아닙니다.</p>`) + `</div>`;
     }
     h += `</section>`;
     app.innerHTML = h;
@@ -833,30 +847,30 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
   let SEL = null; const SLOT = new Map();
   const slotOf = name => { if (!SLOT.has(name)) { const used = new Set(SLOT.values()); SLOT.set(name, SC.find(c => !used.has(c)) || SC[SC.length - 1]); } return SLOT.get(name); };
   function trend(arg) {
-    const days = daysOf(arg), B = board(days), S = serOf(days), A = D.activity[days === 90 ? 'w90' : 'w30'], c = B.counts;
+    const mode = modeOf(arg), B = board(mode), S = serOf(mode), A = D.activity[mode] || D.activity.live, c = B.counts, mn = modeName(mode);
     const active = B.sectors.filter(x => x.n), activeNames = new Set(active.map(x => x.sector));
     if (!SEL) SEL = active.slice().sort((a, b) => (Math.abs(b.score - 50) - Math.abs(a.score - 50)) || (b.n - a.n)).slice(0, 6).map(x => x.sector);
     for (const s of SEL) if (!activeNames.has(s)) SLOT.delete(s);
     SEL = SEL.filter(s => activeNames.has(s));
     SEL.forEach(slotOf);
-    let h = pageHead({ eyebrow: '추이', title: '근거는 어떻게 바뀌어 왔나', lede: '정렬 %를 날마다 그날 기준 창으로 다시 계산해 선으로 그렸습니다. 선 위에 마우스를 올리면 그날 값이 보입니다.', meta: [`기준일 ${D.today}`, `장부 전체 ${D.ledger.length}건`, ledgerNote()].filter(Boolean).map(esc) });
+    let h = pageHead({ eyebrow: '추이', title: '근거는 어떻게 바뀌어 왔나', lede: '정렬 %를 날마다 그날 기준으로 다시 계산해 선으로 그렸습니다. 누적은 수준, 최근 30일은 새로 들어온 근거입니다. 선 위에 마우스를 올리면 그날 값이 보입니다.', meta: [`기준일 ${D.today}`, `장부 전체 ${D.ledger.length}건`, ledgerNote()].filter(Boolean).map(esc) });
     if (!D.ledger.length) { app.innerHTML = h + `<p class="empty">장부가 비어 있습니다.</p>`; REDRAW = null; return; }
-    h += segTabs('#/trend', days, `${B.from} ~ ${B.to} · ${B.total}건`, true);
-    h += `<section class="dash"><div class="kpis full">` + tile(B.total, `최근 ${days}일 구조적 시그널`) + tile(A.axes.map(x => `<span class="axn ${axCls(x.axis)}" title="${esc(x.axis)} ${x.count}건"><i class="sw2" aria-hidden="true"></i>${x.count}</span>`).join(' <small>/</small> '), `${D.axes.join(' / ')} 건수`) +
+    h += segTabs('#/trend', mode, spanText(B), true);
+    h += `<section class="dash"><div class="kpis full">` + tile(B.total, `${mn} 구조적 시그널`) + tile(A.axes.map(x => `<span class="axn ${axCls(x.axis)}" title="${esc(x.axis)} ${x.count}건"><i class="sw2" aria-hidden="true"></i>${x.count}</span>`).join(' <small>/</small> '), `${D.axes.join(' / ')} 건수`) +
       tile(`${c.aligned3 + c.aligned2} <small>3축 ${c.aligned3}</small>`, '2축 이상 정렬 섹터') + tile(`${c.headwind} <small>엇갈림 ${c.mixed}</small>`, '역풍 섹터') + `</div>`;
     h += `<div class="panel full"><h3>섹터 정렬 % 추이 <span class="dim">섹터를 눌러 켜고 끕니다 (최대 8개). 처음에는 중립(50%)에서 먼 섹터가 켜져 있습니다.</span></h3><div class="seg" style="margin:0 0 8px" role="group" aria-label="섹터 선택">` +
       active.sort(byScore).map(x => `<button type="button" data-sel="${esc(x.sector)}" aria-pressed="${SEL.includes(x.sector)}" class="${SEL.includes(x.sector) ? slotOf(x.sector) : ''}"><i></i>${esc(x.sector)} ${x.score}%</button>`).join('') + `</div><div class="chart-box" data-chart="sectors"></div></div>`;
     h += `<div class="panel full"><h3>방향 정렬 % 추이 <span class="dim">소속 섹터의 평균</span></h3>${legend(B.directions.map((x, i) => [x.direction, SC[i % SC.length]]))}<div class="chart-box" data-chart="directions"></div></div>`;
     h += `<div class="panel full"><h3>일별 시그널 <span class="dim">축별로 쌓음</span></h3>${axisLegend()}<div class="chart-box" data-chart="daily"></div></div>`;
-    h += `<div class="panel full"><h3>축별 상세 <span class="dim">최근 ${days}일. 방향은 섹터 기준</span></h3><div class="tbl"><table><thead><tr><th>축</th><th class="num">건수</th><th class="num">비중</th><th class="num">밀어줌 / 막음 / 양쪽</th><th class="num">평균 확신</th><th>상위 섹터</th><th>상위 티커</th></tr></thead><tbody>` +
+    h += `<div class="panel full"><h3>축별 상세 <span class="dim">${mn}. 방향은 섹터 기준</span></h3><div class="tbl"><table><thead><tr><th>축</th><th class="num">건수</th><th class="num">비중</th><th class="num">밀어줌 / 막음 / 양쪽</th><th class="num">평균 확신</th><th>상위 섹터</th><th>상위 티커</th></tr></thead><tbody>` +
       A.axes.map(x => `<tr><td class="nowrap">${axTag(x.axis)}</td><td class="num">${x.count}</td><td class="num">${A.total ? Math.round(x.share * 100) + '%' : '–'}</td><td class="num">${x.dir['+']} / ${x.dir['-']} / ${x.dir['±']}</td><td class="num">${x.avg_conf ?? '–'}</td><td class="small">${x.sectors.map(([k, v]) => `${esc(k)}(${v})`).join(', ') || '–'}</td><td class="small">${x.tickers.map(([k, v]) => `${esc(k)}(${v})`).join(', ') || '–'}</td></tr>`).join('') + `</tbody></table></div></div></section>`;
     app.innerHTML = h;
-    const drawSectors = () => pctLines(app.querySelector('[data-chart="sectors"]'), S.dates, SEL.map(s => ({ name: s, cls: slotOf(s), values: S.sectors[s] })), { label: `섹터 정렬 % 추이, 최근 ${days}일 창` });
+    const drawSectors = () => pctLines(app.querySelector('[data-chart="sectors"]'), S.dates, SEL.map(s => ({ name: s, cls: slotOf(s), values: S.sectors[s] })), { label: `섹터 정렬 % 추이, ${mn}` });
     const drawAll = () => {
       drawSectors();
-      pctLines(app.querySelector('[data-chart="directions"]'), S.dates, B.directions.map((x, i) => ({ name: x.direction, cls: SC[i % SC.length], values: S.directions[x.direction] })), { label: `방향 정렬 % 추이, 최근 ${days}일 창` });
+      pctLines(app.querySelector('[data-chart="directions"]'), S.dates, B.directions.map((x, i) => ({ name: x.direction, cls: SC[i % SC.length], values: S.directions[x.direction] })), { label: `방향 정렬 % 추이, ${mn}` });
       const { days: dd, per } = dailyCounts(D.ledger, B.from, B.to);
-      stackChart(app.querySelector('[data-chart="daily"]'), dd, D.axes.map(a => ({ name: a, cls: axCls(a), counts: per[axIdx(a)] })), `일별 구조적 시그널 건수, 최근 ${days}일`);
+      stackChart(app.querySelector('[data-chart="daily"]'), dd, D.axes.map(a => ({ name: a, cls: axCls(a), counts: per[axIdx(a)] })), `일별 구조적 시그널 건수, ${B.from} ~ ${B.to}`);
     };
     app.querySelectorAll('button[data-sel]').forEach(btn => btn.addEventListener('click', () => {
       const s = btn.dataset.sel;
@@ -877,7 +891,7 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
     app.innerHTML = pageHead({ eyebrow: '장부', title: '쌓인 근거 전부', lede: '문서로 확정된 구조적 시그널만 쌓입니다. 한 줄이 한 사건이고, 추가만 하고 고치지 않습니다.', meta: [`전체 ${D.ledger.length}건`, D.first_date ? `${D.first_date}부터` : '', D.market_meta ? `종가 ${D.market_meta.asof} 까지 (${esc(D.market_meta.source.split(' (')[0])})` : ''].filter(Boolean) }) +
       `<div class="filters"><label>축 <select id="f-axis"><option value="">전체</option>${D.axes.map(a => `<option>${a}</option>`).join('')}</select></label>` +
       `<label>섹터 <select id="f-sector"><option value="">전체</option>${sectorNames.map(s => `<option>${esc(s)}</option>`).join('')}</select></label>` +
-      `<label>기간 <select id="f-days"><option value="">전체</option><option value="30">최근 30일</option><option value="90">최근 90일</option></select></label>` +
+      `<label>기간 <select id="f-days"><option value="">전체</option>${D.params.windows.map(n => `<option value="${n}">최근 ${winName(n)}</option>`).join('')}</select></label>` +
       `<label class="q">검색 <input type="search" id="f-q" placeholder="섹터, 티커, 팩트"></label><span class="count" id="f-count" aria-live="polite"></span></div>` + legendBox([...KEY_ITEMS, MARKET_KEY]) + `<div id="ledger-table"></div>`;
     const meta = r => `${esc(r.horizon)} · 크기 ${esc(r.impact)} · ${esc(r.channel)}${r.reverses ? ` · 번복 줄 ${r.reverses}` : ''}`;
     const draw = () => {
@@ -951,7 +965,7 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
     LAST_KEY = key;
     if (name === 'sector') sector(arg, a2); else views[name](arg);
     app.insertAdjacentHTML('afterbegin', banner());
-    if (samePage) {   /* 기간(30일·90일)만 바뀜: 보던 자리를 지킨다 */
+    if (samePage) {   /* 기준(누적·창)만 바뀜: 보던 자리를 지킨다 */
       window.scrollTo(0, y);
       if (NAVIGATED) { const tab = app.querySelector('.seg a[aria-selected=true]'); if (tab) tab.focus({ preventScroll: true }); }
     } else {

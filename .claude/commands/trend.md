@@ -1,5 +1,5 @@
 ---
-description: ledger/signals.jsonl 을 최근 30일/90일로 집계해 세 축이 어느 섹터·방향에 정렬되는지 숫자 근거로 서술
+description: ledger/signals.jsonl 을 누적(살아 있는 시그널)과 최근 30일(새 근거)·열린 긴 창으로 집계해 세 축이 어느 섹터·방향에 정렬되는지 숫자 근거로 서술
 argument-hint: [YYYY-MM-DD]
 ---
 
@@ -24,7 +24,7 @@ try: today = datetime.date.fromisoformat(DATE)
 except ValueError: sys.exit(f"DATE 가 YYYY-MM-DD 가 아님: {DATE!r}")
 sys.path.insert(0, "fetch")
 from config import AXES, load_sector_map, all_tickers, directions
-from scoring import alignment, series, attach_deltas, board_table, attention, raw_scan, pending_review, in_window, weight, fmt_net, fmt_delta, LABELS, delta
+from scoring import alignment, series, attach_deltas, board_table, attention, raw_scan, pending_review, select, enabled_windows, span_text, weight, fmt_net, fmt_delta, LABELS, delta
 
 from ledger import load_existing
 try: rows, _ = load_existing()
@@ -36,10 +36,11 @@ print(f"장부 전체 {len(rows)}건, {min(r['_d'] for r in rows)} ~ {max(r['_d'
 smap = load_sector_map()
 def fmt(counter, k): return ", ".join(f"{a}({b})" for a, b in counter.most_common(k)) or "-"
 def pct(n, d): return f"{100 * n / d:.0f}%" if d else "-"
-ser = {days: series(rows, today, days, 90, smap) for days in (30, 90)}
-for days in (30, 90):
-    w, span = in_window(rows, today, days)
-    print(f"\n## 최근 {days}일 ({span['from']} ~ {span['to']}) 총 {len(w)}건")
+MODES = [None] + enabled_windows(rows, today)   # None = 누적(수준). 30 = 새 근거(변화). 90·180·365 는 장부가 쌓이면 열림
+ser = {days: series(rows, today, days, 90, smap) for days in MODES}
+for days in MODES:
+    w, span, _wfn = select(rows, today, days)
+    print(f"\n## {'누적' if days is None else f'최근 {days}일'} ({span_text(span)}) 총 {len(w)}건" + (" — 수준" if days is None else " — 새 근거" if days == 30 else ""))
     print("| 축 | 건수 | 비중 | + | − | ± | 가중 + | 가중 − | 평균 확신 | 상위 섹터 | 상위 티커 |")
     print("|---|---|---|---|---|---|---|---|---|---|---|")
     for a in AXES:
@@ -52,18 +53,18 @@ for days in (30, 90):
         print(f"| {a} | {len(s)} | {pct(len(s), len(w))} | {dc['+']} | {dc['-']} | {dc['±']} | {wp} | {wm} | {conf} | {fmt(sc, 3)} | {fmt(tk, 5)} |")
     board = attach_deltas(alignment(rows, today, days, smap), ser[days])
     c = board["counts"]
-    print(f"\n### 섹터 정렬 (최근 {days}일. 축 값 −1~+1, 정렬 % = 50 + 50 × 세 축 평균) 3축 {c['aligned3']} · 2축 {c['aligned2']} · 1축 {c['aligned1']} · 엇갈림 {c['mixed']} · 양쪽 {c['neutral']} · 역풍 {c['headwind']} · 신호 없음 {c['none']}")
+    print(f"\n### 섹터 정렬 ({'누적' if days is None else f'최근 {days}일'}. 축 값 −1~+1, 정렬 % = 50 + 50 × 세 축 평균) 3축 {c['aligned3']} · 2축 {c['aligned2']} · 1축 {c['aligned1']} · 엇갈림 {c['mixed']} · 양쪽 {c['neutral']} · 역풍 {c['headwind']} · 신호 없음 {c['none']}")
     print("\n".join(board_table(board)))
     print("- 신호 없는 섹터: " + (", ".join(x["sector"] for x in board["sectors"] if not x["n"]) or "없음"))
-    print(f"\n### 방향 (최근 {days}일. 신호 있는 소속 섹터의 축 점수 평균)")
+    print(f"\n### 방향 ({'누적' if days is None else f'최근 {days}일'}. 신호 있는 소속 섹터의 축 점수 평균)")
     print("| 방향 | " + " | ".join(AXES) + " | 정렬 | 상태 | 건수 | 섹터(신호/전체) | 7일 변화 |")
     print("|---|" + "---|" * (len(AXES) + 5))
     for x in sorted(board["directions"], key=lambda x: (x["score"] is None, -(x["score"] or 0), x["direction"])):
         sc = f"{x['score']}%" if x["score"] is not None else "–"
         print(f"| {x['direction']} | " + " | ".join(fmt_net(x["axes"][a]) for a in AXES) + f" | {sc} | {LABELS[x['label']]} | {x['n']} | {x['active']}/{len(x['sectors'])} | {fmt_delta(x.get('delta'))} |")
     if board["orphan_total"]: print(f"- 경고: sector_map 에 없는 섹터의 행 {board['orphan_total']}건이 정렬에서 빠짐: " + ", ".join(f"{k} {v}건" for k, v in board["orphans"].items()))
-print("\n## 30일 변화 (30일 창 정렬 %, 30일 전 대비. 둘 다 값이 있는 섹터만)")
-ch = [(s, delta(v, 30), v[-1]) for s, v in ser[30]["sectors"].items() if delta(v, 30) is not None]
+print("\n## 30일 변화 (누적 정렬 %, 30일 전 대비. 둘 다 값이 있는 섹터만. 수준이 어느 쪽으로 움직였나)")
+ch = [(s, delta(v, 30), v[-1]) for s, v in ser[None]["sectors"].items() if delta(v, 30) is not None]
 for s, dl, now in sorted(ch, key=lambda x: -abs(x[1])): print(f"- {s}: {now}% ({dl:+d}p)")
 if not ch: print("- 없음 (장부가 30일 미만)")
 A = attention(raw_scan(today), smap)
@@ -106,7 +107,7 @@ python3 fetch/market.py --report --date <기준일> --days 90
 
 ## 3. 서술
 
-- "지금 세상은 어느 방향으로 흐르는가": 한 문단. 근거는 위 숫자만 쓴다. 방향별 정렬 %와 상태, 3축·2축 정렬 섹터, 엇갈림·역풍 섹터, 30일 변화의 가속·감속. 숫자 없는 주장은 쓰지 않는다.
+- "지금 세상은 어느 방향으로 흐르는가": 한 문단. 근거는 위 숫자만 쓴다. 수준은 누적(살아 있는 시그널, 유효기간 안에서 서서히 줄어든 가중치)으로, 변화는 최근 30일 창(새로 들어온 근거)과 30일 변화로 읽는다. 방향별 정렬 %와 상태, 3축·2축 정렬 섹터, 엇갈림·역풍 섹터, 30일 변화의 가속·감속. 숫자 없는 주장은 쓰지 않는다. 누적과 30일 창의 순위가 다르면(예: 누적은 높은데 30일 창에는 없음) "오래된 근거로 버티는 중"이라고 밝힌다.
 - 어느 섹터든 표본이 3건 미만이면 "표본 부족"이라고 쓰고 방향을 단정하지 않는다. 한 축에서만 신호가 있는 섹터(1축)는 "나머지 두 축은 아직 모른다"라고 쓴다. 상태 "양쪽"은 신호는 있는데 축 점수가 모두 0 인 섹터(± 뿐이거나 상쇄)다. 엇갈림과 다르며, 방향을 말하지 않고 "판단 보류"라고 쓴다.
 - 스크립트가 "sector_map 에 없는 섹터" 경고를 내면 그 행이 정렬에서 빠져 있다는 뜻이다. 서술 첫머리에 밝히고 맵의 섹터 이름을 되돌리거나 Ken 에게 알린다.
 - 정렬이 깨진 섹터(엇갈림)는 axes.md 의 세 가지 패턴(기술 +/사회 −, 사회 +/정책 −, 정책 +/사회 −) 중 어디에 해당하는지 짚는다.
@@ -122,11 +123,14 @@ python3 fetch/market.py --report --date <기준일> --days 90
 ```markdown
 # 추이 (기준일 <기준일>)
 
-## 최근 30일
+## 누적 (수준)
 (축 표, 섹터 정렬 표, 방향 표 그대로)
 
-## 최근 90일
+## 최근 30일 (새 근거)
 (같은 구성)
+
+## 최근 90일 …
+(열린 창마다 같은 구성)
 
 ## 지금 세상은 어느 방향으로 흐르는가
 한 문단
@@ -135,7 +139,7 @@ python3 fetch/market.py --report --date <기준일> --days 90
 - 3축·2축 정렬: 섹터와 근거 한 줄씩
 - 엇갈림·역풍: 섹터와 어느 축이 막는지
 
-## 30일 변화
+## 30일 변화 (누적 기준)
 (스크립트 출력 그대로)
 
 ## 관심

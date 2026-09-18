@@ -8,8 +8,8 @@
 자료 문제(깨진 장부 줄, sector_map 오류, 맵에 없는 섹터, 브리프 형식)로는 빌드를 멈추지 않는다. data.json 의 warnings 에 적고 사이트가 배너로 보여준다. 사이트가 조용히 멈춰 있는 것보다 낫다.
 data.json:
   today, generated_at, first_date, axes, labels, params, sectors{이름: {direction, tickers, note}}
-  ledger[행 + line], board{w30, w90}(scoring.alignment + delta + orphans), series{w30, w90}(scoring.series)
-  activity{w30, w90}(축별 건수·방향·상위 섹터), attention(scoring.attention), briefs[{date, structural, none_today, signals, md(최신 것만)}]
+  ledger[행 + line], board{live, w30, w90, ...}(scoring.alignment + delta + orphans. live 는 누적(유효기간), w<n> 은 열린 창), series{같은 키}(scoring.series)
+  activity{같은 키}(축별 건수·방향·상위 섹터), attention(scoring.attention), briefs[{date, structural, none_today, signals, md(최신 것만)}]
   raw{날짜: {소스: {count, error, current, backfill}}}, market{장부 줄: 시장 반응(market.reaction)}, market_meta{source, asof, updated_at} | null,
   direction_brief(briefs/direction.md 본문. 홈 "지금 세상의 방향" 서술) | null, warnings[]
   브리프 signals 에는 장부와 (날짜, 출처 URL, 섹터) 가 같은 행의 line 을 붙인다 (카드에 시장 반응을 보이기 위해).
@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "fetch"))
 from config import AXES, all_tickers, load_sector_map, load_sources  # noqa: E402
 from ledger import load_existing  # noqa: E402
-from scoring import LABELS, PARAMS, alignment, attach_deltas, attention, in_window, raw_scan, series  # noqa: E402
+from scoring import LABELS, PARAMS, alignment, attach_deltas, attention, enabled_windows, raw_scan, select, series  # noqa: E402
 from market import SOURCE as PRICE_SOURCE, asof as price_asof, load_prices, reactions  # noqa: E402
 
 SITE = ROOT / "site"
@@ -47,9 +47,9 @@ def d(s: str) -> datetime.date:
     return datetime.date.fromisoformat(s)
 
 
-def activity(rows: list[dict], today: datetime.date, days: int) -> dict:
-    """축별 건수·방향·상위 섹터 (추이 표)."""
-    w, span = in_window(rows, today, days)
+def activity(rows: list[dict], today: datetime.date, days: int | None) -> dict:
+    """축별 건수·방향·상위 섹터 (추이 표). days=None 은 누적(살아 있는 시그널), 정수는 창."""
+    w, span, _wfn = select(rows, today, days)
     axes = []
     for a in AXES:
         s = [r for r in w if r.get("axis") == a]
@@ -198,13 +198,13 @@ def main(argv=None) -> int:
         for s in b["signals"]:
             m = URL_IN.search(s["fact"])
             s["line"] = by_key.get((b["date"], m.group(1), s["sector"])) if m else None
-    ser = {f"w{n}": series(rows, today, n, PARAMS["span_days"], smap) for n in PARAMS["windows"]}
-    board = {f"w{n}": attach_deltas(alignment(rows, today, n, smap), ser[f"w{n}"]) for n in PARAMS["windows"]}
-    for n in PARAMS["windows"]:
-        b = board[f"w{n}"]
-        if b["orphan_total"]:
-            warnings.append(f"최근 {n}일 장부 {b['orphan_total']}건이 sector_map 에 없는 섹터라 정렬에서 빠짐: " + ", ".join(f"{k} {v}건" for k, v in b["orphans"].items()))
-            break
+    windows = enabled_windows(rows, today)   # 장부가 쌓이면 90 → 180 → 365 창이 저절로 열린다
+    modes = {"live": None, **{f"w{n}": n for n in windows}}   # live = 누적(유효기간 기준, 기본 화면), w<n> = 창
+    ser = {k: series(rows, today, n, PARAMS["span_days"], smap) for k, n in modes.items()}
+    board = {k: attach_deltas(alignment(rows, today, n, smap), ser[k]) for k, n in modes.items()}
+    if board["live"]["orphan_total"]:
+        b = board["live"]
+        warnings.append(f"살아 있는 장부 {b['orphan_total']}건이 sector_map 에 없는 섹터라 정렬에서 빠짐: " + ", ".join(f"{k} {v}건" for k, v in b["orphans"].items()))
     scan = raw_scan(today, 14, current=current)
     data = {
         "generated_at": now.replace(microsecond=0).isoformat(),
@@ -212,12 +212,12 @@ def main(argv=None) -> int:
         "first_date": min((r["date"] for r in rows), default=None),
         "axes": list(AXES),
         "labels": LABELS,
-        "params": {"K": PARAMS["K"], "HW": PARAMS["HW"], "delta_days": PARAMS["delta_days"], "windows": PARAMS["windows"]},
+        "params": {"K": PARAMS["K"], "HW": PARAMS["HW"], "validity": PARAMS["validity"], "delta_days": PARAMS["delta_days"], "windows": windows, "all_windows": PARAMS["windows"]},
         "sectors": {s: {"direction": c["direction"], "tickers": c["tickers"], "note": c["note"]} for s, c in smap.items()},
         "ledger": rows,
         "board": board,
         "series": ser,
-        "activity": {f"w{n}": activity(rows, today, n) for n in PARAMS["windows"]},
+        "activity": {k: activity(rows, today, n) for k, n in modes.items()},
         "attention": attention(scan, smap),
         "briefs": [{k: v for k, v in b.items() if k != "md" or b is briefs[0]} for b in briefs],   # 본문은 최신 브리프만 싣는다 (홈 첫 화면용)
         "direction_brief": (ROOT / "briefs/direction.md").read_text(encoding="utf-8") if (ROOT / "briefs/direction.md").exists() else None,   # 홈 "지금 세상의 방향" 서술 (쉬운 말). 날짜는 본문 제목에
@@ -247,9 +247,9 @@ def main(argv=None) -> int:
     (OUT / ".nojekyll").write_text("", encoding="utf-8")
     for w in warnings:
         print(f"경고 {w}", file=sys.stderr)
-    b30 = board["w30"]
-    print(f"built site/out: briefs {len(briefs)}, ledger {len(rows)}, today {today}, 30d {b30['total']} / 90d {board['w90']['total']}, "
-          f"sectors {b30['counts']}, attention days {data['attention']['days_present7']}, warnings {len(warnings)}")
+    bl = board["live"]
+    print(f"built site/out: briefs {len(briefs)}, ledger {len(rows)}, today {today}, live {bl['total']} / " + " / ".join(f"{n}d {board[f'w{n}']['total']}" for n in windows) + ", "
+          f"sectors {bl['counts']}, attention days {data['attention']['days_present7']}, warnings {len(warnings)}")
     return 0
 
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """장부(ledger/signals.jsonl) 검증·추가. 장부에 쓰는 유일한 수단이다.
 
-  python3 fetch/ledger.py --date 2026-09-18 --rows /tmp/rows.json            검증 + 30일 집계 + 섹터 정렬 표
+  python3 fetch/ledger.py --date 2026-09-18 --rows /tmp/rows.json            검증 + 30일 집계 + 섹터 정렬 표(누적)
   python3 fetch/ledger.py --date 2026-09-18 --rows /tmp/rows.json --append   검증 통과 시 append
 
 rows 파일은 JSON 배열이다. `[]` 이면 집계만 한다. 스키마는 CLAUDE.md "시그널 스키마".
@@ -21,7 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import AXES, ROOT, all_tickers, load_sector_map  # noqa: E402
-from scoring import PARAMS, alignment, attach_deltas, board_table, first_sentence, in_window, is_int, series  # noqa: E402
+from scoring import PARAMS, alignment, attach_deltas, board_table, first_sentence, in_window, is_int, series, span_text  # noqa: E402
 
 LEDGER = ROOT / "ledger/signals.jsonl"
 KEYS = ["date", "axis", "sector", "fact", "source", "structural", "tickers", "direction", "confidence", "note",
@@ -154,7 +154,8 @@ def validate(rows: list, date: str, today: datetime.date, existing: list[dict], 
 
 
 def tally(rows: list[dict], today: datetime.date, smap: dict) -> str:
-    """브리프 "30일 누적"·"섹터 정렬" 절에 그대로 붙이는 텍스트. append 전에 계산해 둔다 (계산이 실패해도 장부에 쓰기 전에 멈추도록)."""
+    """브리프 "30일 누적"·"섹터 정렬" 절에 그대로 붙이는 텍스트. 30일 누적은 새로 들어온 건수, 섹터 정렬은 살아 있는 시그널의 누적(유효기간 기준).
+    append 전에 계산해 둔다 (계산이 실패해도 장부에 쓰기 전에 멈추도록)."""
     w, span = in_window(rows, today, 30)
     c: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
     for r in w:
@@ -162,9 +163,9 @@ def tally(rows: list[dict], today: datetime.date, smap: dict) -> str:
     out = ["", "30일 누적"]
     for a in AXES:
         out.append(f"- {a}: {sum(c[a].values())}건 (+{c[a]['+']} / -{c[a]['-']} / ±{c[a]['±']})")
-    board = attach_deltas(alignment(rows, today, 30, smap), series(rows, today, 30, PARAMS["delta_days"] + 1, smap))
+    board = attach_deltas(alignment(rows, today, None, smap), series(rows, today, None, PARAMS["delta_days"] + 1, smap))
     out.append("")
-    out.append(f"섹터 정렬 (최근 30일 {board['from']} ~ {board['to']}. 신호 있는 섹터만, 정렬 % 높은 순. 축 값은 −1~+1, 7일 변화는 %p)")
+    out.append(f"섹터 정렬 (누적. {span_text(board)}. 신호 있는 섹터만, 정렬 % 높은 순. 축 값은 −1~+1, 7일 변화는 %p)")
     out.extend(board_table(board))
     dirs = [x for x in board["directions"] if x["n"]]
     if dirs:

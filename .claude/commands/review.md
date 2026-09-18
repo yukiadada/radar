@@ -32,8 +32,8 @@ try: rows, _ = load_existing(); smap = load_sector_map()
 except ValueError as e: sys.exit(str(e))
 w90, _ = in_window(rows, today, 90)
 print(f"장부 {len(rows)}줄, 최근 90일 {len(w90)}건, 기준일 {today}")
-board = attach_deltas(alignment(rows, today, 90, smap), series(rows, today, 90, 90, smap))
-print("\n## 섹터 정렬 (최근 90일)")
+board = attach_deltas(alignment(rows, today, None, smap), series(rows, today, None, 90, smap))
+print("\n## 섹터 정렬 (누적. 살아 있는 시그널, 유효기간 기준)")
 print("\n".join(board_table(board)))
 print("- 신호 없는 섹터: " + (", ".join(x["sector"] for x in board["sectors"] if not x["n"]) or "없음"))
 if board["orphan_total"]: print(f"- 경고: sector_map 에 없는 섹터의 행 {board['orphan_total']}건이 정렬에서 빠짐: " + ", ".join(f"{k} {v}건" for k, v in board["orphans"].items()))
@@ -77,7 +77,7 @@ EOF
 ```markdown
 # 월간 점검 (<월>)
 
-## 섹터 정렬 (90일)
+## 섹터 정렬 (누적)
 (스크립트 출력 그대로)
 
 ## 시장 반응 (90일)
