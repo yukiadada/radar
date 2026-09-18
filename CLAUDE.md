@@ -155,22 +155,24 @@ logs/                      세션 로그 (/save 가 만듦, git 미추적)
 
 ## 현재 상태
 
-> /save 자동 업데이트 — 2026-09-17 21:56
+> /save 자동 업데이트 — 2026-09-18 12:25
 
 **브랜치:** main
-**마지막 커밋:** 8db398b 로고·공유 이미지 적용
+**마지막 커밋:** 5a6cf15 오늘 탭 최상단의 날짜 줄과 정보 칩(장부 건수·시작일·수집 소스) 삭제
 
 **미완료 항목:**
-- 사이트(site/index.html): 글꼴 IBM Plex Sans KR 단일(Google Fonts, 막히면 시스템 고딕), 화면마다 h1 구조, 홈 요약 4칸, 설명은 "기호 읽는 법" 펼침, 모서리 3단계(상자 12·조작 8·배지 6), 섹터·섹터 상세·추이의 기간 탭은 머리글 아래 8px 고정(배경 없음). 새 화면은 pageHead·secHead·legendBox 부품과 토큰을 쓴다. 긴 대시(—)·알약 모양·색 띠·반투명 흐림은 쓰지 않는다
+- 사이트(site/index.html): 이름 Radar. 글꼴 IBM Plex Sans KR 단일(Google Fonts, 막히면 시스템 고딕), 화면마다 h1 구조, 설명은 "기호 읽는 법" 펼침, 모서리 3단계(상자 12·조작 8·배지 6), 섹터·섹터 상세·추이의 기간 탭은 머리글 아래 8px 고정(배경 없음). 새 화면은 pageHead·secHead·legendBox 부품과 토큰을 쓴다. 긴 대시(—)·알약 모양·색 띠·반투명 흐림은 쓰지 않는다
+- 오늘 탭: 제목·설명 → 오늘의 브리프(축별 카드만, 카드가 200px 넘으면 그라데이션 + 글자 버튼 "더 보기") → 방향별 정렬 → 쉬운 말로 읽는 지금의 방향 → 섹터 한눈에 → 지난 브리프. 요약 4칸·날짜 줄·정보 칩은 뺐다. 섹터 정렬·버린 뉴스·30일 누적·시장 반응·맵 수정 제안은 브리프 탭에만
+- 오늘 탭 카드 안의 "원본 시그널 표 · 해석 · 확인 방법 메모" 펼침은 남아 있음. 브리프 탭으로 옮길지 Ken 판단
 - 이용약관·개인정보처리방침(site/legal/*.md, #/terms #/privacy)의 [입력 필요]·[확인 필요] 16곳을 Ken 이 채운다. 책임 제한 문구는 법률 검토, Cboe 지연 시세 게시 조건 확인. 외부 요청 목록(GitHub Pages·Google Fonts·cdnjs)이나 브라우저 저장 값이 바뀌면 privacy.md 도 고친다
-- 로고·아이콘·공유 이미지는 site/static (원본 logo.png, og.png 1200×630). 채팅 첨부 이미지가 열리지 않아 바탕화면의 같은 로고로 만들었다. 다르면 다시 생성. og.png·새 글꼴·고정 탭 모양은 이미지 확인 없이 수치로만 검증했으니 Ken 이 눈으로 확인
+- 로고·아이콘·공유 이미지는 site/static (원본 logo.png, og.png 1200×630). og.png 는 2026-09-18 에 "Radar" 로 다시 만들고 눈으로 확인. 로고 원본이 Ken 이 준 것과 다르면 다시 생성
 - briefs/direction.md(홈 "방향 브리프")는 2026-09-17 w30 숫자로 쓴 손글씨 문서. 자동 갱신 없음. 장부가 쌓이면 카드 숫자와 어긋나므로 /trend 때 같이 다시 쓸지 Ken 판단
-- 9/18 04:30 KST fetch.yml: 새 소스 10개 수집 + 종가 갱신 단계(market.py --update, Cboe 가 Actions IP 에서 열리는지) + radar-raw prices 커밋을 로그로 확인. ftc_press(ua: browser)가 Actions 에서 열리는지도. 막히면 error 파일이 남고 사이트 raw 표에 표시
-- 9/18 06:20 KST 루틴: 새 /brief(빌드 확인, 1차 출처 피드 항목은 검색 교차 없이 0.6, "## 시장 반응" 절)가 정상 실행되는지 확인. 루틴 프롬프트가 옛 파일(companies 등)을 언급하면 수정. 루틴 로그 claude.ai/code/routines
+- GitHub 예약 수집은 여전히 1~3시간 늦음(9/18 은 07:23·07:51 KST). 루틴이 06:21 KST 에 직접 실행해 브리프는 제때 나옴. 9/18 raw 23소스 정상(bea_releases 0건은 발표 없음, ftc_press 4건), 종가 갱신 정상
+- 루틴 프롬프트가 옛 4축 파일(companies 등)을 언급하는지 확인하고 새 3축 /brief 에 맞춘다. 루틴 로그 claude.ai/code/routines/trig_01564MDnvQH3DtPRvCiqfaDY
 - pages.yml 이 radar-raw 의 prices 를 받아 시장 반응이 매일 갱신되는지 확인 (data.json market_meta.asof)
 - 장부 12~91번 줄(80건, 2026-06-25~09-16)은 2026-09-17 에 에이전트가 소급 작성한 행(1차 출처 본문 확인, ledger.py 검증). Ken 이 훑어보고 어긋난 행은 반대 방향 행(reverses)으로 처리, 기존 줄은 고치지 않는다
 - 시장 반응 판정 "반대로" 30건은 첫 /review(10월 초)에서 근거가 틀렸는지·이미 반영됐는지·다른 힘이 컸는지 본다. 표본이 쌓이면 축·섹터별 비율
-- 9/18 raw 의 fetch 로그로 OR 검색어 괄호 + when:2d 확인. gnews 7개·새 피드 10개 품질 첫 주 점검 후 sources.yaml 조정. court_opinions 키워드·법원 목록, pew_research 소음(하루 10~30건)이 조정 후보
+- gnews 7개·새 피드 10개 품질 첫 주 점검 후 sources.yaml 조정. court_opinions 키워드·법원 목록, pew_research 소음(하루 10~30건)이 조정 후보
 - raw/2026-06-19~09-16 은 backfill.py 소급분(backfill:true, gnews 2일 청크 100건 캡이라 성김). 관심의 지난주 비교는 실제 수집분이 쌓이는 9/23 께부터. 키워드는 sector_map.yaml 의 keywords 에서 Ken 이 조정
 - 못 쓰는 소스는 sources.yaml 머리말에 기록(BLS·NY Fed·Commerce·FCC 403, NRC 503, Gallup sitemap 뿐, Treasury·BIS 피드 없음, Census 보도자료 link 없음). 가격은 Stooq(JS 차단)·Yahoo(429) 대신 Cboe. FRED 는 이 환경에서 연결 실패
 - 사이트 상단에 빌드 경고 배너가 보이면 그 자료(장부 줄·sector_map·브리프 형식·가격 자료 5일 이상 오래됨)를 고친다. 빌드는 멈추지 않는다
