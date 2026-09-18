@@ -137,7 +137,7 @@ def paged_feed(url: str, a: datetime.date, ua: str | None = None, max_pages: int
     for page in range(1, max_pages + 1):
         u = url + ("&" if "?" in url else "?") + f"paged={page}"
         try:
-            items = get_items(u)
+            items = get_items(u, ua)
         except RuntimeError:
             break   # 마지막 페이지 뒤는 404
         if not items:

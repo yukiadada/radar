@@ -64,8 +64,12 @@ jobs:
         run: |
           mkdir -p radar-raw/prices
           rm -rf prices && ln -s "$GITHUB_WORKSPACE/radar-raw/prices" prices
-          python3 fetch/market.py --update 2>&1 | tee market.log || echo "::warning::종가 갱신 실패 (exit ${PIPESTATUS[0]}). 시장 반응은 이전 자료로 계산된다"
+          set +e
+          python3 fetch/market.py --update 2>&1 | tee market.log
+          rc=${PIPESTATUS[0]}
+          set -e
           grep -E '^\[fail\]' market.log | while IFS= read -r line; do echo "::warning::$line"; done || true
+          if [ "$rc" -ge 2 ]; then echo "::warning::종가 갱신 못 함 (exit $rc: 인자·환경·sector_map 오류). 시장 반응은 이전 자료로 계산된다"; elif [ "$rc" -ne 0 ]; then echo "::warning::종가 일부 종목 실패 (exit $rc). 실패 종목은 이전 자료 유지"; fi
       - name: radar-raw 커밋·push
         working-directory: radar-raw
         run: |

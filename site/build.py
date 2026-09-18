@@ -193,7 +193,10 @@ def main(argv=None) -> int:
         market_meta = {"source": PRICE_SOURCE, "asof": pa, "updated_at": prices.get("updated_at"), "n": len(market)}
         if pa and (today - d(pa)).days > 5:
             warnings.append(f"가격 자료(prices/prices.json)가 {pa} 까지라 시장 반응이 오래됐다. fetch.yml 의 market.py --update 를 확인")
-    by_key = {(r["date"], r["source"], r["sector"]): r["line"] for r in rows}
+    incomplete = [r["line"] for r in rows if not r.get("source") or not r.get("sector")]   # ledger.py 를 거치지 않은 줄. 빌드는 멈추지 않는다
+    if incomplete:
+        warnings.append(f"장부 {len(incomplete)}줄에 source 또는 sector 가 없음 (줄 {', '.join(map(str, incomplete[:10]))}). 장부는 수정 금지, Ken 에게 알린다")
+    by_key = {(r["date"], r.get("source"), r.get("sector")): r["line"] for r in rows}
     for b in briefs:
         for s in b["signals"]:
             m = URL_IN.search(s["fact"])

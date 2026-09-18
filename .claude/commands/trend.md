@@ -76,7 +76,7 @@ print("\n## 번복 행 (reverses)")
 rev = [r for r in rows if r.get("reverses")]
 for r in rev: print(f"- {r['date']} [{r['axis']}/{r['sector']}] 줄 {r['line']} 이 줄 {r['reverses']} 을 뒤집음: {r['fact'][:80]}")
 if not rev: print("- 없음")
-print("\n## 확인 대기 (30일 넘은 + 시그널, horizon 1년 이상, 번복 없음. /review 에서 예상 결과를 확인한다)")
+print("\n## 확인 대기 (살아 있는 시그널 중 30일 넘은 +, horizon 1년 이상, 번복 없음. 점수를 밀어 올리는 동안 계속 확인 대상. /review 에서 예상 결과를 확인한다)")
 wait = pending_review(rows, today)
 for r in wait: print(f"- 줄 {r['line']} {r['date']} [{r['axis']}/{r['sector']}] {r['fact'][:80]}")
 if not wait: print("- 없음")

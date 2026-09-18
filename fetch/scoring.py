@@ -141,15 +141,17 @@ def _tally(w: list[dict], smap: dict, wfn=weight) -> tuple[dict, collections.Cou
 
 
 def _scores(cells: dict, smap: dict, dirs: list[tuple[str, list[str]]]) -> tuple[dict, dict]:
-    """섹터별 (nets, n) 과 방향별 (nets, n, active). alignment 와 series 가 같은 규칙을 쓴다."""
+    """섹터별 (nets, n) 과 방향별 (nets, n, active). alignment 와 series 가 같은 규칙을 쓴다.
+    축 점수는 소수 2자리로 반올림한 값이 유일한 값이다: 점수(score_of)·상태(label_of)·표시(fmt_net)가 모두 이 값을 쓰므로
+    감쇠로 0.005 미만이 된 축이 화면에는 0 으로 보이면서 상태에서만 밀어줌/막음으로 세는 일이 없다."""
     by_sector = {}
     for s in smap:
-        nets = {a: clamp(cells[s][a]["raw"] / K) for a in AXES}
+        nets = {a: round(clamp(cells[s][a]["raw"] / K), 2) for a in AXES}
         by_sector[s] = (nets, sum(cells[s][a]["n"] for a in AXES))
     by_dir = {}
     for dn, members in dirs:
         active = [by_sector[s][0] for s in members if by_sector[s][1]]
-        nets = {a: (sum(x[a] for x in active) / len(active)) if active else 0.0 for a in AXES}
+        nets = {a: round(sum(x[a] for x in active) / len(active), 2) if active else 0.0 for a in AXES}
         by_dir[dn] = (nets, sum(by_sector[s][1] for s in members), len(active))
     return by_sector, by_dir
 
@@ -248,11 +250,12 @@ def board_table(board: dict) -> list[str]:
     return out
 
 
-def pending_review(rows: list[dict], today: datetime.date, days: int = 90) -> list[dict]:
-    """확인 대기: 창 안에서 30일 넘은 + 시그널, horizon 1년 이상, 번복되지 않은 것. /trend 와 /review 가 같은 목록을 본다. 행에 line 이 있어야 한다."""
+def pending_review(rows: list[dict], today: datetime.date, days: int | None = None) -> list[dict]:
+    """확인 대기: 30일 넘은 + 시그널 중 horizon 1년 이상, 번복되지 않은 것. days=None 이면 살아 있는(유효기간 안) 시그널 전부,
+    정수면 그 창 안. 점수를 밀어 올리는 동안은 계속 확인 대상이어야 하므로 기본이 누적이다. /trend 와 /review 가 같은 목록을 본다. 행에 line 이 있어야 한다."""
     reversed_lines = {r["reverses"] for r in rows if r.get("reverses")}
     cut = today - datetime.timedelta(days=30)
-    w, _ = in_window(rows, today, days)
+    w, _span, _wfn = select(rows, today, days)
     return [r for r in w if d(r["date"]) <= cut and r.get("direction") == "+" and r.get("horizon", "1년") != "분기" and r.get("line") not in reversed_lines]
 
 

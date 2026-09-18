@@ -427,7 +427,7 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
 <main id="app" tabindex="-1"><p class="loading">불러오는 중</p></main>
 <footer class="foot"><span id="gen"></span><a href="https://github.com/yukiadada/radar">저장소</a><a href="#/terms">이용약관</a><a href="#/privacy">개인정보처리방침</a><span>판단 재료이지 매매 신호가 아닙니다</span></footer>
 <noscript><p style="padding:24px">이 페이지는 JavaScript 로 장부와 브리프를 읽습니다. data.json 과 briefs/ 는 저장소에서 직접 볼 수 있습니다.</p></noscript>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/18.0.12/lib/marked.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/18.0.12/lib/marked.umd.js" integrity="sha384-TuL/7aNYXEDWjlcHi2CR+Een2A5pigrtJ97Tmx3WG69mx5kCSp8yKHRISW9xSmgq" crossorigin="anonymous"></script>
 <script>
 (function () {
   const app = document.getElementById('app');
@@ -625,7 +625,7 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
 
   /* ---- 차트 (SVG 직접). 폭은 컨테이너에 맞추고 창 크기가 바뀌면 다시 그린다 ---- */
   const mdShort = d => { const [, m, dd] = d.split('-').map(Number); return `${m}/${dd}`; };
-  const xStep = n => (n > 40 ? 14 : 7);
+  const xStep = n => (n > 200 ? Math.ceil(n / 24) : n > 40 ? 14 : 7);   // 라벨 25개 안팎으로. 누적·긴 창은 날짜가 수백 개
   function frame(el, { H, m, lo, hi, n, label, ticks, fmtY, band }) {
     const W = Math.max(280, el.clientWidth || 440), iw = W - m.l - m.r, ih = H - m.t - m.b;
     const x = i => m.l + (band ? (i + 0.5) * (iw / n) : (n > 1 ? i / (n - 1) * iw : iw / 2)), y = v => m.t + (hi - v) / (hi - lo) * ih;
@@ -928,7 +928,7 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
   const fetchText = p => { if (!fwCache[p]) fwCache[p] = fetch(p, { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(r.status); return r.text(); }); return fwCache[p]; };
   function framework() {
     REDRAW = null;
-    app.innerHTML = pageHead({ eyebrow: '기준', title: '판단 기준', lede: 'framework/axes.md, sector_map.yaml, sources.yaml 을 그대로 보여줍니다. Ken 이 고칩니다.', meta: [`K = ${D.params.K}`, `기간 가중 ${Object.entries(D.params.HW).map(([k, v]) => `${k} ${v}`).join(' · ')}`, '구현 fetch/scoring.py'] }) + `<div id="axes" style="margin-top:24px"><p class="loading">불러오는 중</p></div><h2 class="sec">방향·섹터·티커 <span class="dim">framework/sector_map.yaml</span></h2><pre class="yaml" id="smap"></pre><h2 class="sec">수집 소스 <span class="dim">framework/sources.yaml</span></h2><pre class="yaml" id="srcs"></pre>`;
+    app.innerHTML = pageHead({ eyebrow: '기준', title: '판단 기준', lede: 'framework/axes.md, sector_map.yaml, sources.yaml 을 그대로 보여줍니다. Ken 이 고칩니다.', meta: [`K = ${D.params.K}`, `기간 가중 ${Object.entries(D.params.HW).map(([k, v]) => `${k} ${v}`).join(' · ')}`, `유효기간 ${validityText()}`, '구현 fetch/scoring.py'] }) + `<div id="axes" style="margin-top:24px"><p class="loading">불러오는 중</p></div><h2 class="sec">방향·섹터·티커 <span class="dim">framework/sector_map.yaml</span></h2><pre class="yaml" id="smap"></pre><h2 class="sec">수집 소스 <span class="dim">framework/sources.yaml</span></h2><pre class="yaml" id="srcs"></pre>`;
     Promise.all([fetchText('framework/axes.md'), fetchText('framework/sector_map.yaml'), fetchText('framework/sources.yaml')]).then(([a, s, r]) => {
       const ax = document.getElementById('axes'); if (!ax) return;
       ax.innerHTML = ''; ax.appendChild(md(a)); document.getElementById('smap').textContent = s; document.getElementById('srcs').textContent = r;

@@ -175,7 +175,8 @@ def tally(rows: list[dict], today: datetime.date, smap: dict) -> str:
     return "\n".join(out)
 
 
-def append(path: Path, todo: list[dict], n_existing: int) -> None:
+def append(path: Path, todo: list[dict], n_existing: int) -> int:
+    """append 한 뒤 마지막 줄들을 다시 읽어 rows 와 같은지 확인한다. 0 통과 / 2 검증 실패(이미 쓴 뒤라 되돌리지 않는다. 장부는 수정 금지)."""
     path.parent.mkdir(exist_ok=True)
     need_nl = path.exists() and path.stat().st_size > 0 and not path.read_bytes().endswith(b"\n")
     with open(path, "a", encoding="utf-8") as f:
@@ -184,8 +185,15 @@ def append(path: Path, todo: list[dict], n_existing: int) -> None:
         for r in todo:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
     tail = [l for l in path.read_text(encoding="utf-8").split("\n") if l.strip()][-len(todo):]
-    assert [json.loads(l) for l in tail] == todo, "append 검증 실패"
+    try:
+        ok = [json.loads(l) for l in tail] == todo
+    except json.JSONDecodeError:
+        ok = False
+    if not ok:
+        print(f"append 검증 실패: {path.name} 마지막 {len(todo)}줄이 rows 와 다름. 장부는 수정하지 않는다. Ken 에게 알린다")
+        return 2
     print(f"appended {len(todo)} ({path.name} 총 {n_existing + len(todo)}줄)")
+    return 0
 
 
 def main(argv=None) -> int:
@@ -220,7 +228,9 @@ def main(argv=None) -> int:
         return 1
     summary = tally(existing + todo, today, smap)   # append 전에 계산. 여기서 실패하면 장부에 아무것도 쓰지 않는다
     if args.append and todo:
-        append(LEDGER, todo, len(existing))
+        rc = append(LEDGER, todo, len(existing))
+        if rc:
+            return rc
     elif args.append:
         print("appended 0")
     else:
