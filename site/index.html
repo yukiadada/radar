@@ -346,6 +346,17 @@ h3.axh .dim{font-size:var(--fs-sm)}
 .sig p{margin:0 0 12px;font-size:var(--fs-body);line-height:1.75;max-width:68ch}
 .sig p b{display:block;font-size:var(--fs-cap);font-weight:700;color:var(--ink2);margin:0 0 2px;letter-spacing:.01em}
 .sig .chips{margin:12px 0 0}
+/* 이득·손해 행: 라벨 · 티커 · 이유 */
+.gls{margin:2px 0 0}
+.glr{display:grid;grid-template-columns:auto auto minmax(0,1fr);column-gap:12px;row-gap:6px;align-items:baseline;padding:10px 0;border-top:1px solid var(--hair2)}
+.glr:first-child{border-top:0;padding-top:4px}
+.glk{display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-sm);font-weight:700;white-space:nowrap}
+.glk i{font-style:normal;font-size:11px}
+.glr.up .glk{color:var(--pos-ink)}
+.glr.down .glk{color:var(--neg-ink)}
+.glt{display:flex;flex-wrap:wrap;gap:6px}
+.glr p.gly{margin:0;font-size:var(--fs-body);line-height:1.7;max-width:62ch}
+@media (max-width:560px){.glr{grid-template-columns:auto minmax(0,1fr)}.glr p.gly{grid-column:1/-1}}
 .sig details{margin-top:14px;border-top:1px solid var(--hair2);padding-top:4px;font-size:var(--fs-sm)}
 .sig details>summary{display:flex;align-items:center;gap:8px;min-height:40px;color:var(--ink2);font-weight:600}
 .sig details>summary:hover{color:var(--ink)}
@@ -533,11 +544,21 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
     return briefCache[b.date];
   }
   const splitSections = text => text.split(/^## /m).slice(1).map(p => { const nl = p.indexOf('\n'); return { title: p.slice(0, nl).trim(), md: p.slice(nl + 1) }; });
+  /* 이득·손해: 한 줄에 라벨, 티커, 이유. 이득 먼저 */
+  function gainLoss(gl) {
+    const rows = gl.slice().sort((a, c) => (a.kind === 'gain' ? 0 : 1) - (c.kind === 'gain' ? 0 : 1));
+    return `<div class="gls">` + rows.map(g => {
+      const up = g.kind === 'gain';
+      const tk = g.tickers.length ? g.tickers.map(t => `<span class="chip">${esc(t)}</span>`).join('') : '<span class="dim small">티커 없음</span>';
+      return `<div class="glr ${up ? 'up' : 'down'}"><span class="glk"><i aria-hidden="true">${up ? '▲' : '▼'}</i>${up ? '이득' : '손해'}</span><span class="glt">${tk}</span><p class="gly">${inlineMd(g.why)}</p></div>`;
+    }).join('') + `</div>`;
+  }
   function signalCard(s) {
+    const gl = (s.easy && s.easy.gl) || [];
     const title = s.easy ? s.easy.name : firstSentence(plain(s.fact)).slice(0, 70);
     return `<article class="sig"><header>${axTag(s.axis)}${s.structural == null ? '' : stBadge(s.structural)}${dirBadge(s.direction)}${confBadge(s.confidence)}<span class="dim small">${sectorLink(s.sector)}</span></header><h3>${esc(title)}</h3>` +
       (s.easy ? s.easy.parts.map(([k, v]) => `<p><b>${esc(k)}</b>${inlineMd(v)}</p>`).join('') : '') +
-      (s.tickers.length ? `<div class="chips">${s.tickers.map(t => `<span class="chip">${esc(t)}</span>`).join('')}</div>` : '') + (s.line ? marketHtml(s.line) : '') +
+      (gl.length ? gainLoss(gl) : s.tickers.length ? `<div class="chips">${s.tickers.map(t => `<span class="chip">${esc(t)}</span>`).join('')}</div>` : '') + (s.line ? marketHtml(s.line) : '') +
       `<details><summary>근거와 출처</summary><p>${inlineMd(s.fact)}</p>${s.interp ? `<p class="dim">${inlineMd(s.interp)}</p>` : ''}</details></article>`;
   }
   /* compact: 오늘 탭용. 축별 카드만 두고 섹터 정렬·버린 뉴스·30일 누적·시장 반응·맵 수정 제안은 브리프 탭(#/brief/날짜)에만 */

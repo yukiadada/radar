@@ -29,7 +29,7 @@ from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "fetch"))
-from config import AXES, load_sector_map, load_sources  # noqa: E402
+from config import AXES, all_tickers, load_sector_map, load_sources  # noqa: E402
 from ledger import load_existing  # noqa: E402
 from scoring import LABELS, PARAMS, alignment, attach_deltas, attention, in_window, raw_scan, series  # noqa: E402
 from market import SOURCE as PRICE_SOURCE, asof as price_asof, load_prices, reactions  # noqa: E402
@@ -38,7 +38,9 @@ SITE = ROOT / "site"
 OUT = SITE / "out"
 URL_IN = re.compile(r"\((https?://[^)\s]+)\)")   # 브리프 팩트 셀의 ([출처](URL)) 에서 URL
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-EASY_KEYS = ("무슨 일", "왜 중요", "누가 이득·손해")
+EASY_KEYS = ("무슨 일", "왜 중요", "누가 이득·손해")   # 누가 이득·손해 는 2026-09-18 이전 형식. 지금은 이득/손해 줄
+GAIN_LOSS = re.compile(r"^\s+- (이득|손해)\s*[(（]([^)）]*)[)）]\s*[:：]\s*(.+)$")   # "  - 이득 (XLI, CAT): 이유"
+NO_TICKER = re.compile(r"^\s*(티커\s*없음|없음|-)?\s*$")
 
 
 def d(s: str) -> datetime.date:
@@ -80,8 +82,13 @@ def _easy(body: str) -> list[dict]:
     for raw in body.split("\n"):
         m = re.match(r"^- \*\*(.+?)\*\*\s*$", raw)
         if m:
-            cur = {"name": m.group(1), "parts": []}
+            cur = {"name": m.group(1), "parts": [], "gl": []}
             items.append(cur)
+            continue
+        m = GAIN_LOSS.match(raw)
+        if m and cur:
+            tks = [] if NO_TICKER.match(m.group(2)) else [t.strip() for t in re.split(r"[,，]", m.group(2)) if t.strip()]
+            cur["gl"].append({"kind": "gain" if m.group(1) == "이득" else "loss", "tickers": tks, "why": m.group(3).strip()})
             continue
         m = re.match(r"^\s+- (무슨 일|왜 중요|누가 이득·손해)\s*[:：]\s*(.+)$", raw)
         if m and cur:
@@ -89,7 +96,25 @@ def _easy(body: str) -> list[dict]:
     return items
 
 
-def parse_brief(md: str) -> dict:
+def _gain_loss(sig: dict, e: dict | None, where: str, tickers: set | None, warnings: list[str]) -> None:
+    """카드의 이득·손해 행. 새 형식(이득/손해 줄)이 없고 옛 "누가 이득·손해" 한 줄만 있으면 방향으로 나눈다(+ 이득, − 손해, ± 는 옛 문장 그대로)."""
+    if not e:
+        return
+    if not e["gl"]:
+        old = next((v for k, v in e["parts"] if k == "누가 이득·손해"), None)
+        kind = {"+": "gain", "-": "loss", "−": "loss"}.get(sig["direction"].strip())
+        if old and kind:
+            e["gl"] = [{"kind": kind, "tickers": sig["tickers"], "why": old}]
+            e["parts"] = [[k, v] for k, v in e["parts"] if k != "누가 이득·손해"]
+        elif not old:
+            warnings.append(f"{where}: 쉬운 말로에 이득·손해 줄이 없음")
+    for g in e["gl"]:
+        bad = [t for t in g["tickers"] if tickers is not None and t not in tickers]
+        if bad:
+            warnings.append(f"{where}: {'이득' if g['kind'] == 'gain' else '손해'} 티커 {', '.join(bad)} 가 sector_map 에 없음")
+
+
+def parse_brief(md: str, tickers: set | None = None) -> dict:
     """세 축 절의 표를 signals 로. 표의 행 i 는 "쉬운 말로" i 번째 항목(기술→사회→정책 순서로 이어 붙임)과 같은 시그널이다 (brief.md 규칙).
     셀 안의 '|' 는 팩트에 합쳐 넣는다. 형식 문제는 warnings 에 적고 그 행은 건너뛴다 (쉬운 말로 번호는 건너뛴 행만큼 같이 넘긴다)."""
     secs = _sections(md)
@@ -118,6 +143,7 @@ def parse_brief(md: str) -> dict:
             signals.append({"axis": a, "fact": fact, "structural": structural, "sector": sector.strip(),
                             "tickers": [t.strip() for t in tk.split(",") if t.strip()], "direction": dirc, "confidence": conf,
                             "interp": interp[i] if i < len(interp) else "", "easy": easy[k] if k < len(easy) else None})
+            _gain_loss(signals[-1], signals[-1]["easy"], f"{a} 표 {i + 1}행", tickers, warnings)
             k += 1
     if easy and len(easy) != k:
         warnings.append(f"쉬운 말로 항목 {len(easy)}개, 시그널 표 행 {k}개. 카드 제목이 어긋날 수 있음")
@@ -125,13 +151,13 @@ def parse_brief(md: str) -> dict:
             "none_today": "오늘 구조적 시그널 없음" in md, "warnings": warnings}
 
 
-def load_briefs(warnings: list[str]) -> list[dict]:
+def load_briefs(warnings: list[str], tickers: set | None = None) -> list[dict]:
     out = []
     for p in sorted((ROOT / "briefs").glob("*.md"), reverse=True):
         if not DATE_RE.match(p.stem):
             continue
         md = p.read_text(encoding="utf-8")
-        b = parse_brief(md)
+        b = parse_brief(md, tickers)
         warnings.extend(f"briefs/{p.stem}.md: {w}" for w in b.pop("warnings"))
         out.append({"date": p.stem, "md": md, **b})
     return out
@@ -158,7 +184,7 @@ def main(argv=None) -> int:
     except (ValueError, OSError) as e:
         warnings.append(f"framework/sources.yaml: {e}")
         current = None
-    briefs = load_briefs(warnings)
+    briefs = load_briefs(warnings, all_tickers(smap) if smap else None)
     prices = load_prices()
     market = reactions(rows, prices)
     market_meta = None
