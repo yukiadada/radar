@@ -707,8 +707,7 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
     const B = D.board.w30, b = D.briefs[0];
     REDRAW = null;
     const dirs = B.directions.filter(x => x.n).sort((a, c) => (c.score - a.score) || (c.n - a.n)), quiet = B.directions.filter(x => !x.n);
-    const meta = [`최근 30일 장부 ${B.total}건`, `전체 ${D.ledger.length}건`, ledgerNote(), rawLine(b ? b.date : D.today)].filter(Boolean).map(esc);
-    let h = pageHead({ eyebrow: fmtDate(D.today), title: '지금 세상의 방향', lede: '기술 · 사회 · 정책 세 축이 같은 쪽을 가리킬수록 %가 높습니다. 50%가 중립, 100%는 세 축 모두 밀어줌입니다.', meta });
+    let h = pageHead({ title: '지금 세상의 방향', lede: '기술 · 사회 · 정책 세 축이 같은 쪽을 가리킬수록 %가 높습니다. 50%가 중립, 100%는 세 축 모두 밀어줌입니다.' });
 
     /* 오늘의 브리프: 방향별 정렬 위 */
     if (b) h += secHead(b.date === D.today ? '오늘의 브리프' : '최근 브리프', `${fmtDate(b.date)} · 구조적 ${b.none_today ? '없음' : b.structural + '건'}`, `<a href="#/brief/${b.date}">따로 열기 →</a>`) + `<div id="brief"></div>`;
