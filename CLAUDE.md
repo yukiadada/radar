@@ -34,6 +34,7 @@ fetch/                     fetch.py 수집, ledger.py 장부 검증·추가(장�
 raw/YYYY-MM-DD/            당일 수집 원문. 비공개 저장소 radar-raw 에만 커밋 (여기서는 ../radar-raw/raw 심볼릭 링크, git 미추적). 2026-06-19~09-16 은 backfill.py 소급분(backfill:true, 그날 수집보다 성김)
 prices/prices.json         sector_map 티커 + SPY 일별 종가 (Cboe 지연 시세). radar-raw 의 prices/ 심볼릭 링크. fetch.yml 이 매일 갱신·커밋
 briefs/YYYY-MM-DD.md       일간 브리프 (축별 기사 + 쉬운 말로 + 섹터 정렬 표)
+briefs/direction.md        방향 브리프 (쉬운 말로 읽는 지금의 방향). /brief 가 매일 덮어쓴다. 홈에 표시
 ledger/signals.jsonl       구조적 시그널 누적 장부 (append only)
 .claude/commands/          /brief, /trend, /review
 site/                      웹페이지. build.py 가 briefs·ledger·framework·raw 를 site/out/ 로 빌드, index.html 이 렌더
@@ -54,6 +55,7 @@ logs/                      세션 로그 (/save 가 만듦, git 미추적)
 5. `briefs/오늘.md` 작성 (아래 템플릿). 섹터 정렬 표는 4의 출력을 그대로 붙인다.
 6. 같은 rows 로 `fetch/ledger.py --append`.
 7. `python3 site/build.py` 로 빌드가 되는지 확인한다 (경고가 있으면 채팅 요약에 적는다). 빌드 실패는 사이트가 조용히 멈추는 원인이라 push 전에 잡는다.
+8. `briefs/direction.md`(홈 "쉬운 말로 읽는 지금의 방향")를 4의 누적 정렬 표와 장부만 재료로 매일 통째로 다시 쓴다. 형식은 brief.md 7b.
 
 ### /trend (주 1회 또는 요청 시)
 1. 장부 누적(살아 있는 시그널, 유효기간 기준) / 최근 30일(새 근거) / 열린 긴 창: 축별 건수와 방향(+/−/±), 섹터별 정렬 %(기술·사회·정책 축 점수, 상태, 7일·30일 변화), 방향별 %. 수준은 누적으로, 변화는 30일 창으로 읽는다.
@@ -170,7 +172,7 @@ logs/                      세션 로그 (/save 가 만듦, git 미추적)
 - 오늘 탭 카드 안의 "원본 시그널 표 · 해석 · 확인 방법 메모" 펼침은 남아 있음. 브리프 탭으로 옮길지 Ken 판단
 - 이용약관·개인정보처리방침(site/legal/*.md, #/terms #/privacy)의 [입력 필요]·[확인 필요] 16곳을 Ken 이 채운다. 책임 제한 문구는 법률 검토, Cboe 지연 시세 게시 조건 확인. 외부 요청 목록(GitHub Pages·Google Fonts·cdnjs)이나 브라우저 저장 값이 바뀌면 privacy.md 도 고친다
 - 로고·아이콘·공유 이미지는 site/static (원본 logo.png, og.png 1200×630). og.png 는 2026-09-18 에 "Radar" 로 다시 만들고 눈으로 확인. 로고 원본이 Ken 이 준 것과 다르면 다시 생성
-- briefs/direction.md(홈 "방향 브리프")는 2026-09-17 30일 창 숫자로 쓴 손글씨 문서. 자동 갱신 없음. 누적 카드 숫자와 어긋나므로 /trend 때 같이 다시 쓸지 Ken 판단
+- briefs/direction.md 는 2026-09-22 부터 /brief 7b 단계가 매일 다시 쓴다(누적 정렬 표 기준). 9/23 루틴이 실제로 갱신하는지 홈의 날짜로 확인
 - GitHub 예약 수집은 여전히 1~3시간 늦음(9/18 은 07:23·07:51 KST). 루틴이 06:21 KST 에 직접 실행해 브리프는 제때 나옴. 9/18 raw 23소스 정상(bea_releases 0건은 발표 없음, ftc_press 4건), 종가 갱신 정상
 - 루틴 프롬프트가 옛 4축 파일(companies 등)을 언급하는지 확인하고 새 3축 /brief 에 맞춘다. 루틴 로그 claude.ai/code/routines/trig_01564MDnvQH3DtPRvCiqfaDY
 - pages.yml 이 radar-raw 의 prices 를 받아 시장 반응이 매일 갱신되는지 확인 (data.json market_meta.asof)
