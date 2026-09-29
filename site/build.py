@@ -5,7 +5,7 @@
   python3 site/build.py --date 2026-09-18   기준일 지정 (기본: 오늘, Asia/Seoul)
 
 표준 라이브러리만 쓴다 (framework/*.yaml 은 fetch/config.py, 점수는 fetch/scoring.py, 장부 읽기는 fetch/ledger.py). .github/workflows/pages.yml 이 main 에 push 될 때마다 실행해 GitHub Pages 로 올린다.
-자료 문제(깨진 장부 줄, sector_map 오류, 맵에 없는 섹터, 브리프 형식)로는 빌드를 멈추지 않는다. data.json 의 warnings 에 적고 사이트가 배너로 보여준다. 사이트가 조용히 멈춰 있는 것보다 낫다.
+자료 문제(깨진 장부 줄, sector_map 오류, 맵에 없는 섹터, 브리프·방향 브리프 형식)로는 빌드를 멈추지 않는다. data.json 의 warnings 에 적고 사이트가 배너로 보여준다. 사이트가 조용히 멈춰 있는 것보다 낫다.
 data.json:
   today, generated_at, first_date, axes, labels, params, sectors{이름: {direction, tickers, note}}
   ledger[행 + line], board{live, w30, w90, ...}(scoring.alignment + delta + orphans. live 는 누적(유효기간), w<n> 은 열린 창), series{같은 키}(scoring.series)
@@ -163,6 +163,27 @@ def load_briefs(warnings: list[str], tickers: set | None = None) -> list[dict]:
     return out
 
 
+DIR_TITLE = re.compile(r"\A# .*?(\d{4}-\d{2}-\d{2})")   # index.html dirBriefParts 와 같은 규칙: 첫 줄 제목의 날짜
+
+
+def load_direction(warnings: list[str], latest: str | None) -> str | None:
+    """briefs/direction.md 본문. 형식(brief.md 7b)이 어긋나거나 최신 브리프보다 날짜가 늦으면 warnings 에 적는다. 홈이 날짜·요약을 잃는 것을 배너로 드러낸다."""
+    p = ROOT / "briefs/direction.md"
+    if not p.exists():
+        return None
+    md = p.read_text(encoding="utf-8")
+    m = DIR_TITLE.match(md)
+    if not m:
+        warnings.append("briefs/direction.md: 첫 줄이 '# 지금 세상의 방향 (YYYY-MM-DD)' 형식이 아님. 홈에 기준 날짜가 안 보인다")
+    elif latest and m.group(1) < latest:
+        warnings.append(f"briefs/direction.md: {m.group(1)} 기준인데 최신 브리프는 {latest}. /brief 7b 가 건너뛰어졌다")
+    if not re.search(r"^## 한 줄 요약", md, re.M):
+        warnings.append("briefs/direction.md: '## 한 줄 요약' 절이 없음. 홈 요약 칸에 머리말이 대신 보인다")
+    if not re.search(r"^## \d", md, re.M):
+        warnings.append("briefs/direction.md: '## 1. <방향> ...' 처럼 번호 붙은 방향 절이 없음")
+    return md
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="radar 정적 페이지 빌드")
     ap.add_argument("--date", default=None, help="기준일 YYYY-MM-DD (기본: 오늘, Asia/Seoul)")
@@ -185,6 +206,7 @@ def main(argv=None) -> int:
         warnings.append(f"framework/sources.yaml: {e}")
         current = None
     briefs = load_briefs(warnings, all_tickers(smap) if smap else None)
+    direction_brief = load_direction(warnings, briefs[0]["date"] if briefs else None)
     prices = load_prices()
     market = reactions(rows, prices)
     market_meta = None
@@ -223,7 +245,7 @@ def main(argv=None) -> int:
         "activity": {k: activity(rows, today, n) for k, n in modes.items()},
         "attention": attention(scan, smap),
         "briefs": [{k: v for k, v in b.items() if k != "md" or b is briefs[0]} for b in briefs],   # 본문은 최신 브리프만 싣는다 (홈 첫 화면용)
-        "direction_brief": (ROOT / "briefs/direction.md").read_text(encoding="utf-8") if (ROOT / "briefs/direction.md").exists() else None,   # 홈 "지금 세상의 방향" 서술 (쉬운 말). 날짜는 본문 제목에
+        "direction_brief": direction_brief,   # 홈 "지금 세상의 방향" 서술 (쉬운 말). 날짜는 본문 제목에
         "raw": scan["days"],
         "market": market,
         "market_meta": market_meta,
