@@ -7,7 +7,9 @@
     줄어든다 (w × (1 − 지난 일수 ÷ 유효기간)). 유효기간이 지나면 점수에서 빠진다. 이것이 "수준"이다.
   창(days=30 등): cut < date <= today 인 시그널을 줄이지 않고 그대로 센다. 30일 창은 "새로 들어온 근거"(변화)를 보는 용도.
     PARAMS["windows"] 중 장부가 (n − grace)일 이상 쌓인 것만 연다 (enabled_windows). 첫 창(30)은 항상 연다.
-  섹터의 축 점수 n = clamp(Σ 방향(+1/−1/±0) × w ÷ K, −1, +1), K = PARAMS["K"].
+  섹터의 축 점수 n = Σ 방향(+1/−1/±0) × w ÷ (Σ w + K), K = PARAMS["K"]. 분모의 Σ w 는 ± 를 포함한 그 축 시그널의 가중치 합.
+    근거가 한쪽으로만 쌓이면 n 이 ±1 에 가까워지고(닿지는 않는다), 반대 방향 근거가 들어오면 그만큼 0 쪽으로 돌아온다.
+    K 는 근거가 적을 때 점수를 0 쪽으로 깎는 몫이다: 같은 쪽 가중치 6 이면 0.5, 12 이면 0.67, 24 이면 0.8.
   정렬 % = 50 + 50 × (축 점수 합 ÷ 축 수). 살아 있는(창 안) 시그널이 없으면 None.
   정렬 상태 = 밀어주는 축(n>0)·막는 축(n<0) 수로 aligned3 / aligned2 / aligned1 / mixed(둘 다) / neutral(신호는 있는데 축 점수 0) / headwind / none.
   방향(내러티브)의 축 점수 = 신호 있는 소속 섹터의 축 점수 평균.
@@ -99,8 +101,9 @@ def enabled_windows(rows: list[dict], today: datetime.date) -> list[int]:
     return [n for i, n in enumerate(PARAMS["windows"]) if i == 0 or have >= n - PARAMS["grace"]]
 
 
-def clamp(x: float) -> float:
-    return max(-1.0, min(1.0, x))
+def axis_net(raw: float, gross: float) -> float:
+    """축 점수. raw = Σ 방향 × w, gross = Σ w (± 포함). 시그널이 없으면 0."""
+    return raw / (gross + K) if gross else 0.0
 
 
 def score_of(nets: dict[str, float]) -> int:
@@ -120,7 +123,7 @@ def label_of(nets: dict[str, float], n: int) -> str:
 
 
 def _cell() -> dict:
-    return {"raw": 0.0, "n": 0, "up": 0, "down": 0, "both": 0}
+    return {"raw": 0.0, "gross": 0.0, "n": 0, "up": 0, "down": 0, "both": 0}
 
 
 def _tally(w: list[dict], smap: dict, wfn=weight) -> tuple[dict, collections.Counter]:
@@ -134,7 +137,9 @@ def _tally(w: list[dict], smap: dict, wfn=weight) -> tuple[dict, collections.Cou
             continue
         c = cells[s][a]
         dirc = r.get("direction", "±")
-        c["raw"] += DIRV.get(dirc, 0) * wfn(r)
+        wr = wfn(r)
+        c["raw"] += DIRV.get(dirc, 0) * wr
+        c["gross"] += wr
         c["n"] += 1
         c["up" if dirc == "+" else "down" if dirc == "-" else "both"] += 1
     return cells, orphans
@@ -146,7 +151,7 @@ def _scores(cells: dict, smap: dict, dirs: list[tuple[str, list[str]]]) -> tuple
     감쇠로 0.005 미만이 된 축이 화면에는 0 으로 보이면서 상태에서만 밀어줌/막음으로 세는 일이 없다."""
     by_sector = {}
     for s in smap:
-        nets = {a: round(clamp(cells[s][a]["raw"] / K), 2) for a in AXES}
+        nets = {a: round(axis_net(cells[s][a]["raw"], cells[s][a]["gross"]), 2) for a in AXES}
         by_sector[s] = (nets, sum(cells[s][a]["n"] for a in AXES))
     by_dir = {}
     for dn, members in dirs:
@@ -168,7 +173,7 @@ def alignment(rows: list[dict], today: datetime.date, days: int | None = None, s
         nets, n = by_sector[s]
         sectors.append({
             "sector": s, "direction": cfg["direction"], "tickers": list(cfg["tickers"]), "n": n,
-            "axes": {a: {"net": round(nets[a], 2), "raw": round(cells[s][a]["raw"], 1), "n": cells[s][a]["n"],
+            "axes": {a: {"net": round(nets[a], 2), "raw": round(cells[s][a]["raw"], 1), "gross": round(cells[s][a]["gross"], 1), "n": cells[s][a]["n"],
                          "up": cells[s][a]["up"], "down": cells[s][a]["down"], "both": cells[s][a]["both"]} for a in AXES},
             "score": score_of(nets) if n else None, "label": label_of(nets, n),
         })
