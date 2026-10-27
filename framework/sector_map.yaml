@@ -6,9 +6,9 @@
 
 AI 인프라:
   AI 반도체:
-    tickers: [SMH, NVDA, AVGO, TSM]
-    note: 학습·추론 칩과 파운드리. 하이퍼스케일러 capex 의 직접 수혜
-    keywords: [nvidia, gpu, semiconductor, chips, tsmc, "chip export", broadcom]
+    tickers: [SMH, NVDA, AVGO, TSM, MU]
+    note: 학습·추론 칩과 파운드리, 메모리(HBM). 하이퍼스케일러 capex 의 직접 수혜
+    keywords: [nvidia, gpu, semiconductor, chips, tsmc, "chip export", broadcom, micron, hbm, dram]
   하이퍼스케일러:
     tickers: [QQQ, MSFT, GOOGL, AMZN, META]
     note: capex 주체이자 모델·클라우드 판매자. 반독점·저작권 판결의 당사자
@@ -43,12 +43,16 @@ AI 인프라:
     keywords: [tariff, tariffs, reshoring, "section 232", "section 301", "trade deal", "import duties", manufacturing]
   방산:
     tickers: [ITA, LMT, RTX]
-    note: 국방예산, 지정학, 골든돔
+    note: 국방예산, 지정학, 골든돔. 드론 관세·수출통제처럼 드론 업체에만 닿는 정책은 이 티커들에 닿지 않아 맵 영향 없음으로 버린다
     keywords: [pentagon, "defense budget", "defense department", missile, nato, "arms sale", "golden dome"]
   에너지:
     tickers: [XLE, XOP]
     note: 시추 규제 완화, 전략비축유, DPA 에너지 권한. 유가 등락 자체는 시그널 아님
     keywords: [oil, drilling, opec, lng, "energy secretary", pipeline, "strategic petroleum", "interior department"]
+  태양광:
+    tickers: [TAN]
+    note: 태양광 셀·모듈·폴리실리콘. 반덤핑·상계관세와 232조 관세는 국내 생산자에 +, 설치 비용에는 − 로 갈릴 수 있다
+    keywords: [solar, polysilicon, "solar panel", "solar panels", "solar cells", photovoltaic]
 
 금리·달러 체제:
   금리/국채:
