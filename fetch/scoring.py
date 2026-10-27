@@ -7,7 +7,7 @@
     줄어든다 (w × (1 − 지난 일수 ÷ 유효기간)). 유효기간이 지나면 점수에서 빠진다. 이것이 "수준"이다.
   창(days=30 등): cut < date <= today 인 시그널을 줄이지 않고 그대로 센다. 30일 창은 "새로 들어온 근거"(변화)를 보는 용도.
     PARAMS["windows"] 중 장부가 (n − grace)일 이상 쌓인 것만 연다 (enabled_windows). 첫 창(30)은 항상 연다.
-  섹터의 축 점수 n = Σ 방향(+1/−1/±0) × w ÷ (Σ w + K), K = PARAMS["K"]. 분모의 Σ w 는 ± 를 포함한 그 축 시그널의 가중치 합.
+  섹터의 축 점수 n = Σ 방향(+1/−1) × w ÷ (Σ w + K), K = PARAMS["K"]. 분모의 Σ w 는 그 축 +·− 시그널의 가중치 합. ± 는 분자에도 분모에도 넣지 않는다(점수에 영향 없음).
     근거가 한쪽으로만 쌓이면 n 이 ±1 에 가까워지고(닿지는 않는다), 반대 방향 근거가 들어오면 그만큼 0 쪽으로 돌아온다.
     K 는 근거가 적을 때 점수를 0 쪽으로 깎는 몫이다: 같은 쪽 가중치 6 이면 0.5, 12 이면 0.67, 24 이면 0.8.
   정렬 % = 50 + 50 × (축 점수 합 ÷ 축 수). 살아 있는(창 안) 시그널이 없으면 None.
@@ -102,7 +102,7 @@ def enabled_windows(rows: list[dict], today: datetime.date) -> list[int]:
 
 
 def axis_net(raw: float, gross: float) -> float:
-    """축 점수. raw = Σ 방향 × w, gross = Σ w (± 포함). 시그널이 없으면 0."""
+    """축 점수. raw = Σ 방향 × w, gross = +·− 행의 Σ w (± 제외). +·− 시그널이 없으면 0."""
     return raw / (gross + K) if gross else 0.0
 
 
@@ -139,7 +139,8 @@ def _tally(w: list[dict], smap: dict, wfn=weight) -> tuple[dict, collections.Cou
         dirc = r.get("direction", "±")
         wr = wfn(r)
         c["raw"] += DIRV.get(dirc, 0) * wr
-        c["gross"] += wr
+        if dirc in ("+", "-"):
+            c["gross"] += wr
         c["n"] += 1
         c["up" if dirc == "+" else "down" if dirc == "-" else "both"] += 1
     return cells, orphans
