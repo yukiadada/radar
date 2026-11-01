@@ -220,9 +220,8 @@ def main(argv=None) -> int:
         warnings.append(f"장부 {len(incomplete)}줄에 source 또는 sector 가 없음 (줄 {', '.join(map(str, incomplete[:10]))}). 장부는 수정 금지, Ken 에게 알린다")
     by_key = {(r["date"], r.get("source"), r.get("sector")): r["line"] for r in rows}
     for b in briefs:
-        for s in b["signals"]:
-            m = URL_IN.search(s["fact"])
-            s["line"] = by_key.get((b["date"], m.group(1), s["sector"])) if m else None
+        for s in b["signals"]:   # 팩트 칸에는 검색 결과 링크가 먼저 올 수 있어 링크 전부를 장부 source 와 맞춰 본다
+            s["line"] = next((ln for u in URL_IN.findall(s["fact"]) if (ln := by_key.get((b["date"], u, s["sector"]))) is not None), None)
     windows = enabled_windows(rows, today)   # 장부가 쌓이면 90 → 180 → 365 창이 저절로 열린다
     modes = {"live": None, **{f"w{n}": n for n in windows}}   # live = 누적(유효기간 기준, 기본 화면), w<n> = 창
     ser = {k: series(rows, today, n, PARAMS["span_days"], smap) for k, n in modes.items()}

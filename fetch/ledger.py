@@ -135,8 +135,8 @@ def validate(rows: list, date: str, today: datetime.date, existing: list[dict], 
                 prev = by_line[rv]
                 print(f"번복 {p}: {rv}번 줄 [{prev.get('axis')}/{prev.get('sector')}] {str(prev.get('fact', ''))[:70]}" +
                       ("" if prev.get("sector") == r["sector"] else f"  경고: 섹터가 다름 ({prev.get('sector')} vs {r['sector']})"))
-                if prev.get("direction") == r["direction"]:
-                    errors.append(f"{p}: reverses 는 이전 줄과 반대 방향이어야 함 ({rv}번 줄도 {r['direction']}). 번복이 아니면 null")
+                if {prev.get("direction"), r["direction"]} != {"+", "-"}:
+                    errors.append(f"{p}: reverses 는 이전 줄과 반대 방향(+ ↔ -)이어야 함 ({rv}번 줄 {prev.get('direction')}, 이 행 {r['direction']}). ± 는 뒤집을 수도, 뒤집는 행이 될 수도 없다. 번복이 아니면 null")
         g = grams(r["fact"])
         for x in recent:
             if x["sector"] == r["sector"] and x["source"] != r["source"]:

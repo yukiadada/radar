@@ -11,8 +11,10 @@
     근거가 한쪽으로만 쌓이면 n 이 ±1 에 가까워지고(닿지는 않는다), 반대 방향 근거가 들어오면 그만큼 0 쪽으로 돌아온다.
     K 는 근거가 적을 때 점수를 0 쪽으로 깎는 몫이다: 같은 쪽 가중치 6 이면 0.5, 12 이면 0.67, 24 이면 0.8.
   정렬 % = 50 + 50 × (축 점수 합 ÷ 축 수). 살아 있는(창 안) 시그널이 없으면 None.
-  정렬 상태 = 밀어주는 축(n>0)·막는 축(n<0) 수로 aligned3 / aligned2 / aligned1 / mixed(둘 다) / neutral(신호는 있는데 축 점수 0) / headwind / none.
+  정렬 상태 = 밀어주는 축(n ≥ dead)·막는 축(n ≤ −dead) 수로 aligned3 / aligned2 / aligned1 / mixed(둘 다) / neutral(신호는 있는데 모든 축이 ±dead 안) / headwind / none.
+    dead = PARAMS["dead"](0.1). 반대 근거가 거의 상쇄된 +0.03 같은 축을 '밀어줌'으로 세지 않는다. 점수(%)에는 쓰지 않는다.
   방향(내러티브)의 축 점수 = 신호 있는 소속 섹터의 축 점수 평균.
+  번복: 기준일까지 다른 행이 reverses 로 뒤집은 행은 누적·창 모두에서 뺀다(select). 뒤집은 날 전의 추이에는 원래 행이 남는다.
   추이(series) = 날마다 그날을 기준일로 같은 계산을 다시 한 값. 장부 첫날 전은 만들지 않는다.
 관심(attention): 수집 헤드라인(raw/*/*.json 의 title)에서 sector_map 의 keywords 가 나온 건수. 같은 제목은 하루에 한 번만 센다.
   검색어 때문에 편향이 있으니 절대량보다 순위와 주간 변화를 본다.
@@ -27,7 +29,7 @@ from pathlib import Path
 
 from config import AXES, ROOT, directions, load_sector_map
 
-PARAMS = {"K": 6.0, "HW": {"분기": 1, "1년": 2, "다년": 3}, "validity": {"분기": 90, "1년": 365, "다년": 730},
+PARAMS = {"K": 6.0, "dead": 0.1, "HW": {"분기": 1, "1년": 2, "다년": 3}, "validity": {"분기": 90, "1년": 365, "다년": 730},
           "windows": [30, 90, 180, 365], "grace": 7, "span_days": 90, "delta_days": 7}
 DIRV = {"+": 1, "-": -1, "±": 0}
 HW = PARAMS["HW"]
@@ -85,8 +87,22 @@ def live(rows: list[dict], today: datetime.date) -> tuple[list[dict], dict]:
     return w, {"mode": "live", "days": None, "from": min((r["date"] for r in w), default=today.isoformat()), "to": today.isoformat()}
 
 
+def reversed_by(rows: list[dict]) -> dict[int, str]:
+    """{번복된 줄 번호: 그 줄을 뒤집은 행의 날짜(여럿이면 가장 이른 것)}."""
+    out: dict[int, str] = {}
+    for r in rows:
+        rv, dt = r.get("reverses"), r.get("date")
+        if is_int(rv) and isinstance(dt, str) and (rv not in out or dt < out[rv]):
+            out[rv] = dt
+    return out
+
+
 def select(rows: list[dict], today: datetime.date, days: int | None):
-    """days=None 이면 누적(살아 있는 시그널, 줄어든 가중치), 아니면 창(그대로). (행, 범위, 가중치 함수)."""
+    """days=None 이면 누적(살아 있는 시그널, 줄어든 가중치), 아니면 창(그대로). (행, 범위, 가중치 함수).
+    기준일까지 번복된 행은 뺀다. 뒤집은 행만 남아 그 섹터·축을 반대쪽으로 민다 (장부에는 둘 다 남는다)."""
+    rev = reversed_by(rows)
+    if rev:
+        rows = [r for r in rows if not (r.get("line") in rev and d(rev[r["line"]]) <= today)]
     if days is None:
         w, span = live(rows, today)
         return w, span, (lambda r: live_weight(r, today))
@@ -113,13 +129,14 @@ def score_of(nets: dict[str, float]) -> int:
 def label_of(nets: dict[str, float], n: int) -> str:
     if n == 0:
         return "none"
-    push = sum(1 for a in AXES if nets[a] > 0)
-    block = sum(1 for a in AXES if nets[a] < 0)
+    dead = PARAMS["dead"]
+    push = sum(1 for a in AXES if nets[a] >= dead)
+    block = sum(1 for a in AXES if nets[a] <= -dead)
     if push and block:
         return "mixed"
     if block:
         return "headwind"
-    return {3: "aligned3", 2: "aligned2", 1: "aligned1"}.get(push, "neutral")   # 신호는 있는데 축 점수가 모두 0 (± 만 있거나 상쇄)
+    return {3: "aligned3", 2: "aligned2", 1: "aligned1"}.get(push, "neutral")   # 신호는 있는데 모든 축이 ±dead 안 (± 만 있거나 상쇄)
 
 
 def _cell() -> dict:

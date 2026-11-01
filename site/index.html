@@ -474,7 +474,7 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
     ['확신', `사실이 맞는가. <span class="conf conf-low">${dots(1)}낮음 0.3</span> · <span class="conf conf-mid">${dots(2)}보통 0.6</span> · <span class="conf conf-high">${dots(3)}높음 0.8</span>`],
   ];
   const KEYS = legendBox(KEY_ITEMS);
-  const MARKET_KEY = ['시장 반응', '시그널 전날 종가 대비 시그널 티커 평균 수익률과 같은 기간 SPY. 판정은 끝난 가장 긴 구간(20 → 5 → 최근 3거래일 이상)에서 SPY 보다 방향대로 움직였는지 (±0.5%p 안은 보합). 판단 재료이지 매매 신호가 아닙니다.'];
+  const MARKET_KEY = ['시장 반응', '시그널 전날 종가 대비 시그널 티커 평균 수익률과 같은 기간 SPY. 판정은 끝난 가장 긴 구간(60 → 20 → 5 → 최근 3거래일 이상)에서 SPY 보다 방향대로 움직였는지 (±0.5%p 안은 보합). 판단 재료이지 매매 신호가 아닙니다.'];
   const fmtNet = v => (Math.abs(v) < 0.005 ? '0' : (v > 0 ? '+' : '') + v.toFixed(2));
   const netCls = v => (v > 0 ? 'gs' : v < 0 ? 'ss' : 'dim');
   const pctCls = s => (s == null ? 'dim' : s >= 60 ? 'gs' : s <= 40 ? 'ss' : 'ns');
@@ -510,6 +510,13 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
   const axes3 = axes => `<div class="axes3">${D.axes.map(a => { const x = axes[a]; const net = typeof x === 'number' ? x : x.net; return axisBar(a, net, typeof x === 'object' ? x.n : null); }).join('')}</div>`;
 
   /* ---- 마크다운 ---- */
+  /* 브리프는 외부 뉴스 문장을 옮겨 쓴 것이라 그 안의 날 HTML 은 실행하지 않고 글자로 보인다. 링크는 http(s)·mailto·상대 경로만 */
+  const safeHref = h => !/^\s*[a-z][a-z0-9+.\-]*:/i.test(h || '') || /^\s*(https?|mailto):/i.test(h);
+  marked.use({ renderer: {
+    html({ text }) { return esc(text); },
+    link({ href, tokens }) { return safeHref(href) ? false : this.parser.parseInline(tokens); },
+    image({ href, text }) { return safeHref(href) ? false : esc(text); },
+  } });
   function md(text) {
     const el = document.createElement('div');
     el.className = 'md';
@@ -748,7 +755,7 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
     h += legendBox([
       ['정렬 %', '세 축 점수(−1~+1)의 평균을 0~100%로 바꾼 값. 50%가 중립, 60% 이상은 파랑, 40% 이하는 빨강 글자.'],
       ['축 막대', '가운데 선에서 오른쪽 파랑은 그 축이 밀어줌, 왼쪽 빨강은 막음. 길이가 근거의 무게(크기 × 기간).'],
-      ['상태', '<span class="lbl lbl-aligned3">3축 정렬</span> · <span class="lbl lbl-aligned2">2축 정렬</span> · <span class="lbl lbl-aligned1">1축</span> 막는 축 없이 밀어주는 축의 수 · <span class="lbl lbl-mixed">엇갈림</span> 밀고 막는 축이 섞임 · <span class="lbl lbl-headwind">역풍</span> 막는 축만 · <span class="lbl">양쪽</span> 신호는 있지만 점수 0'],
+      ['상태', '<span class="lbl lbl-aligned3">3축 정렬</span> · <span class="lbl lbl-aligned2">2축 정렬</span> · <span class="lbl lbl-aligned1">1축</span> 막는 축 없이 밀어주는 축의 수 · <span class="lbl lbl-mixed">엇갈림</span> 밀고 막는 축이 섞임 · <span class="lbl lbl-headwind">역풍</span> 막는 축만 · <span class="lbl">양쪽</span> 신호는 있지만 모든 축이 0 근처. 축 점수가 ±0.1 안이면 밀어줌·막음 어느 쪽으로도 세지 않습니다'],
       ['7일', '일주일 전보다 몇 %p 바뀌었나. 신규는 일주일 전에는 신호가 없던 곳.'],
       [LIVE_KEY[0], LIVE_KEY[1]()],
       MARKET_KEY,
