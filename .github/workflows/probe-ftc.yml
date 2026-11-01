@@ -1,4 +1,4 @@
-# 임시 점검: ftc_press 가 setup-python 3.12 에서만 404 인지, 어느 버전이면 되는지 본다. 결과를 확인하면 이 파일은 지운다.
+# 임시 점검: setup-python(OpenSSL 3.5.5)에서만 ftc_press 가 404 다. 우회 방법 셋을 시험한다. 결과를 확인하면 이 파일은 지운다.
 name: Probe FTC feeds (temporary)
 
 on:
@@ -12,30 +12,45 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        py: ["3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.py }}
-      - run: python3 -m pip install --quiet -r fetch/requirements.txt
-      - name: fetch.py 로 ftc_press 와 다른 소스 몇 개
+      - name: A. 시스템 Python 가상환경으로 fetch.py
         run: |
-          python3 --version
-          python3 -c "import ssl; print(ssl.OPENSSL_VERSION)"
-          python3 - <<'EOF'
+          /usr/bin/python3 --version
+          /usr/bin/python3 -c "import ssl; print(ssl.OPENSSL_VERSION)"
+          /usr/bin/python3 -m venv /tmp/venv && /tmp/venv/bin/python -m pip install --quiet -r fetch/requirements.txt
+          /tmp/venv/bin/python - <<'EOF'
           import sys
           sys.path.insert(0, "fetch")
           import fetch as f
           srcs = f.build_sources(48)
-          for name in ["ftc_press", "federal_register", "sec_press", "doj_antitrust", "pew_research", "gnews_tariff"]:
+          for name in f.SOURCE_NAMES:
               ua = f.BROWSER_UA if f.SOURCES[name]["ua"] == "browser" else None
               try:
                   items, warn = f.parse_items(f.fetch_bytes(srcs[name], 30, 0, ua))
-                  print("PY", sys.version.split()[0], name, "OK", len(items))
+                  print("A", name, "OK", len(items))
               except Exception as e:
-                  print("PY", sys.version.split()[0], name, "FAIL", str(e)[:60])
+                  print("A", name, "FAIL", str(e)[:60])
+          EOF
+          /tmp/venv/bin/python fetch/market.py --help >/dev/null && echo "A market.py import OK"
+      - name: C. curl
+        run: |
+          curl --version | head -1
+          curl -sS -o /dev/null -w "C curl %{http_code}\n" -A "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15" https://www.ftc.gov/feeds/press-release.xml
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: B. setup-python 3.12 + TLS 1.2 상한
+        run: |
+          python3 - <<'EOF'
+          import ssl, urllib.request, urllib.error
+          UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+          for label, ctx in [("default", ssl.create_default_context()), ("tls1.2", None)]:
+              if ctx is None:
+                  ctx = ssl.create_default_context(); ctx.maximum_version = ssl.TLSVersion.TLSv1_2
+              try:
+                  with urllib.request.urlopen(urllib.request.Request("https://www.ftc.gov/feeds/press-release.xml", headers={"User-Agent": UA}), timeout=30, context=ctx) as r:
+                      print("B", label, r.status, r.read().count(b"<item>"))
+              except urllib.error.HTTPError as e:
+                  print("B", label, e.code)
           EOF
