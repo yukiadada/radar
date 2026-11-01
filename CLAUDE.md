@@ -176,6 +176,7 @@ logs/                      세션 로그 (/save 가 만듦, git 미추적)
 - 90·180·365일 창은 장부가 (n−7)일 쌓이면 자동으로 열림: 180일 2026-12-14, 1년 2027-06-17 께. 시장 반응 90일 열은 12월쯤 표본이 차면 추가
 - GitHub 예약 수집은 2~4시간 늦음(10/20~10/27 실제 06:44~08:52 KST). 루틴이 06:21 KST 에 직접 실행해 브리프는 제때 나옴. 9/30~10/27 Actions 수집·배포 모두 성공
 - Actions 의 Node 20 지원 종료 경고(checkout@v4, setup-python@v5, configure-pages@v5, upload-artifact@v4). 지금은 Node 24 로 강제 실행돼 동작한다. 버전 올리기 후보
+- fetch.yml 은 2026-11-01 부터 setup-python 대신 러너의 시스템 python3 로 가상환경을 만들어 돌린다. setup-python 판 Python(3.12~3.14)과 curl 에는 ftc.gov 가 10/27 부터 404 를 줬다(10/27~11/01 ftc_press 수집 실패, 루틴이 날마다 푸시). 러너 이미지가 바뀌어 또 404 가 나면 같은 방식으로 Actions 에서 버전별로 열어 본다
 - 수집 소스: 9/17 이후 40일 중 bea_releases 는 6일, doj_antitrust 는 9일만 항목이 있었고 10/8·10/10 이후 0건. 11월에 피드 상태 확인. 90일 축 건수는 정책 116·기술 64·사회 65 로 정책에 치우침. pew_research 행은 먼 연결 기준으로 거른다
 - GitHub MCP(plugin:github) 연결 실패(Authorization header 형식 오류)는 로컬 이야기. 클라우드 세션에서는 GitHub MCP 로 Actions 로그·PR·병합이 됐다
 - 사이트(site/index.html): 이름 Radar. 글꼴 IBM Plex Sans KR 단일(Google Fonts, 막히면 시스템 고딕), 화면마다 h1 구조, 설명은 "기호 읽는 법" 펼침, 모서리 3단계(상자 12·조작 8·배지 6), 섹터·섹터 상세·추이의 기준 탭(누적·창)은 머리글 아래 8px 고정(배경 없음). 새 화면은 pageHead·secHead·legendBox 부품과 토큰을 쓴다. 긴 대시(—)·알약 모양·색 띠·반투명 흐림은 쓰지 않는다. 섹터 상세 축 머리에 "가중 합 / +·− 합계" 를 보인다

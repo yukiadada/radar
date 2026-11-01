@@ -33,7 +33,7 @@ ftc_press:
   url: https://www.ftc.gov/feeds/press-release.xml
   axis: 정책
   ua: browser
-  note: FTC 보도자료. 반독점·합병 심사·소비자 규칙. 10건 캡
+  note: FTC 보도자료. 반독점·합병 심사·소비자 규칙. 10건 캡. 2026-10-27 부터 setup-python 판 Python 에 404 를 줘서 fetch.yml 을 러너의 시스템 python3 가상환경으로 바꿨다(11-01). 나뉜 피드 /feeds/press-release-competition.xml·-consumer-protection.xml(각 30건)도 있다
 doj_antitrust:
   type: rss
   url: https://www.justice.gov/news/rss?type%5B0%5D=press_release&field_component=376&search_api_language=en&show_public_archived=0&require_all=0

@@ -40,12 +40,14 @@ jobs:
           sparse-checkout: |
             raw/${{ env.DATE }}
             prices
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: fetch/requirements.txt
-      - run: python3 -m pip install --quiet -r fetch/requirements.txt
+      # setup-python 이 까는 Python(3.12·3.13·3.14 모두)과 curl 로는 ftc.gov 가 404 를 준다(2026-10-27 부터, 11-01 확인).
+      # 러너에 깔린 시스템 python3 는 같은 요청에 200 이라 그것으로 가상환경을 만든다. 아래 python3 는 이 가상환경의 것이다.
+      - name: 파이썬 가상환경 (러너의 시스템 python3)
+        run: |
+          /usr/bin/python3 --version
+          /usr/bin/python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/python" -m pip install --quiet -r fetch/requirements.txt
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
       - name: 수집 (radar-raw 안에 씀, 실패 소스는 기존 파일 유지)
         run: |
           mkdir -p radar-raw/raw
