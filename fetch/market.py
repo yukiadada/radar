@@ -9,7 +9,7 @@
 반응 계산 (reactions):
   기준 종가 = 장부 날짜(date) 이틀 전 이전의 마지막 종가. 장부 날짜는 브리프를 쓴 날(KST)이고 사건은 보통 그 전날(ET)이므로
   "사건 전날 종가" 다. 그 뒤 1·5·20·60 거래일 종가의 수익률을 시그널의 티커 평균과 SPY 로 낸다. 초과 = 티커 평균 - SPY.
-  판정(verdict): 완료된 가장 긴 구간(20 → 5 → 최신 3거래일 이상)의 초과수익 부호가 방향(+/-)과 같으면 "방향대로", 반대면 "반대로",
+  판정(verdict): 완료된 가장 긴 구간(60 → 20 → 5 → 최신 3거래일 이상)의 초과수익 부호가 방향(+/-)과 같으면 "방향대로", 반대면 "반대로",
   ±0.5%p 안이면 "보합", 자료가 모자라면 "아직". ± 시그널은 판정하지 않는다. 판단 재료이지 매매 신호가 아니다.
 
 사용:
@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 import argparse
+import bisect
 import datetime
 import json
 import sys
@@ -133,16 +134,16 @@ def _base_index(dates: list[str], date: str) -> int | None:
     return i
 
 
-def _ret(series: dict, i0: int, h: int) -> float | None:
-    close = series["close"]
-    j = i0 + h
-    if j >= len(close) or close[i0] in (0, None) or close[j] is None:
-        return None
-    return close[j] / close[i0] - 1
+def _close_at(series: dict, date: str) -> float | None:
+    """date 이전(포함) 마지막 종가. 그날 거래가 비었으면 전날 종가. date 보다 앞선 자료가 없으면 None."""
+    i = bisect.bisect_right(series["dates"], date) - 1
+    return series["close"][i] if i >= 0 and series["close"][i] not in (0, None) else None
 
 
 def reaction(row: dict, prices: dict) -> dict | None:
     """장부 행 하나의 시장 반응. 자료가 없으면 None.
+    구간은 SPY 거래일로 센다: 기준일 = SPY 의 기준 종가 날짜, h 거래일 뒤 = SPY 의 ib+h 번째 날짜. 각 티커는 그 두 날짜의 종가로 잰다
+    (티커에 그날이 비었으면 전날 종가). 티커 자료가 그 날짜까지 아직 없으면(Cboe 가 늦게 채움) 그 구간은 None.
     {"base": 기준일, "asof": 마지막 종가일, "tickers": [있는 티커], "h": {"1": {"r", "spy", "x"} | None, ...},
      "latest": {"days", "r", "spy", "x"} | None, "verdict": "방향대로"|"반대로"|"보합"|"아직"|None}"""
     tick = prices.get("tickers") or {}
@@ -150,45 +151,40 @@ def reaction(row: dict, prices: dict) -> dict | None:
     used = [t for t in row.get("tickers", []) if t in tick and tick[t].get("dates")]
     if not used or not bench:
         return None
-    base = None
-    for t in used:
-        i0 = _base_index(tick[t]["dates"], row["date"])
-        if i0 is not None:
-            base = tick[t]["dates"][i0] if base is None else min(base, tick[t]["dates"][i0])
-    if base is None:
-        return None
     ib = _base_index(bench["dates"], row["date"])
     if ib is None:
         return None
+    base = bench["dates"][ib]
+    if all(_close_at(tick[t], base) is None for t in used):
+        return None
 
-    def avg(h: int):
+    def at(k: int) -> dict | None:
+        """SPY 의 k 번째 날짜까지의 수익률. 한 종목이라도 자료가 모자라면 None."""
+        if k >= len(bench["dates"]) or bench["close"][ib] in (0, None):
+            return None
+        target = bench["dates"][k]
         rs = []
         for t in used:
             s = tick[t]
-            i0 = _base_index(s["dates"], row["date"])
-            if i0 is None:
-                continue
-            r = _ret(s, i0, h)
-            if r is not None:
-                rs.append(r)
-        if len(rs) != len(used):   # 한 종목이라도 자료가 모자라면 그 구간은 아직
-            return None
-        return sum(rs) / len(rs)
+            c0, c1 = _close_at(s, base), _close_at(s, target)
+            if c0 is None or c1 is None or s["dates"][-1] < target:
+                return None
+            rs.append(c1 / c0 - 1)
+        r, sp = sum(rs) / len(rs), bench["close"][k] / bench["close"][ib] - 1
+        return {"r": round(r, 4), "spy": round(sp, 4), "x": round(r - sp, 4)}
 
-    out_h = {}
-    for h in HORIZONS:
-        r, sp = avg(h), _ret(bench, ib, h)
-        out_h[str(h)] = None if r is None or sp is None else {"r": round(r, 4), "spy": round(sp, 4), "x": round(r - sp, 4)}
-    # 최신: 기준일 이후 지금까지 (거래일 수는 SPY 기준)
-    days = len(bench["dates"]) - 1 - ib
+    out_h = {str(h): at(ib + h) for h in HORIZONS}
+    # 최신: 모든 티커와 SPY 에 다 있는 마지막 날짜까지 (거래일 수는 SPY 기준)
+    common = min([bench["dates"][-1]] + [tick[t]["dates"][-1] for t in used])
+    k = bisect.bisect_right(bench["dates"], common) - 1
     latest = None
-    if days >= 1:
-        r, sp = avg(days), _ret(bench, ib, days)
-        if r is not None and sp is not None:
-            latest = {"days": days, "r": round(r, 4), "spy": round(sp, 4), "x": round(r - sp, 4)}
+    if k - ib >= 1:
+        v = at(k)
+        if v:
+            latest = {"days": k - ib, **v}
     verdict = None
     if row.get("direction") in ("+", "-"):
-        pick = out_h["20"] or out_h["5"] or (latest if latest and latest["days"] >= 3 else None)
+        pick = out_h["60"] or out_h["20"] or out_h["5"] or (latest if latest and latest["days"] >= 3 else None)
         if pick is None:
             verdict = "아직"
         elif abs(pick["x"]) < DEAD_ZONE:
@@ -239,18 +235,18 @@ def report(rows: list[dict], prices: dict | None, today: datetime.date, days: in
         return f"최근 {days}일 장부 행 없음"
     rx = reactions(w, prices)
     lines = [f"기준: 장부 날짜 이틀 전(사건 전날) 종가. 티커 평균과 SPY. 종가 {asof(prices)} 까지 ({SOURCE.split(' (')[0]}).",
-             "", "| 날짜 | 축 · 섹터 | 시그널 | 방향 | 1일 | 5일 | 20일 | 판정 |", "|---|---|---|---|---|---|---|---|"]
+             "", "| 날짜 | 축 · 섹터 | 시그널 | 방향 | 1일 | 5일 | 20일 | 60일 | 판정 |", "|---|---|---|---|---|---|---|---|---|"]
     for r in sorted(w, key=lambda r: (r["date"], r.get("line", 0)), reverse=True):
         x = rx.get(int(r.get("line", 0)))
         fact = " ".join(str(r["fact"]).split())
         if len(fact) > 40:
             fact = fact[:39] + "…"
         if x:
-            cells = [f"{pct(v['r'])} / {pct(v['spy'])}" if v else "—" for v in (x["h"]["1"], x["h"]["5"], x["h"]["20"])]
+            cells = [f"{pct(v['r'])} / {pct(v['spy'])}" if v else "—" for v in (x["h"]["1"], x["h"]["5"], x["h"]["20"], x["h"]["60"])]
             verdict = x["verdict"] or "—"
         else:
-            cells, verdict = ["—", "—", "—"], "자료 없음"
-        lines.append(f"| {r['date']} | {r['axis']} · {r['sector']} | {fact} | {r['direction']} | {cells[0]} | {cells[1]} | {cells[2]} | {verdict} |")
+            cells, verdict = ["—", "—", "—", "—"], "자료 없음"
+        lines.append(f"| {r['date']} | {r['axis']} · {r['sector']} | {fact} | {r['direction']} | {cells[0]} | {cells[1]} | {cells[2]} | {cells[3]} | {verdict} |")
     return "\n".join(lines)
 
 
