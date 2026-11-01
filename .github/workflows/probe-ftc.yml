@@ -1,4 +1,4 @@
-# 임시 점검: ftc_press 가 fetch.py 에서만 404 인 원인을 가른다(Accept 헤더 / Python 버전). 결과를 확인하면 이 파일은 지운다.
+# 임시 점검: ftc_press 가 setup-python 3.12 에서만 404 인지, 어느 버전이면 되는지 본다. 결과를 확인하면 이 파일은 지운다.
 name: Probe FTC feeds (temporary)
 
 on:
@@ -12,44 +12,30 @@ permissions:
 jobs:
   probe:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        py: ["3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
-      - name: 시스템 Python
-        run: |
-          python3 --version
-          python3 -I - <<'EOF'
-          import urllib.request, urllib.error
-          UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
-          U = "https://www.ftc.gov/feeds/press-release.xml"
-          for name, acc in [("fetch.py ACCEPT", "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.5"),
-                            ("probe ACCEPT", "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.5"),
-                            ("*/*", "*/*")]:
-              try:
-                  with urllib.request.urlopen(urllib.request.Request(U, headers={"User-Agent": UA, "Accept": acc}), timeout=30) as r:
-                      print("SYS", name, r.status, r.read().count(b"<item>"), "items")
-              except urllib.error.HTTPError as e:
-                  print("SYS", name, e.code)
-          EOF
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.py }}
       - run: python3 -m pip install --quiet -r fetch/requirements.txt
-      - name: setup-python 3.12 + fetch.py 그대로
+      - name: fetch.py 로 ftc_press 와 다른 소스 몇 개
         run: |
           python3 --version
+          python3 -c "import ssl; print(ssl.OPENSSL_VERSION)"
           python3 - <<'EOF'
-          import sys, urllib.request, urllib.error
+          import sys
           sys.path.insert(0, "fetch")
           import fetch as f
-          U = f.build_sources(48)["ftc_press"]
-          for name, acc in [("fetch.py ACCEPT", f.ACCEPT), ("probe ACCEPT", "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.5"), ("*/*", "*/*")]:
+          srcs = f.build_sources(48)
+          for name in ["ftc_press", "federal_register", "sec_press", "doj_antitrust", "pew_research", "gnews_tariff"]:
+              ua = f.BROWSER_UA if f.SOURCES[name]["ua"] == "browser" else None
               try:
-                  with urllib.request.urlopen(urllib.request.Request(U, headers={"User-Agent": f.BROWSER_UA, "Accept": acc}), timeout=30) as r:
-                      print("SETUP", name, r.status, r.read().count(b"<item>"), "items")
-              except urllib.error.HTTPError as e:
-                  print("SETUP", name, e.code)
-          try:
-              d = f.fetch_bytes(U, 30, 0, f.BROWSER_UA); print("SETUP fetch_bytes OK", len(d))
-          except Exception as e:
-              print("SETUP fetch_bytes", e)
+                  items, warn = f.parse_items(f.fetch_bytes(srcs[name], 30, 0, ua))
+                  print("PY", sys.version.split()[0], name, "OK", len(items))
+              except Exception as e:
+                  print("PY", sys.version.split()[0], name, "FAIL", str(e)[:60])
           EOF
