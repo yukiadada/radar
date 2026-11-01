@@ -30,10 +30,10 @@ sec_press:
   note: SEC 보도자료. 규칙 제안·채택, 코인·ETF 조치, 집행. 승인은 정책, 자금 유입은 사회(gnews_bitcoin_etf). 25건 캡
 ftc_press:
   type: rss
-  url: https://www.ftc.gov/feeds/press-release.xml
+  url: https://www.ftc.gov/news-events/news/press-releases/rss.xml
   axis: 정책
   ua: browser
-  note: FTC 보도자료. 반독점·합병 심사·소비자 규칙. 10건 캡
+  note: FTC 보도자료. 반독점·합병 심사·소비자 규칙. 10건 캡. 옛 주소 /feeds/press-release.xml 은 2026-10-27 부터 404
 doj_antitrust:
   type: rss
   url: https://www.justice.gov/news/rss?type%5B0%5D=press_release&field_component=376&search_api_language=en&show_public_archived=0&require_all=0
