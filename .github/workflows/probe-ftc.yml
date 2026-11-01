@@ -15,7 +15,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: 시스템 Python
-        run: python3 --version && python3 -I - <<'EOF'
+        run: |
+          python3 --version
+          python3 -I - <<'EOF'
           import urllib.request, urllib.error
           UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
           U = "https://www.ftc.gov/feeds/press-release.xml"
