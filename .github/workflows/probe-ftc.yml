@@ -1,0 +1,53 @@
+# 임시 점검: ftc_press 가 fetch.py 에서만 404 인 원인을 가른다(Accept 헤더 / Python 버전). 결과를 확인하면 이 파일은 지운다.
+name: Probe FTC feeds (temporary)
+
+on:
+  push:
+    branches: [claude/fervent-hamilton-cp41yw]
+    paths: [.github/workflows/probe-ftc.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 시스템 Python
+        run: python3 --version && python3 -I - <<'EOF'
+          import urllib.request, urllib.error
+          UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+          U = "https://www.ftc.gov/feeds/press-release.xml"
+          for name, acc in [("fetch.py ACCEPT", "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.5"),
+                            ("probe ACCEPT", "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.5"),
+                            ("*/*", "*/*")]:
+              try:
+                  with urllib.request.urlopen(urllib.request.Request(U, headers={"User-Agent": UA, "Accept": acc}), timeout=30) as r:
+                      print("SYS", name, r.status, r.read().count(b"<item>"), "items")
+              except urllib.error.HTTPError as e:
+                  print("SYS", name, e.code)
+          EOF
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python3 -m pip install --quiet -r fetch/requirements.txt
+      - name: setup-python 3.12 + fetch.py 그대로
+        run: |
+          python3 --version
+          python3 - <<'EOF'
+          import sys, urllib.request, urllib.error
+          sys.path.insert(0, "fetch")
+          import fetch as f
+          U = f.build_sources(48)["ftc_press"]
+          for name, acc in [("fetch.py ACCEPT", f.ACCEPT), ("probe ACCEPT", "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.5"), ("*/*", "*/*")]:
+              try:
+                  with urllib.request.urlopen(urllib.request.Request(U, headers={"User-Agent": f.BROWSER_UA, "Accept": acc}), timeout=30) as r:
+                      print("SETUP", name, r.status, r.read().count(b"<item>"), "items")
+              except urllib.error.HTTPError as e:
+                  print("SETUP", name, e.code)
+          try:
+              d = f.fetch_bytes(U, 30, 0, f.BROWSER_UA); print("SETUP fetch_bytes OK", len(d))
+          except Exception as e:
+              print("SETUP fetch_bytes", e)
+          EOF
