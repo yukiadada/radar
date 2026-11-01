@@ -3,11 +3,9 @@
 # axis 는 어느 축의 입력인지 힌트일 뿐이다. 분류는 /brief 가 기사 내용으로 한다.
 # gnews 는 관련도순 상위 100건만 주고 fetch.py 가 when:Nd 를 붙여 최근 것만 받는다. OR 와 따옴표 구문을 쓸 수 있다.
 # 값 안에 ' #' 을 쓰면 주석으로 잘린다. 이름을 바꾸면 그날부터 raw 파일 이름이 바뀐다 (사이트의 관심 집계는 제목만 보므로 영향 없음).
-# ua: browser 를 주면 그 소스만 브라우저형 User-Agent 로 받는다 (봇 UA 를 403 으로 막는 곳. 지금은 쓰는 소스 없음). 나머지는 feedparser 형 UA.
+# ua: browser 를 주면 그 소스만 브라우저형 User-Agent 로 받는다 (봇 UA 를 403 으로 막는 ftc.gov). 나머지는 feedparser 형 UA.
 # 못 쓰는 곳 (2026-09-17 확인): bls.gov·newyorkfed.org·commerce.gov·fcc.gov 는 어떤 UA 로도 403, nrc.gov 503, Gallup 은 RSS 없이 sitemap 뿐,
 # Treasury·BIS 는 피드를 못 찾음, Census 보도자료 피드(newsroom/press-releases.xml)는 link 가 비어 있어 출처로 못 씀. BLS 는 gnews_consumer 가 대신 잡는다.
-# ftc_press(FTC 보도자료, ua: browser)는 2026-10-27 부터 /feeds/press-release.xml 이 404 라 뺐다. /news-events/news/press-releases/rss.xml 도 404(2026-11-01).
-#   새 주소를 찾으면 되살린다. 그동안 FTC 최종 규칙은 federal_register 가, Big Tech 반독점 소식은 gnews_big_tech_antitrust 가 일부 잡는다.
 
 # 정책 — 문서가 나오는 곳
 federal_register:
@@ -30,6 +28,12 @@ sec_press:
   url: https://www.sec.gov/news/pressreleases.rss
   axis: 정책
   note: SEC 보도자료. 규칙 제안·채택, 코인·ETF 조치, 집행. 승인은 정책, 자금 유입은 사회(gnews_bitcoin_etf). 25건 캡
+ftc_press:
+  type: rss
+  url: https://www.ftc.gov/feeds/press-release.xml
+  axis: 정책
+  ua: browser
+  note: FTC 보도자료. 반독점·합병 심사·소비자 규칙. 10건 캡
 doj_antitrust:
   type: rss
   url: https://www.justice.gov/news/rss?type%5B0%5D=press_release&field_component=376&search_api_language=en&show_public_archived=0&require_all=0

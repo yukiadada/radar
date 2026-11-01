@@ -185,7 +185,7 @@ logs/                      세션 로그 (/save 가 만듦, git 미추적)
 - 로고·아이콘·공유 이미지는 site/static (원본 logo.png, og.png 1200×630). og.png 는 2026-09-18 에 "Radar" 로 다시 만들고 눈으로 확인. 로고 원본이 Ken 이 준 것과 다르면 다시 생성
 - 장부 12~91번 줄(80건, 2026-06-25~09-16)은 2026-09-17 에 에이전트가 소급 작성한 행(1차 출처 본문 확인, ledger.py 검증). Ken 이 훑어보고 어긋난 행은 반대 방향 행(reverses)으로 처리, 기존 줄은 고치지 않는다
 - raw/2026-06-19~09-16 은 backfill.py 소급분(backfill:true, gnews 2일 청크 100건 캡이라 성김). 키워드는 sector_map.yaml 의 keywords 에서 Ken 이 조정
-- 못 쓰는 소스는 sources.yaml 머리말에 기록(BLS·NY Fed·Commerce·FCC 403, NRC 503, Gallup sitemap 뿐, Treasury·BIS 피드 없음, Census 보도자료 link 없음, FTC 보도자료 피드 2026-10-27 부터 404 라 2026-11-01 에 뺌. 새 주소는 Ken 이 브라우저로 https://www.ftc.gov/news-events/stay-connected/ftc-rss-feeds 에서 확인). 가격은 Stooq(JS 차단)·Yahoo(429) 대신 Cboe. FRED 는 이 환경에서 연결 실패
+- 못 쓰는 소스는 sources.yaml 머리말에 기록(BLS·NY Fed·Commerce·FCC 403, NRC 503, Gallup sitemap 뿐, Treasury·BIS 피드 없음, Census 보도자료 link 없음). 가격은 Stooq(JS 차단)·Yahoo(429) 대신 Cboe. FRED 는 이 환경에서 연결 실패
 - 사이트 상단에 빌드 경고 배너가 보이면 그 자료(장부 줄·sector_map·브리프 형식·방향 브리프 형식·날짜·가격 자료 5일 이상 오래됨·이득/손해 줄의 티커)를 고친다. 빌드는 멈추지 않는다
 - 장부 1~11번 줄은 옛 장부의 3축 재분류(이관 판단). 첫 문장 40자·note 접미어 규칙의 예외. 12번 줄부터 ledger.py 가 검사
 - 기업 관찰(SpaceX·BITO·Microsoft)은 새 스펙에 없어 뺐다. 필요하면 backlog 에서 복원
