@@ -192,8 +192,8 @@ def fetch_bytes(url: str, timeout: float, retries: int, ua: str | None = None) -
                 return resp.read()
         except (urllib.error.URLError, OSError, http.client.HTTPException) as e:
             last = e
-            if isinstance(e, urllib.error.HTTPError) and 400 <= e.code < 500 and e.code not in (408, 429):
-                break  # 4xx 는 다시 시도해도 같다 (408/429 제외)
+            if isinstance(e, urllib.error.HTTPError) and 400 <= e.code < 500 and e.code not in (404, 408, 429):
+                break  # 4xx 는 다시 시도해도 같다. 404 는 예외: 정부 사이트 앞단이 잠깐 404 를 주기도 한다(2026-11-05 fed_press)
             if attempt < retries:
                 time.sleep(2.0 * (attempt + 1))
     raise RuntimeError(f"{type(last).__name__}: {last}")
