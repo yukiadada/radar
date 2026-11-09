@@ -158,10 +158,10 @@ logs/                      세션 로그 (/save 가 만듦, git 미추적)
 
 ## 현재 상태
 
-> /save 자동 업데이트 — 2026-11-09 15:30
+> /save 자동 업데이트 — 2026-11-09 19:50
 
 **브랜치:** main
-**마지막 커밋:** 11/06~11/09 점검·네트워크 허용 기록 (이 커밋)
+**마지막 커밋:** 수집 실패분 소급 확인(FTC 6건) (이 커밋)
 
 **미완료 항목:**
 - 2026-10-27 정렬 축 점수 식을 바꿨다(74fb58d·6bdbf4e): Σ방향×w ÷ (+·− 행의 Σw + 6), ± 는 점수에 영향 없음. 옛 식(Σ÷6 을 ±1 에서 자름)은 축의 44%가 ±1 에 붙어 반대 근거가 들어와도 안 움직였다. 10/27 전 브리프 파일의 정렬 숫자는 옛 식 값이고, 추이 그래프와 7일 변화는 새 식으로 다시 계산된다. 몇 달 뒤 너무 둔하거나 튀면 K(6)·validity 재검토
@@ -181,6 +181,7 @@ logs/                      세션 로그 (/save 가 만듦, git 미추적)
 - 11/06~11/09 점검: 루틴·수집·배포 모두 성공(11/05 21:20 UTC 부터 404 재시도 판으로 수집), 빌드 경고 0, 소스 23개 오류 없음. 하루 시그널 2·2·0·2건, 11/08 은 "오늘 구조적 시그널 없음". 새 장부 6행(295~300) 중 ± 2건(태양광). 10/27 에 만든 태양광 섹터의 첫 시그널 두 건이 모두 ± 라 상태 "양쪽"(정렬 50%)이다. 맵 수정 제안 없음. 버린 뉴스에 "구조적이나 맵 영향 없음"으로 CMS 지급률 최종 규칙(병원 외래·의사 수가·재택의료)이 11/07~11/09 사흘 연속 나왔다. XLV·IHE 에 직접 닿지 않는다는 판단인데, 같은 이유가 계속 쌓이면 11월 /review 에서 헬스케어 맵(병원·보험 쪽 티커) 검토 후보. 중국의 SoftBank·ABB 로봇 인수 차단은 11/06·11/08 두 번 먼 연결로 버렸다(같은 판단 일관)
 - 2026-11-01 코드 전체 리뷰 8건 반영: 정렬 상태는 축 점수 ±0.1 안을 밀어줌·막음으로 세지 않는다(금리·달러 체제 2축 정렬→양쪽 등), 사이트 마크다운의 날 HTML·javascript: 링크는 실행하지 않고 글자로(XSS), fetch.yml 은 가상환경 실패 시 setup-python 으로 넘어간다, 시장 반응 판정은 60일이 끝났으면 60일 기준(판정 14건 바뀜, --report 에 60일 칸), 번복된 행은 번복 날부터 점수에서 빠진다(줄 100 → 237, 에너지 정책 +0.60→+0.53), 번복은 + ↔ − 만 허용, 브리프 카드는 팩트 칸 링크 전부로 장부 줄을 찾는다, 시장 반응은 SPY 거래일 날짜로 티커 종가를 맞춘다(지금 자료로는 결과 동일). fetch.yml 의 setup-python 대체 경로는 아직 실제로 돈 적이 없다. 11/02 브리프부터 시장 반응 표에 60일 칸, 상태 이름 변화(금리·달러 체제 양쪽 등)가 보이는지 확인
 - fetch.yml 은 2026-11-01 부터 setup-python 대신 러너의 시스템 python3 로 가상환경을 만들어 돌린다. setup-python 판 Python(3.12~3.14)과 curl 에는 ftc.gov 가 10/27 부터 404 를 줬다(10/27~11/01 ftc_press 수집 실패, 루틴이 날마다 푸시). 러너 이미지가 바뀌어 또 404 가 나면 같은 방식으로 Actions 에서 버전별로 열어 본다
+- 수집 실패분 소급 확인(2026-11-09): radar-raw 이력에서 브리프가 읽은 시점의 오류 파일은 ftc_press 10/27~11/01(6일)과 fed_press 10/30·11/05 뿐이다. fed_press 는 그 기간 연준 보도자료 3건(10/28 FOMC 성명, 10/29 BNS 승인, 11/5 집행 종료)이 모두 다음 날 수집(48시간 창)으로 브리프에 들어가 빠진 것이 없다. ftc_press 는 10/26~10/29 보도자료 6건이 어느 브리프에도 안 들어갔다(임시 워크플로로 Actions 에서 FTC 피드를 읽어 확인. 피드 10건이 10/22 까지 닿아 빠짐없음, 10/30~11/01 은 보도자료 없음). 6건 모두 structural=false(Dollar General·Toast 제소는 판결 전, 6(b) 개인 맞춤 가격 조사는 자료 요청, 경고 서한, 사칭 사기 성과 정리, PlayPower 인수 포기는 맵 밖)라 장부 추가는 없고 10/27~10/30 브리프 "버린 뉴스"에 "(11/09 소급 …)" 으로 적었다. 본문 차단으로 버렸던 정부 문서는 관보 API 요약으로 다시 봤다: FCC 위성 기준 링크(2026-22600)는 12/7 시행 기술 갱신이라 그대로 버림, 캐나다 목재 NAFTA 패널(2026-22431)은 2017년 원 조사 판정의 상계관세율 정정이고 본문(새 세율)은 위 차단으로 확인 안 됨, CIT Jinko Solar 판결은 courtlistener 차단으로 확인 안 됨. 셋 다 장부 추가 없음
 - 수집 소스: 9/17 이후 40일 중 bea_releases 는 6일, doj_antitrust 는 9일만 항목이 있었고 10/8·10/10 이후 0건. 11월에 피드 상태 확인. 90일 축 건수는 정책 116·기술 64·사회 65 로 정책에 치우침. pew_research 행은 먼 연결 기준으로 거른다
 - GitHub MCP(plugin:github) 연결 실패(Authorization header 형식 오류)는 로컬 이야기. 클라우드 세션에서는 GitHub MCP 로 Actions 로그·PR·병합이 됐다
 - 사이트(site/index.html): 이름 Radar. 글꼴 IBM Plex Sans KR 단일(Google Fonts, 막히면 시스템 고딕), 화면마다 h1 구조, 설명은 "기호 읽는 법" 펼침, 모서리 3단계(상자 12·조작 8·배지 6), 섹터·섹터 상세·추이의 기준 탭(누적·창)은 머리글 아래 8px 고정(배경 없음). 새 화면은 pageHead·secHead·legendBox 부품과 토큰을 쓴다. 긴 대시(—)·알약 모양·색 띠·반투명 흐림은 쓰지 않는다. 섹터 상세 축 머리에 "가중 합 / +·− 합계" 를 보인다
@@ -194,6 +195,6 @@ logs/                      세션 로그 (/save 가 만듦, git 미추적)
 - 사이트 상단에 빌드 경고 배너가 보이면 그 자료(장부 줄·sector_map·브리프 형식·방향 브리프 형식·날짜·가격 자료 5일 이상 오래됨·이득/손해 줄의 티커)를 고친다. 빌드는 멈추지 않는다
 - 장부 1~11번 줄은 옛 장부의 3축 재분류(이관 판단). 첫 문장 40자·note 접미어 규칙의 예외. 12번 줄부터 ledger.py 가 검사
 - 기업 관찰(SpaceX·BITO·Microsoft)은 새 스펙에 없어 뺐다. 필요하면 backlog 에서 복원
-- 네트워크(2026-11-09): 루틴이 쓰는 claude.ai/code Default 환경에 허용 도메인 12곳을 넣었다(에이전트가 환경 수정을 제안하고 Ken 이 승인). 단계는 "제한됨" 그대로, 패키지 관리자·MCP 서버 허용도 그대로. 도메인: www.federalregister.gov, www.whitehouse.gov, www.federalreserve.gov, www.sec.gov, www.ftc.gov, www.justice.gov, ustr.gov, www.energy.gov, www.bea.gov, www.census.gov, www.pewresearch.org, www.courtlistener.com. 넣은 세션의 프록시 경유 확인: 11곳 200, ftc.gov 404(막힌 게 아니라 FTC 의 클라이언트별 404, 위 fetch.yml 항목과 같은 문제라 FTC 본문은 계속 검색 교차). 그 세션의 WebFetch 는 변경 전 머신이라 계속 실패했다(새 세션부터 적용). 11/09 06:20 루틴은 변경 전이라 "federalregister.gov 본문 열리지 않음(프록시 403)"을 보고했다. 첫 확인은 11/10 루틴: 보고에서 403 이 사라지는지, 0.8 행이 나오는지. 매체 기사(CNBC·Reuters 등)와 public-inspection.federalregister.gov 는 허용 목록에 없어 그쪽은 여전히 검색 교차다. 도메인을 더 넣을 때도 정확한 호스트 이름만(와일드카드는 설정 화면에서만)
+- 네트워크(2026-11-09): 루틴이 쓰는 claude.ai/code Default 환경에 허용 도메인 12곳을 넣었다(에이전트가 환경 수정을 제안하고 Ken 이 승인). 단계는 "제한됨" 그대로, 패키지 관리자·MCP 서버 허용도 그대로. 도메인: www.federalregister.gov, www.whitehouse.gov, www.federalreserve.gov, www.sec.gov, www.ftc.gov, www.justice.gov, ustr.gov, www.energy.gov, www.bea.gov, www.census.gov, www.pewresearch.org, www.courtlistener.com. 넣은 세션의 프록시 경유 확인: 11곳 200, ftc.gov 404(막힌 게 아니라 FTC 의 클라이언트별 404, 위 fetch.yml 항목과 같은 문제라 FTC 본문은 계속 검색 교차). 그 세션의 WebFetch 는 변경 전 머신이라 계속 실패했다(새 세션부터 적용). 11/09 06:20 루틴은 변경 전이라 "federalregister.gov 본문 열리지 않음(프록시 403)"을 보고했다. 첫 확인은 11/10 루틴: 보고에서 403 이 사라지는지, 0.8 행이 나오는지. 매체 기사(CNBC·Reuters 등)와 public-inspection.federalregister.gov 는 허용 목록에 없어 그쪽은 여전히 검색 교차다. 도메인을 더 넣을 때도 정확한 호스트 이름만(와일드카드는 설정 화면에서만). 11/09 확인: federalregister.gov 는 API(documents.json, 요약)는 열리지만 본문(full_text html·txt·xml)은 자동 접속을 unblock.federalregister.gov 확인 페이지로 돌린다. courtlistener.com 은 판결 페이지가 봇 확인(202)이고 검색 API 는 인증(401)이 필요하다. 그래서 허용만으로 관보·판결 본문 확인(0.8)이 늘지 않을 수 있다. 11/10 루틴이 WebFetch 로 본문을 열었는지 보고를 본다
 - 로컬 작업 전 `git pull` (../radar-raw 도). 로컬 raw·prices 는 ../radar-raw/raw, ../radar-raw/prices 심볼릭 링크. 장부는 `fetch/ledger.py --append` 로만
 - 저장소: https://github.com/yukiadada/radar (public), https://github.com/yukiadada/radar-raw (private, raw·prices). 사이트 https://yukiadada.github.io/radar/
