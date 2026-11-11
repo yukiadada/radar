@@ -30,13 +30,13 @@ framework/axes.md          3축 정의, 축별 질문·밀어줌/막음 신호·
 framework/sector_map.yaml  방향(내러티브) → 섹터 → 티커·keywords (Ken 이 큐레이션)
 framework/sources.yaml     수집 소스 (RSS·Google News 검색어) 와 축 힌트 (Ken 이 큐레이션)
 fetch/                     fetch.py 수집, ledger.py 장부 검증·추가(장부에 쓰는 유일한 수단), scoring.py 정렬 %·추이·관심, config.py yaml 파서, gn_decode.py,
-                           market.py 종가 갱신·시장 반응 계산(--update / --report), backfill.py 과거 raw 소급 수집
+                           market.py 종가 갱신·시장 반응 계산(--update / --report), backfill.py 과거 raw 소급 수집, check.py /check 집계(읽기만)
 raw/YYYY-MM-DD/            당일 수집 원문. 비공개 저장소 radar-raw 에만 커밋 (여기서는 ../radar-raw/raw 심볼릭 링크, git 미추적). 2026-06-19~09-16 은 backfill.py 소급분(backfill:true, 그날 수집보다 성김)
 prices/prices.json         sector_map 티커 + SPY 일별 종가 (Cboe 지연 시세). radar-raw 의 prices/ 심볼릭 링크. fetch.yml 이 매일 갱신·커밋
 briefs/YYYY-MM-DD.md       일간 브리프 (축별 기사 + 쉬운 말로 + 섹터 정렬 표)
 briefs/direction.md        방향 브리프 (쉬운 말로 읽는 지금의 방향). /brief 가 매일 덮어쓴다. 홈에 표시
 ledger/signals.jsonl       구조적 시그널 누적 장부 (append only)
-.claude/commands/          /brief, /trend, /review
+.claude/commands/          /brief, /trend, /review, /check, /save
 site/                      웹페이지. build.py 가 briefs·ledger·framework·raw 를 site/out/ 로 빌드, index.html 이 렌더
 .github/workflows/         fetch.yml 수집, pages.yml 사이트 빌드·배포
 backlog/                   2026-09-17 이전의 4축(정치·기술·자본·코인) 체계 보관본. 실행되지 않는다. backlog/README.md 참고
@@ -66,6 +66,14 @@ logs/                      세션 로그 (/save 가 만듦, git 미추적)
 ### /review (월 1회)
 1. 확인 대기 시그널의 예상 결과가 실제로 나타났는지 확인한다. 뒤집혔으면 반대 방향 행을 /brief 로 올리자고 제안한다 (`reverses`에 이전 줄 번호).
 2. 방향·섹터 맵(sector_map.yaml)과 소스(sources.yaml)의 수정을 제안한다. Ken 이 승인해야 고친다.
+
+### /check (점검. 며칠에 한 번 또는 요청 시)
+1. 지난 점검(현재 상태의 마지막 "M/D~M/D 점검" 항목) 다음 날부터 오늘까지 루틴 커밋·raw 소스(브리프 시점 오류 포함)·장부 행(하루 건수·±·확신)·종가 날짜·브리프 내용(맵 수정 제안, 버린 이유 반복, 열리지 않은 호스트)을 `fetch/check.py` 로, 수집·배포를 GitHub Actions 실행 기록으로, 빌드 경고를 `site/build.py` 로 본다. raw·prices 는 radar-raw 를 붙여 링크한다.
+2. 읽기만 한다. 채팅에 표와 "현재 상태에 넣을 한 줄"을 낸다. 기록은 /save.
+
+### /save (세션 끝)
+1. 이 세션에서 한 일과 점검 결과로 이 파일의 "현재 상태" 절만 고친다(있는 항목은 그 자리에서, 끝난 일은 지움). 다른 절은 고치지 않는다.
+2. `logs/` 에 세션 로그(git 미추적)를 쓰고 커밋·푸시한다.
 
 ## 시그널 스키마 (ledger/signals.jsonl 한 줄)
 
