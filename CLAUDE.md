@@ -40,7 +40,7 @@ ledger/signals.jsonl       구조적 시그널 누적 장부 (append only)
 site/                      웹페이지. build.py 가 briefs·ledger·framework·raw 를 site/out/ 로 빌드, index.html 이 렌더
 .github/workflows/         fetch.yml 수집, pages.yml 사이트 빌드·배포
 backlog/                   2026-09-17 이전의 4축(정치·기술·자본·코인) 체계 보관본. 실행되지 않는다. backlog/README.md 참고
-logs/                      세션 로그 (/save 가 만듦, git 미추적)
+logs/                      세션 로그. 비공개 radar-raw 의 logs/ 심볼릭 링크 (/save 가 쓰고 radar-raw 에 커밋, 여기서는 git 미추적)
 ```
 
 매일 흐름 (시각은 여기에만 적는다): 04:30 KST GitHub Actions(fetch.yml) 예약 수집 + 종가 갱신(market.py --update)(05:15 KST 에 한 번 더. 워크플로는 멱등) → 비공개 radar-raw 커밋 → 06:20 KST 클라우드 루틴(claude.ai/code/routines)이 radar 와 radar-raw 를 함께 받아 /brief 실행·push → Pages 갱신(07:00 KST 에 한 번 더 빌드). GitHub 예약은 1~2시간 늦을 수 있어 루틴은 raw 가 없으면 fetch.yml 을 직접 실행하고 기다린다. 사이트 https://yukiadada.github.io/radar/. 로컬에서 작업하기 전에 `git pull` 부터 한다. 로컬에서 /brief 를 돌리려면 `python3 fetch/fetch.py` 로 raw/ 를 만들면 된다(미추적, feedparser 필요).
@@ -73,7 +73,7 @@ logs/                      세션 로그 (/save 가 만듦, git 미추적)
 
 ### /save (세션 끝)
 1. 이 세션에서 한 일과 점검 결과로 이 파일의 "현재 상태" 절만 고친다(있는 항목은 그 자리에서, 끝난 일은 지움). 다른 절은 고치지 않는다.
-2. `logs/` 에 세션 로그(git 미추적)를 쓰고 커밋·푸시한다. main 이 아닌 브랜치면 main 으로 PR 을 열고 fast-forward 로 병합한다(빌드 실패·rebase 충돌·변경 요청이면 PR 만 열어 둔다).
+2. 세션 로그를 비공개 radar-raw 의 `logs/` 에 커밋하고(radar 의 `logs` 는 링크), 이 파일을 커밋·푸시한다. main 이 아닌 브랜치면 main 으로 PR 을 열고 fast-forward 로 병합한다(빌드 실패·rebase 충돌·변경 요청이면 PR 만 열어 둔다).
 
 ## 시그널 스키마 (ledger/signals.jsonl 한 줄)
 
@@ -166,10 +166,10 @@ logs/                      세션 로그 (/save 가 만듦, git 미추적)
 
 ## 현재 상태
 
-> /save 자동 업데이트 — 2026-11-11 14:52 (KST)
+> /save 자동 업데이트 — 2026-11-11 15:15 (KST)
 
 **브랜치:** main (claude/dreamy-keller-4uzfeu 에서 PR 병합)
-**마지막 커밋:** /save 에 PR 병합까지 + 현재 상태 기록 (이 커밋)
+**마지막 커밋:** 세션 로그를 radar-raw logs/ 에 보관 + 현재 상태 기록 (이 커밋)
 
 **미완료 항목:**
 - 2026-10-27 정렬 축 점수 식을 바꿨다(74fb58d·6bdbf4e): Σ방향×w ÷ (+·− 행의 Σw + 6), ± 는 점수에 영향 없음. 옛 식(Σ÷6 을 ±1 에서 자름)은 축의 44%가 ±1 에 붙어 반대 근거가 들어와도 안 움직였다. 10/27 전 브리프 파일의 정렬 숫자는 옛 식 값이고, 추이 그래프와 7일 변화는 새 식으로 다시 계산된다. 몇 달 뒤 너무 둔하거나 튀면 K(6)·validity 재검토
@@ -188,7 +188,7 @@ logs/                      세션 로그 (/save 가 만듦, git 미추적)
 - 11/02~11/05 점검: 루틴·수집·배포 모두 성공, 빌드 경고 0, FTC 오류 없음(가상환경 경로, 대체 경로는 안 탐). 하루 시그널 0·1·1·4건, 11/02 은 "오늘 구조적 시그널 없음". 새 장부 6행에 ± 없음. 시장 반응 표 60일 칸 확인. 11/05 06:21 수집에서 fed_press 가 일시 404 → 루틴 푸시(09:28 수집에서 회복). fetch.py 가 404 도 재시도하도록 고쳤다(05e02f0). 루틴 세션에서 federalregister.gov 가 막혀 있던 건은 11/09 에 허용(아래 네트워크 항목)
 - 11/06~11/09 점검: 루틴·수집·배포 모두 성공(11/05 21:20 UTC 부터 404 재시도 판으로 수집), 빌드 경고 0, 소스 23개 오류 없음. 하루 시그널 2·2·0·2건, 11/08 은 "오늘 구조적 시그널 없음". 새 장부 6행(295~300) 중 ± 2건(태양광). 10/27 에 만든 태양광 섹터의 첫 시그널 두 건이 모두 ± 라 상태 "양쪽"(정렬 50%)이다. 맵 수정 제안 없음. 버린 뉴스에 "구조적이나 맵 영향 없음"으로 CMS 지급률 최종 규칙(병원 외래·의사 수가·재택의료)이 11/07~11/09 사흘 연속 나왔다. XLV·IHE 에 직접 닿지 않는다는 판단인데, 같은 이유가 계속 쌓이면 11월 /review 에서 헬스케어 맵(병원·보험 쪽 티커) 검토 후보. 중국의 SoftBank·ABB 로봇 인수 차단은 11/06·11/08 두 번 먼 연결로 버렸다(같은 판단 일관)
 - 11/10~11/11 점검: 루틴·수집·배포 모두 성공, 빌드 경고 0(prices 링크 포함). 소스 23개 브리프 시점 오류 없음, 두 날 모두 0건 bea_releases·doj_antitrust·ustr_press. 종가 11/09 까지(11/11 09:40 KST 갱신). 하루 시그널 2·2건(301~304), ± 없음. 확신 0.8 이 처음 나왔다(위 확신 항목)
-- /check·/save 를 레포 명령으로 옮겼다(0193251, 2026-11-11). 그전에는 Ken 로컬에만 있어 클라우드 세션에서 안 돌았다. 레포 판이 기준이다(지난 저장·점검 커밋 10/27~11/11 이 한 일로 썼다). /check 는 읽기만 하고 `fetch/check.py`(루틴 커밋·raw 소스와 브리프 시점 오류·장부 행·종가·브리프 내용) + Actions 실행 + build.py 경고를 표로 낸다. check.py 의 브리프 시점 오류는 11/09 소급 확인과 같았다(ftc_press 10/29~11/01, fed_press 10/30·11/05). 클라우드에서는 radar-raw 를 read 로 붙여(83M clone, 이력은 --depth=200) raw·prices 를 링크한다. radar-raw 없이 빌드하면 가격 경고가 빠진 "경고 0"이 나온다. 2026-11-11 main 에 병합(fast-forward, Pages 배포 #199 성공). /save 는 main 이 아닌 브랜치면 푸시 뒤 main 으로 PR 을 열고 fast-forward 로 병합한다(2026-11-11 Ken 결정. 첫 PR #14 는 Ken 요청으로 병합. 빌드 실패·rebase 충돌·변경 요청이면 PR 만 열어 둔다). 로컬 `~/.claude/commands/save.md`·`check.md` 는 이름이 겹쳐 Ken 이 로컬에서 지운다(클라우드 세션에서는 Ken 컴퓨터에 못 닿는다)
+- /check·/save 를 레포 명령으로 옮겼다(0193251, 2026-11-11). 그전에는 Ken 로컬에만 있어 클라우드 세션에서 안 돌았다. 레포 판이 기준이다(지난 저장·점검 커밋 10/27~11/11 이 한 일로 썼다). /check 는 읽기만 하고 `fetch/check.py`(루틴 커밋·raw 소스와 브리프 시점 오류·장부 행·종가·브리프 내용) + Actions 실행 + build.py 경고를 표로 낸다. check.py 의 브리프 시점 오류는 11/09 소급 확인과 같았다(ftc_press 10/29~11/01, fed_press 10/30·11/05). 클라우드에서는 radar-raw 를 read 로 붙여(83M clone, 이력은 --depth=200) raw·prices 를 링크한다. radar-raw 없이 빌드하면 가격 경고가 빠진 "경고 0"이 나온다. 2026-11-11 main 에 병합(fast-forward, Pages 배포 #199 성공). /save 는 main 이 아닌 브랜치면 푸시 뒤 main 으로 PR 을 열고 fast-forward 로 병합한다(2026-11-11 Ken 결정. 첫 PR #14 는 Ken 요청으로 병합. 빌드 실패·rebase 충돌·변경 요청이면 PR 만 열어 둔다). 로컬 `~/.claude/commands/save.md`·`check.md` 는 이름이 겹쳐 Ken 이 로컬에서 지운다(클라우드 세션에서는 Ken 컴퓨터에 못 닿는다). 세션 로그는 2026-11-11 부터 radar-raw `logs/` 에 커밋한다(c9edbeb, 그날 세 건부터. 그전에는 git 미추적이라 클라우드 로그는 사라졌다). Ken 로컬의 예전 `logs/` 는 다음 로컬 /save 가 radar-raw 로 옮기고 링크로 바꾼다
 - 2026-11-01 코드 전체 리뷰 8건 반영: 정렬 상태는 축 점수 ±0.1 안을 밀어줌·막음으로 세지 않는다(금리·달러 체제 2축 정렬→양쪽 등), 사이트 마크다운의 날 HTML·javascript: 링크는 실행하지 않고 글자로(XSS), fetch.yml 은 가상환경 실패 시 setup-python 으로 넘어간다, 시장 반응 판정은 60일이 끝났으면 60일 기준(판정 14건 바뀜, --report 에 60일 칸), 번복된 행은 번복 날부터 점수에서 빠진다(줄 100 → 237, 에너지 정책 +0.60→+0.53), 번복은 + ↔ − 만 허용, 브리프 카드는 팩트 칸 링크 전부로 장부 줄을 찾는다, 시장 반응은 SPY 거래일 날짜로 티커 종가를 맞춘다(지금 자료로는 결과 동일). fetch.yml 의 setup-python 대체 경로는 아직 실제로 돈 적이 없다. 11/02 브리프부터 시장 반응 표에 60일 칸, 상태 이름 변화(금리·달러 체제 양쪽 등)가 보이는지 확인
 - fetch.yml 은 2026-11-01 부터 setup-python 대신 러너의 시스템 python3 로 가상환경을 만들어 돌린다. setup-python 판 Python(3.12~3.14)과 curl 에는 ftc.gov 가 10/27 부터 404 를 줬다(10/27~11/01 ftc_press 수집 실패, 루틴이 날마다 푸시). 러너 이미지가 바뀌어 또 404 가 나면 같은 방식으로 Actions 에서 버전별로 열어 본다
 - 수집 실패분 소급 확인(2026-11-09): radar-raw 이력에서 브리프가 읽은 시점의 오류 파일은 ftc_press 10/27~11/01(6일)과 fed_press 10/30·11/05 뿐이다. fed_press 는 그 기간 연준 보도자료 3건(10/28 FOMC 성명, 10/29 BNS 승인, 11/5 집행 종료)이 모두 다음 날 수집(48시간 창)으로 브리프에 들어가 빠진 것이 없다. ftc_press 는 10/26~10/29 보도자료 6건이 어느 브리프에도 안 들어갔다(임시 워크플로로 Actions 에서 FTC 피드를 읽어 확인. 피드 10건이 10/22 까지 닿아 빠짐없음, 10/30~11/01 은 보도자료 없음). 6건 모두 structural=false(Dollar General·Toast 제소는 판결 전, 6(b) 개인 맞춤 가격 조사는 자료 요청, 경고 서한, 사칭 사기 성과 정리, PlayPower 인수 포기는 맵 밖)라 장부 추가는 없고 10/27~10/30 브리프 "버린 뉴스"에 "(11/09 소급 …)" 으로 적었다. 본문 차단으로 버렸던 정부 문서는 관보 API 요약으로 다시 봤다: FCC 위성 기준 링크(2026-22600)는 12/7 시행 기술 갱신이라 그대로 버림, 캐나다 목재 NAFTA 패널(2026-22431)은 2017년 원 조사 판정의 상계관세율 정정이고 본문(새 세율)은 위 차단으로 확인 안 됨, CIT Jinko Solar 판결은 courtlistener 차단으로 확인 안 됨. 셋 다 장부 추가 없음
@@ -206,5 +206,5 @@ logs/                      세션 로그 (/save 가 만듦, git 미추적)
 - 장부 1~11번 줄은 옛 장부의 3축 재분류(이관 판단). 첫 문장 40자·note 접미어 규칙의 예외. 12번 줄부터 ledger.py 가 검사
 - 기업 관찰(SpaceX·BITO·Microsoft)은 새 스펙에 없어 뺐다. 필요하면 backlog 에서 복원
 - 네트워크(2026-11-09): 루틴이 쓰는 claude.ai/code Default 환경에 허용 도메인 12곳을 넣었다(에이전트가 환경 수정을 제안하고 Ken 이 승인). 단계는 "제한됨" 그대로, 패키지 관리자·MCP 서버 허용도 그대로. 도메인: www.federalregister.gov, www.whitehouse.gov, www.federalreserve.gov, www.sec.gov, www.ftc.gov, www.justice.gov, ustr.gov, www.energy.gov, www.bea.gov, www.census.gov, www.pewresearch.org, www.courtlistener.com. 넣은 세션의 프록시 경유 확인: 11곳 200, ftc.gov 404(막힌 게 아니라 FTC 의 클라이언트별 404, 위 fetch.yml 항목과 같은 문제라 FTC 본문은 계속 검색 교차). 그 세션의 WebFetch 는 변경 전 머신이라 계속 실패했다(새 세션부터 적용). 11/09 06:20 루틴은 변경 전이라 "federalregister.gov 본문 열리지 않음(프록시 403)"을 보고했다. 첫 확인은 11/10 루틴: 보고에서 403 이 사라지는지, 0.8 행이 나오는지. 매체 기사(CNBC·Reuters 등)와 public-inspection.federalregister.gov 는 허용 목록에 없어 그쪽은 여전히 검색 교차다. 도메인을 더 넣을 때도 정확한 호스트 이름만(와일드카드는 설정 화면에서만). 11/09 확인: federalregister.gov 는 API(documents.json, 요약)는 열리지만 본문(full_text html·txt·xml)은 자동 접속을 unblock.federalregister.gov 확인 페이지로 돌린다. courtlistener.com 은 판결 페이지가 봇 확인(202)이고 검색 API 는 인증(401)이 필요하다. 그래서 허용만으로 관보·판결 본문 확인(0.8)이 늘지 않을 수 있다. 11/10~11/11 결과: www.sec.gov 본문은 루틴에서 열린다(0.8). 막힌 곳은 nasa.gov(허용 목록 밖), bls.gov·api.bls.gov(프록시 403)라 그 건은 검색 교차였다. 관보 본문은 아직 두 날 모두 쓸 일이 없어 확인 전. 더 넣을 후보: www.nasa.gov, www.bls.gov, api.bls.gov (Ken 승인 후)
-- 로컬 작업 전 `git pull` (../radar-raw 도). 로컬 raw·prices 는 ../radar-raw/raw, ../radar-raw/prices 심볼릭 링크. 장부는 `fetch/ledger.py --append` 로만
-- 저장소: https://github.com/yukiadada/radar (public), https://github.com/yukiadada/radar-raw (private, raw·prices). 사이트 https://yukiadada.github.io/radar/
+- 로컬 작업 전 `git pull` (../radar-raw 도). 로컬 raw·prices·logs 는 ../radar-raw/raw, ../radar-raw/prices, ../radar-raw/logs 심볼릭 링크. 장부는 `fetch/ledger.py --append` 로만
+- 저장소: https://github.com/yukiadada/radar (public), https://github.com/yukiadada/radar-raw (private, raw·prices·logs). 사이트 https://yukiadada.github.io/radar/

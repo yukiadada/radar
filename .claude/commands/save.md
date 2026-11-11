@@ -1,12 +1,12 @@
 ---
-description: 이 세션에서 한 일과 점검 결과를 CLAUDE.md "현재 상태"에 반영하고 세션 로그(logs/, git 미추적)를 쓴 뒤 커밋·푸시하고, main 이 아닌 브랜치면 main 으로 PR 을 열어 병합한다. Ken 이 직접 호출한다. 모델이 스스로 호출하지 않는다
+description: 이 세션에서 한 일과 점검 결과를 CLAUDE.md "현재 상태"에 반영하고 세션 로그를 비공개 radar-raw 의 logs/ 에 커밋하고, 커밋·푸시한 뒤 main 이 아닌 브랜치면 main 으로 PR 을 열어 병합한다. Ken 이 직접 호출한다. 모델이 스스로 호출하지 않는다
 argument-hint: [한 줄 메모]
 disable-model-invocation: true
 ---
 
 # /save
 
-레포 루트에서 실행한다. 고치는 곳은 CLAUDE.md 의 `## 현재 상태` 절과 `logs/` 뿐이다. CLAUDE.md 의 다른 절(목적·절대 규칙·파일 구조·워크플로·스키마·템플릿·작성 스타일)은 여기서 고치지 않는다. 그런 변경은 이 세션에서 Ken 이 승인해 이미 고친 것만 커밋에 넣는다. 장부(`ledger/signals.jsonl`)는 읽기만 한다.
+레포 루트에서 실행한다. 고치는 곳은 CLAUDE.md 의 `## 현재 상태` 절과 세션 로그(radar-raw 의 `logs/`) 뿐이다. CLAUDE.md 의 다른 절(목적·절대 규칙·파일 구조·워크플로·스키마·템플릿·작성 스타일)은 여기서 고치지 않는다. 그런 변경은 이 세션에서 Ken 이 승인해 이미 고친 것만 커밋에 넣는다. 장부(`ledger/signals.jsonl`)는 읽기만 한다.
 
 메모: `$ARGUMENTS` 가 있으면 그 한 줄을 로그와 현재 상태에 반영할 내용의 힌트로 쓴다 (예: `11/10~11/11 점검`).
 
@@ -28,9 +28,16 @@ disable-model-invocation: true
 - /check 를 이 세션에서 돌렸으면 그 요약의 "현재 상태에 넣을 한 줄"과 늘려야 할 기존 항목.
 - 지금 CLAUDE.md 의 `## 현재 상태` 절 전체를 읽는다.
 
-## 3. 세션 로그 (logs/, git 미추적)
+## 3. 세션 로그 (비공개 radar-raw 의 logs/)
 
-`logs/<YYYY-MM-DD>-<HHMM>.md` (KST)를 쓴다. `logs/` 가 없으면 만든다. `.gitignore` 에 있어 커밋되지 않는다. 클라우드 세션에서는 컨테이너와 함께 사라지므로 남겨야 할 것은 4단계의 현재 상태에 넣는다.
+로그는 비공개 저장소 radar-raw 의 `logs/` 에 커밋해 남긴다 (radar 는 공개라 여기에 두지 않는다). radar 의 `logs` 는 `../radar-raw/logs` 심볼릭 링크이고 `.gitignore` 에 있다. 커밋은 5c 단계에서 한다.
+
+1. 링크 준비. `logs` 가 `../radar-raw/logs` 링크가 아니면:
+   - `../radar-raw` 가 없으면(클라우드) `add_repo`(owner yukiadada, repo radar-raw, access push)로 붙이고 그 결과가 알려주는 clone 명령으로 `../radar-raw` 에 받는다. 붙이지 못하면 로그는 scratchpad 에 쓰고 채팅 요약에 "로그 보관 못 함"과 그 경로를 적는다.
+   - `git -C ../radar-raw pull --rebase -q origin main` (radar-raw 는 fetch.yml 이 매일 커밋한다).
+   - `logs` 가 실제 폴더면(예전 로컬 로그) `mkdir -p ../radar-raw/logs && mv -n logs/* ../radar-raw/logs/` 로 옮기고(같은 이름은 덮지 않는다) 비었을 때만 `rmdir logs`. 파일이 남으면 멈추고 Ken 에게 알린다.
+   - `mkdir -p ../radar-raw/logs && ln -s ../radar-raw/logs logs`.
+2. `logs/<YYYY-MM-DD>-<HHMM>.md` (KST)를 쓴다.
 
 ```markdown
 # 세션 로그 YYYY-MM-DD HH:MM (KST)
@@ -110,10 +117,16 @@ disable-model-invocation: true
    3) PR 이 병합됨으로 바뀌었는지 본다 (MCP `pull_request_read` get 의 merged, 또는 `gh pr view --json state`). fast-forward 푸시면 GitHub 가 PR 을 병합됨으로 표시한다.
    4) main 푸시는 pages.yml 배포를 띄운다. 기다리지 않는다. 결과는 다음 /check 가 본다.
 
+## 5c. 세션 로그 커밋 (radar-raw)
+
+1. 로그의 "이 세션 커밋" 줄에 이 save 커밋 해시와 PR 링크·병합 결과를 채운다.
+2. `git -C ../radar-raw add logs/` 로 이번 로그와 3단계에서 옮긴 옛 로그만 올린다. `raw/`·`prices/` 는 건드리지 않는다.
+3. 커밋 메시지 `logs: <YYYY-MM-DD HH:MM> 세션 로그 (<한 줄 요약>)`. `git -C ../radar-raw pull --rebase -q origin main` 후 `git -C ../radar-raw push origin HEAD:main`. 네트워크 오류는 5단계처럼 다시 시도하고, 권한으로 거부되면 로컬 커밋으로 두고 채팅 요약에 적는다.
+
 ## 6. 채팅 요약
 
 - 커밋 해시와 푸시한 브랜치
 - PR 링크와 병합 결과 (새로 열었는지 / 이미 열려 있던 것인지 / main 이라 건너뛰었는지, 병합됨 / 병합 안 함과 그 이유)
 - 현재 상태에서 바뀐 항목 (고침 / 새로 / 지움)
-- 로그 파일 경로
+- 로그 파일 경로와 radar-raw 커밋 해시 (보관 못 했으면 그 이유)
 - main 위로 rebase 했으면 그 사실
