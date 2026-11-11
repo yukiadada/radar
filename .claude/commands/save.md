@@ -1,5 +1,5 @@
 ---
-description: 이 세션에서 한 일과 점검 결과를 CLAUDE.md "현재 상태"에 반영하고 세션 로그(logs/, git 미추적)를 쓴 뒤 커밋·푸시한다. Ken 이 직접 호출한다. 모델이 스스로 호출하지 않는다
+description: 이 세션에서 한 일과 점검 결과를 CLAUDE.md "현재 상태"에 반영하고 세션 로그(logs/, git 미추적)를 쓴 뒤 커밋·푸시하고, main 이 아닌 브랜치면 main 으로 PR 을 연다. Ken 이 직접 호출한다. 모델이 스스로 호출하지 않는다
 argument-hint: [한 줄 메모]
 disable-model-invocation: true
 ---
@@ -79,9 +79,31 @@ disable-model-invocation: true
 3. `git push -u origin <현재 브랜치>`. 네트워크 오류면 2·4·8·16초 간격으로 최대 4번 다시 시도한다. non-fast-forward 로 거부되면 `git pull --rebase --autostash` 후 한 번 더.
 4. 커밋 뒤 4단계 머리의 "마지막 커밋"이 이 커밋의 요약과 맞는지 본다 (해시는 쓰지 않는다. "(이 커밋)"이 가리킨다).
 
+## 5b. PR (main 이 아닌 브랜치)
+
+현재 브랜치가 main 이면 건너뛴다. 아니면 푸시 뒤 main 으로 PR 을 연다. **병합은 하지 않는다** (Ken 이 정한다).
+
+1. `git fetch origin main` 후 `git log origin/main..HEAD --format='%h %s'` 가 비어 있으면(브랜치가 main 과 같음) PR 을 열지 않는다.
+2. 그 브랜치의 열린 PR 을 찾는다: GitHub MCP `list_pull_requests`(owner yukiadada, repo radar, head `yukiadada:<브랜치>`, state open), 도구가 없으면 `gh pr view <브랜치> --json url,state`. 열린 PR 이 있으면 새로 열지 않는다. 방금 푸시한 커밋이 그 PR 에 붙으므로 링크만 적는다. 이미 병합된 PR 은 다시 쓰지 않고 새 PR 을 연다.
+3. 없으면 연다: GitHub MCP `create_pull_request`(owner yukiadada, repo radar, head <브랜치>, base main). 도구가 없으면 `gh pr create --base main --head <브랜치> --title ... --body-file <임시 파일>`. 둘 다 안 되면 `https://github.com/yukiadada/radar/compare/main...<브랜치>?expand=1` 을 채팅에 적는다.
+   - 제목: 1의 커밋이 하나면 그 첫 줄, 여럿이면 바뀐 것을 한 줄로.
+   - 본문(한국어, 짧게). 레포에 PR 템플릿(`.github/pull_request_template.md` 등)이 생기면 그 절 제목을 따른다.
+
+     ```markdown
+     ## 바뀐 것
+     - <1의 커밋 한 줄씩>
+
+     ## 확인
+     - site/build.py 경고 n (이 세션에서 돌린 것). /check 를 돌렸으면 그 결과 한 줄
+
+     ## 현재 상태
+     - 고침 / 새로 / 지움 항목
+     ```
+
 ## 6. 채팅 요약
 
 - 커밋 해시와 푸시한 브랜치
+- PR 링크 (새로 열었는지, 이미 열려 있던 것인지, main 이라 건너뛰었는지)
 - 현재 상태에서 바뀐 항목 (고침 / 새로 / 지움)
 - 로그 파일 경로
 - main 보다 뒤처졌으면 그 사실
