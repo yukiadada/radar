@@ -121,6 +121,16 @@ def asof(prices: dict | None) -> str | None:
     return max((s["dates"][-1] for s in prices["tickers"].values() if s.get("dates")), default=None)
 
 
+def lagging(prices: dict | None, days: int = 5) -> list[tuple[str, str]]:
+    """[(티커, 마지막 종가 날짜)] 가장 최근 종가(asof)보다 days 일 넘게 뒤처진 종목. 갱신이 계속 실패해 이전 자료로 남은 종목이다.
+    asof 는 종목 중 최댓값이라 일부만 멈춘 것은 거기서 드러나지 않는다. 그 종목이 든 시그널의 시장 반응은 멈춘다."""
+    a = asof(prices)
+    if not a:
+        return []
+    cut = (datetime.date.fromisoformat(a) - datetime.timedelta(days=days)).isoformat()
+    return sorted((t, s["dates"][-1]) for t, s in prices["tickers"].items() if s.get("dates") and s["dates"][-1] < cut)
+
+
 # ---------------------------------------------------------------- 반응 계산
 def _base_index(dates: list[str], date: str) -> int | None:
     """장부 날짜 이틀 전 이전의 마지막 종가 인덱스. 없으면 None."""
@@ -277,6 +287,9 @@ def main(argv=None) -> int:
         print(f"{PRICES}: {len(prices['tickers'])}종목, 마지막 종가 {asof(prices)}, 갱신 {prices.get('updated_at')}")
         if missing:
             print(f"빠진 종목: {', '.join(missing)}")
+        lag = lagging(prices)
+        if lag:
+            print("멈춘 종목 (최근 종가보다 5일 넘게 뒤): " + ", ".join(f"{t} {dt}" for t, dt in lag))
         if prices.get("errors"):
             print("마지막 갱신 실패: " + ", ".join(f"{k} ({v})" for k, v in prices["errors"].items()))
         return 1 if missing else 0

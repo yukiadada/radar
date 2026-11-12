@@ -139,6 +139,8 @@ def paged_feed(url: str, a: datetime.date, ua: str | None = None, max_pages: int
         try:
             items = get_items(u, ua)
         except RuntimeError:
+            if page == 1:
+                raise   # 첫 페이지부터 실패면 수집 실패다. 0건 성공으로 넘기면 빈 파일이 남아 다시 돌려도 안 채워진다
             break   # 마지막 페이지 뒤는 404
         if not items:
             break

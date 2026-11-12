@@ -5,7 +5,7 @@
   python3 site/build.py --date 2026-09-18   기준일 지정 (기본: 오늘, Asia/Seoul)
 
 표준 라이브러리만 쓴다 (framework/*.yaml 은 fetch/config.py, 점수는 fetch/scoring.py, 장부 읽기는 fetch/ledger.py). .github/workflows/pages.yml 이 main 에 push 될 때마다 실행해 GitHub Pages 로 올린다.
-자료 문제(깨진 장부 줄, sector_map 오류, 맵에 없는 섹터, 브리프·방향 브리프 형식)로는 빌드를 멈추지 않는다. data.json 의 warnings 에 적고 사이트가 배너로 보여준다. 사이트가 조용히 멈춰 있는 것보다 낫다.
+자료 문제(깨진 장부 줄, sector_map 오류, 맵에 없는 섹터, 브리프·방향 브리프 형식, 형식이 다른 raw 파일, 멈춘 종가)로는 빌드를 멈추지 않는다. data.json 의 warnings 에 적고 사이트가 배너로 보여준다. 사이트가 조용히 멈춰 있는 것보다 낫다.
 data.json:
   today, generated_at, first_date, axes, labels, params, sectors{이름: {direction, tickers, note}}
   ledger[행 + line], board{live, w30, w90, ...}(scoring.alignment + delta + orphans. live 는 누적(유효기간), w<n> 은 열린 창), series{같은 키}(scoring.series)
@@ -32,7 +32,7 @@ sys.path.insert(0, str(ROOT / "fetch"))
 from config import AXES, all_tickers, load_sector_map, load_sources  # noqa: E402
 from ledger import load_existing  # noqa: E402
 from scoring import LABELS, PARAMS, alignment, attach_deltas, attention, enabled_windows, raw_scan, select, series  # noqa: E402
-from market import SOURCE as PRICE_SOURCE, asof as price_asof, load_prices, reactions  # noqa: E402
+from market import BENCH, SOURCE as PRICE_SOURCE, asof as price_asof, lagging, load_prices, reactions  # noqa: E402
 
 SITE = ROOT / "site"
 OUT = SITE / "out"
@@ -215,6 +215,12 @@ def main(argv=None) -> int:
         market_meta = {"source": PRICE_SOURCE, "asof": pa, "updated_at": prices.get("updated_at"), "n": len(market)}
         if pa and (today - d(pa)).days > 5:
             warnings.append(f"가격 자료(prices/prices.json)가 {pa} 까지라 시장 반응이 오래됐다. fetch.yml 의 market.py --update 를 확인")
+        if BENCH not in prices["tickers"]:
+            warnings.append(f"가격 자료에 {BENCH} 가 없어 시장 반응을 계산하지 못한다. fetch.yml 의 market.py --update 를 확인")
+        lag = lagging(prices)   # 일부 종목만 갱신이 계속 실패한 경우. 전체 날짜(asof)로는 안 보인다
+        if lag:
+            warnings.append(f"종가가 멈춘 종목 {len(lag)}개 ({', '.join(f'{t} {dt}' for t, dt in lag[:8])}{' 등' if len(lag) > 8 else ''}). 다른 종목은 {pa} 까지 있다. "
+                            "이 종목이 든 시그널의 시장 반응이 멈춘다. fetch.yml 의 market.py --update 로그를 확인")
     incomplete = [r["line"] for r in rows if not r.get("source") or not r.get("sector")]   # ledger.py 를 거치지 않은 줄. 빌드는 멈추지 않는다
     if incomplete:
         warnings.append(f"장부 {len(incomplete)}줄에 source 또는 sector 가 없음 (줄 {', '.join(map(str, incomplete[:10]))}). 장부는 수정 금지, Ken 에게 알린다")

@@ -49,8 +49,9 @@ for days in MODES:
         sc = collections.Counter(r["sector"] for r in s)
         tk = collections.Counter(t for r in s for t in dict.fromkeys(r.get("tickers", [])))
         conf = f"{sum(r['confidence'] for r in s) / len(s):.2f}" if s else "-"
-        wp = sum(weight(r) for r in s if r["direction"] == "+"); wm = sum(weight(r) for r in s if r["direction"] == "-")
-        print(f"| {a} | {len(s)} | {pct(len(s), len(w))} | {dc['+']} | {dc['-']} | {dc['±']} | {wp} | {wm} | {conf} | {fmt(sc, 3)} | {fmt(tk, 5)} |")
+        # 가중 합은 그 기준의 가중치 함수로 (누적은 줄어든 가중치, 창은 그대로). 아래 섹터 정렬 표와 같은 기준이다
+        wp = sum(_wfn(r) for r in s if r["direction"] == "+"); wm = sum(_wfn(r) for r in s if r["direction"] == "-")
+        print(f"| {a} | {len(s)} | {pct(len(s), len(w))} | {dc['+']} | {dc['-']} | {dc['±']} | {round(wp, 1):g} | {round(wm, 1):g} | {conf} | {fmt(sc, 3)} | {fmt(tk, 5)} |")
     board = attach_deltas(alignment(rows, today, days, smap), ser[days])
     c = board["counts"]
     print(f"\n### 섹터 정렬 ({'누적' if days is None else f'최근 {days}일'}. 축 값 −1~+1, 정렬 % = 50 + 50 × 세 축 평균) 3축 {c['aligned3']} · 2축 {c['aligned2']} · 1축 {c['aligned1']} · 엇갈림 {c['mixed']} · 양쪽 {c['neutral']} · 역풍 {c['headwind']} · 신호 없음 {c['none']}")

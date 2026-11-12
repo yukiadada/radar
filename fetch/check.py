@@ -8,6 +8,7 @@
 루틴 커밋은 origin/main 기록에서 찾는다 (루틴은 main 에 푸시한다). 먼저 `git fetch origin main`.
 raw/·prices/ 링크(radar-raw)가 없으면 그 두 절은 "확인 안 됨"으로 찍는다. 브리프가 읽은 시점의 수집 오류는
 radar-raw 의 git 이력으로 본다 (얕은 clone 이면 `git -C ../radar-raw fetch --depth=200 origin main`).
+브리프 시점은 루틴 커밋 직전의 수집으로 잡는다. 루틴은 커밋보다 몇 분 앞서 raw 를 읽으므로 커밋 전 30분 안의 앞선 수집에 있던 오류도 같이 찍는다.
 GitHub Actions 수집·배포 실행과 site/build.py 경고는 여기서 보지 않는다 (/check 가 따로 본다).
 종료 코드: 0 (문제가 있어도 0. 판단은 /check 가 한다) / 2 인자 오류
 """
@@ -17,15 +18,16 @@ import argparse
 import collections
 import datetime
 import json
+import os
 import re
 import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config import ROOT, load_sources  # noqa: E402
+from config import ROOT, all_tickers, load_sector_map, load_sources  # noqa: E402
 from ledger import LEDGER, load_existing  # noqa: E402
-from market import asof, load_prices  # noqa: E402
+from market import BENCH, asof, lagging, load_prices  # noqa: E402
 
 KST = datetime.timezone(datetime.timedelta(hours=9))
 CHECK_ITEM = re.compile(r"^- (\d{1,2})/(\d{1,2})(?:~(\d{1,2})/(\d{1,2}))? 점검", re.M)
@@ -34,6 +36,7 @@ BRIEF_COMMIT = re.compile(r"^brief (\d{4}-\d{2}-\d{2}): 구조적 시그널 (\d+
 REASONS = ["맵 영향 없음", "맵 밖", "제안 단계", "임시 조치", "일시 중단", "같은 달 지표 반복", "먼 연결", "발언", "가격 등락",
            "자금흐름", "중복", "헤드라인만", "전망", "계획 단계", "3축 어디에도"]
 BLOCKED = re.compile(r"403|열리지|허용 도메인 밖|허용 목록 밖|막혀|막힌|봇 확인|차단")
+READ_WINDOW = 30   # 분. 루틴이 raw 를 읽고 커밋하기까지 걸릴 수 있는 시간
 HOST = re.compile(r"\b(?:[a-z0-9-]+\.)+(?:gov|com|org|net|io)\b")
 
 
@@ -56,7 +59,12 @@ def last_check_end(today: datetime.date) -> datetime.date | None:
             e = datetime.date(today.year, mo, d)
         except ValueError:
             continue
-        ends.append(e if e <= today else e.replace(year=today.year - 1))
+        if e > today:   # 해를 넘긴 항목 (1월에 보는 12월 점검)
+            try:
+                e = e.replace(year=today.year - 1)
+            except ValueError:   # 2/29
+                continue
+        ends.append(e)
     return max(ends, default=None)
 
 
@@ -70,6 +78,19 @@ def brief_commits(lo: datetime.date) -> dict[str, list[dict]]:
         if m:
             files = sh("git", "show", "--name-only", "--format=", h).split()
             out[m.group(1)].append({"hash": h, "author": an, "time": ci, "n": int(m.group(2)), "files": files})
+    return out
+
+
+def errors_at(rr: Path, commit: str, ds: str) -> list[str]:
+    """radar-raw 의 그 커밋 시점에 raw/<날짜>/ 에서 error 필드가 있던 소스."""
+    out = []
+    for f in sh("git", "ls-tree", "--name-only", commit, f"raw/{ds}/", cwd=rr).split():
+        try:
+            j = json.loads(sh("git", "show", f"{commit}:{f}", cwd=rr) or "{}")
+            if isinstance(j, dict) and j.get("error"):
+                out.append(Path(f).stem)
+        except ValueError:
+            out.append(Path(f).stem + "(깨짐)")
     return out
 
 
@@ -127,23 +148,25 @@ def section_sources(dates: list[str], commits: dict) -> None:
         items = sum(v.get("count") or 0 for v in files.values())
         print(f"- {ds}: 파일 {len(files)}/{len(names)}, 항목 {items}, 빠짐 {', '.join(missing) or '없음'}, "
               f"오류 {', '.join(errs) or '없음'}, 0건 {', '.join(zero) or '없음'}")
-        # 브리프가 읽은 시점: 루틴 커밋 직전의 radar-raw 커밋
+        # 브리프가 읽은 시점: 루틴 커밋 직전의 radar-raw 커밋. 루틴은 커밋보다 몇 분 앞서 raw 를 읽으므로,
+        # 커밋 전 READ_WINDOW 분 안에 수집이 여러 번 들어왔으면 앞선 수집의 오류도 같이 보인다 (어느 쪽을 읽었는지는 이력만으로 모른다)
         when = commits.get(ds, [{}])[0].get("time")
         if not when:
             continue
-        c = sh("git", "log", "-1", f"--before={when}", "--format=%h|%cI", "--", f"raw/{ds}", cwd=rr).strip()
-        if not c:
+        since = (datetime.datetime.fromisoformat(when) - datetime.timedelta(minutes=READ_WINDOW)).isoformat()
+        near = [x.split("|") for x in sh("git", "log", f"--before={when}", f"--since={since}", "--format=%h|%cI", "--", f"raw/{ds}", cwd=rr).split()]
+        if not near:   # 창 안에 수집이 없으면 그 전의 마지막 수집을 읽은 것이다
+            near = [x.split("|") for x in sh("git", "log", "-1", f"--before={when}", "--format=%h|%cI", "--", f"raw/{ds}", cwd=rr).split()]
+        if not near:
             print(f"  - 브리프 시점: radar-raw 이력 없음" + (" (얕은 clone)" if shallow == "true" else ""))
             continue
-        ch, ct = c.split("|")
-        at = []
-        for f in sh("git", "ls-tree", "--name-only", ch, f"raw/{ds}/", cwd=rr).split():
-            try:
-                if json.loads(sh("git", "show", f"{ch}:{f}", cwd=rr) or "{}").get("error"):
-                    at.append(Path(f).stem)
-            except ValueError:
-                at.append(Path(f).stem + "(깨짐)")
+        (ch, ct), earlier = near[0], near[1:]
+        at = errors_at(rr, ch, ds)
         print(f"  - 브리프 시점({ch} {kst(ct)} KST) 오류: {', '.join(at) or '없음'}")
+        for eh, et in earlier:
+            more = [n for n in errors_at(rr, eh, ds) if n not in at]
+            if more:
+                print(f"    - 그 직전 수집({eh} {kst(et)} KST)에는 오류: {', '.join(more)}. 루틴 커밋 {READ_WINDOW}분 안이라 브리프가 이쪽을 읽었을 수 있다")
     always = [n for n, k in zero_days.items() if k == len(dates)]
     if len(dates) > 1 and always:
         print(f"- 기간 내내 0건: {', '.join(sorted(always))}")
@@ -177,6 +200,16 @@ def section_prices(today: datetime.date) -> None:
     a = asof(p)
     lag = (today - datetime.date.fromisoformat(a)).days if a else None
     print(f"- {len(p['tickers'])}종목, 마지막 종가 {a} (오늘보다 {lag}일 전), 갱신 {kst(p['updated_at']) + ' KST' if p.get('updated_at') else '확인 안 됨'}")
+    try:
+        want = sorted(all_tickers(load_sector_map()) | {BENCH})
+        missing = [t for t in want if t not in p["tickers"]]
+    except ValueError as e:
+        missing = []
+        print(f"- sector_map 읽기 실패: {e}")
+    stale = lagging(p)
+    errs = p.get("errors") or {}
+    print(f"- 빠진 종목: {', '.join(missing) or '없음'}. 멈춘 종목(최근 종가보다 5일 넘게 뒤): {', '.join(f'{t} {dt}' for t, dt in stale) or '없음'}. "
+          f"마지막 갱신 실패: {', '.join(errs) or '없음'}")
 
 
 def section_briefs(dates: list[str]) -> None:
@@ -245,4 +278,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except BrokenPipeError:   # `| head` 처럼 읽는 쪽이 먼저 닫은 경우
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        sys.exit(0)

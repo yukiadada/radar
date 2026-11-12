@@ -67,11 +67,27 @@ def live_weight(r: dict, today: datetime.date) -> float:
     return weight(r) * remaining(r, today)
 
 
+# 마침표가 붙어도 문장 끝이 아닌 말. first_sentence 가 여기서는 자르지 않는다 (site/index.html 의 ABBR 과 같은 목록)
+ABBR = frozenset("inc corp co ltd llc plc no vs mr mrs ms dr st jr sr etc bros approx est fig sec art gov sen rep gen "
+                 "jan feb mar apr jun jul aug sep sept oct nov dec a.m p.m e.g i.e u.s u.k".split())
+
+
 def first_sentence(s: str) -> str:
-    """팩트의 첫 문장. 한국어 '다.' 또는 영문 '. ' 에서 자른다. 사이트가 카드 제목으로 쓰고, ledger.py 가 길이를 검사한다."""
+    """팩트의 첫 문장. 뒤에 공백(또는 끝)이 오는 첫 마침표에서 자른다. 사이트가 카드 제목으로 쓰고, ledger.py 가 길이를 검사한다.
+    마침표 앞이 한글이면("…했다.", "…올림.") 자르고, 영문 소문자·닫는 괄호·따옴표·% 이면 약어(Inc. No. U.S. 등)가 아닐 때 자른다.
+    대문자·숫자 뒤의 마침표("U.S.", "2026. 11.")는 문장 끝으로 보지 않는다. site/index.html 의 firstSentence 와 같은 규칙이다."""
     s = " ".join(s.split())
-    m = re.search(r"(다\.|\. )(?=\s|$)", s)
-    return s[: m.end()].rstrip() if m else s
+    for m in re.finditer(r"\.(?=\s|$)", s):
+        head = s[: m.start()]
+        prev = head[-1:]
+        if "가" <= prev <= "힣":
+            return s[: m.end()]
+        if "a" <= prev <= "z" or (prev and prev in ")]%\"'”’"):
+            word = re.search(r"[A-Za-z.]+$", head)
+            if word and word.group(0).lower() in ABBR:
+                continue
+            return s[: m.end()]
+    return s
 
 
 def in_window(rows: list[dict], today: datetime.date, days: int) -> tuple[list[dict], dict]:
@@ -306,20 +322,23 @@ def raw_scan(today: datetime.date, days: int = 14, raw_dir: Path = ROOT / "raw",
         for f in files:
             try:
                 j = json.loads(f.read_text(encoding="utf-8"))
-            except Exception:
-                srcs[f.stem] = {"count": 0, "error": "읽기 실패", "current": current is None or f.stem in current}
+                if not isinstance(j, dict):
+                    raise ValueError("JSON 객체가 아님")
+            except Exception:   # 깨졌거나 형식이 다른 파일 하나가 빌드를 멈추지 않게
+                srcs[f.stem] = {"count": 0, "error": "읽기 실패", "current": current is None or f.stem in current, "backfill": False}
                 continue
-            name = j.get("source", f.stem)
+            name = j.get("source") if isinstance(j.get("source"), str) else f.stem
             cur = current is None or name in current
-            items = j.get("items", [])
-            srcs[name] = {"count": j.get("count", len(items)), "error": j.get("error"), "current": cur, "backfill": bool(j.get("backfill"))}
+            items = [it for it in j.get("items") or [] if isinstance(it, dict)] if isinstance(j.get("items"), list) else []
+            count = j.get("count") if isinstance(j.get("count"), int) else len(items)
+            srcs[name] = {"count": count, "error": j.get("error"), "current": cur, "backfill": bool(j.get("backfill"))}
             if not cur:
                 continue
             for it in items:
-                key = _title_key(it.get("title") or "")
+                key = _title_key(str(it.get("title") or ""))
                 if key and key not in seen:
                     seen.add(key)
-                    titles.append(it.get("title") or "")
+                    titles.append(str(it.get("title") or ""))
         out["days"][dt] = srcs
         out["titles"][dt] = titles
     return out

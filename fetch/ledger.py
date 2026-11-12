@@ -6,7 +6,8 @@
 
 rows 파일은 JSON 배열이다. `[]` 이면 집계만 한다. 스키마는 CLAUDE.md "시그널 스키마".
 검증에 하나라도 걸리면 아무것도 쓰지 않는다. 기존 줄은 어떤 경우에도 고치지 않는다.
-출력의 `skip 중복` 은 이미 장부에 있는 사건(같은 source, 같은 sector), `경고 유사 사건` 은 최근 7일 같은 섹터 행과 팩트가 많이 겹치는 것.
+출력의 `skip 중복` 은 이미 장부에 있는 사건(같은 source, 같은 sector 의 행이 --date 앞뒤 14일 안에 있음), `경고 유사 사건` 은 최근 7일 같은 섹터 행과 팩트가 많이 겹치는 것.
+중복 검사에 기간을 두는 이유: 정기 지표(Census·BLS 월간 발표)는 매달 같은 주소로 나온다. 기간이 없으면 두 번째 달부터 걸러져 장부에 안 올라간다.
 종료 코드: 0 통과 / 1 검증 실패 / 2 인자·환경 오류 또는 장부·sector_map 이 깨져 읽을 수 없음
 """
 from __future__ import annotations
@@ -27,10 +28,12 @@ LEDGER = ROOT / "ledger/signals.jsonl"
 KEYS = ["date", "axis", "sector", "fact", "source", "structural", "tickers", "direction", "confidence", "note",
         "horizon", "impact", "channel", "reverses"]
 HORIZON, CHANNEL = ("분기", "1년", "다년"), ("실적", "멀티플", "수급")
-BAD = re.compile(r"사라(?![지진질져졌짐])|팔아라|지금이 기회|매수 추천|매도 추천|사야 한다|팔아야 한다")
+# "사라" 는 앞뒤가 한글이 아닐 때만 (명령형 "사라", "사라고"). "자회사라는"·"행사라고"·"사라졌다" 는 걸리지 않는다
+BAD = re.compile(r"(?<![가-힣])사라(?:고(?![가-힣]))?(?![가-힣])|팔아라|지금이 기회|매수 추천|매도 추천|사야 한다|팔아야 한다")
 URL = re.compile(r"^https?://[^\s/]+\.[^\s/]+\S*$")
 VERIFY_SUFFIX = " 확인: 검색 교차"
 FIRST_WARN, FIRST_MAX = 55, 90   # 팩트 첫 문장 길이. CLAUDE.md "40자 안팎" 규칙
+DUP_DAYS = 14   # 중복 검사 창(일). 같은 (source, sector) 라도 이보다 떨어진 행은 다른 사건으로 본다
 
 
 def load_existing(path: Path = LEDGER, warnings: list[str] | None = None) -> tuple[list[dict], dict[int, dict]]:
@@ -67,12 +70,13 @@ def grams(t: str) -> set[str]:
 def validate(rows: list, date: str, today: datetime.date, existing: list[dict], by_line: dict[int, dict], smap: dict) -> tuple[list[dict], list[str], list[str]]:
     tickers = all_tickers(smap)
     print(f"sector_map: 섹터 {len(smap)}개, 티커 {len(tickers)}개")
-    seen = {(r["source"], r["sector"]): r["date"] for r in existing}
+    seen = {(r.get("source"), r.get("sector")): r["date"] for r in existing
+            if abs((today - datetime.date.fromisoformat(r["date"])).days) <= DUP_DAYS}
     recent, _ = in_window(existing, today, 7)
     if recent:
         print(f"최근 7일 장부 {len(recent)}건 (같은 사건이면 올리지 않는다):")
         for r in recent:
-            print(f"  - {r['date']} [{r['axis']}/{r['sector']}] {r['fact'][:80]}")
+            print(f"  - {r['date']} [{r.get('axis')}/{r.get('sector')}] {str(r.get('fact', ''))[:80]}")
     errors, todo, skipped = [], [], []
     for i, r in enumerate(rows):
         p = f"rows[{i}]"
@@ -139,14 +143,14 @@ def validate(rows: list, date: str, today: datetime.date, existing: list[dict], 
                     errors.append(f"{p}: reverses 는 이전 줄과 반대 방향(+ ↔ -)이어야 함 ({rv}번 줄 {prev.get('direction')}, 이 행 {r['direction']}). ± 는 뒤집을 수도, 뒤집는 행이 될 수도 없다. 번복이 아니면 null")
         g = grams(r["fact"])
         for x in recent:
-            if x["sector"] == r["sector"] and x["source"] != r["source"]:
-                h = grams(x["fact"])
+            if x.get("sector") == r["sector"] and x.get("source") != r["source"]:
+                h = grams(str(x.get("fact", "")))
                 j = len(g & h) / max(1, len(g | h))
                 if j >= 0.35:
-                    print(f"경고 유사 사건 {p}: {x['date']} 장부 행과 팩트 겹침 {j:.2f}. 같은 사건이면 rows 에서 뺀다: {x['fact'][:70]}")
+                    print(f"경고 유사 사건 {p}: {x['date']} 장부 행과 팩트 겹침 {j:.2f}. 같은 사건이면 rows 에서 뺀다: {str(x.get('fact', ''))[:70]}")
         key = (r["source"], r["sector"])
         if key in seen:
-            skipped.append(f"{p}: 이미 {seen[key]} 에 기록됨 ({r['sector']}, {r['source'][:70]})")
+            skipped.append(f"{p}: 이미 {seen[key]} 에 기록됨 (같은 출처·섹터, {DUP_DAYS}일 안. {r['sector']}, {r['source'][:70]})")
             continue
         seen[key] = date
         todo.append({k: r[k] for k in KEYS})
