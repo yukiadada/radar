@@ -30,9 +30,10 @@ framework/axes.md          3축 정의, 축별 질문·밀어줌/막음 신호·
 framework/sector_map.yaml  방향(내러티브) → 섹터 → 티커·keywords (Ken 이 큐레이션)
 framework/sources.yaml     수집 소스 (RSS·Google News 검색어) 와 축 힌트 (Ken 이 큐레이션)
 fetch/                     fetch.py 수집, ledger.py 장부 검증·추가(장부에 쓰는 유일한 수단), scoring.py 정렬 %·추이·관심, config.py yaml 파서, gn_decode.py,
-                           market.py 종가 갱신·시장 반응 계산(--update / --report), backfill.py 과거 raw 소급 수집, check.py /check 집계(읽기만)
+                           market.py 종가·시장 온도 갱신과 시장 반응 계산(--update / --report / --macro), backfill.py 과거 raw 소급 수집, check.py /check 집계(읽기만)
 raw/YYYY-MM-DD/            당일 수집 원문. 비공개 저장소 radar-raw 에만 커밋 (여기서는 ../radar-raw/raw 심볼릭 링크, git 미추적). 2026-06-19~09-16 은 backfill.py 소급분(backfill:true, 그날 수집보다 성김)
-prices/prices.json         sector_map 티커 + SPY 일별 종가 (Cboe 지연 시세). radar-raw 의 prices/ 심볼릭 링크. fetch.yml 이 매일 갱신·커밋
+prices/prices.json         sector_map 티커 + SPY 일별 종가 (Cboe 지연 시세, 막히면 Yahoo → Stooq → Nasdaq). radar-raw 의 prices/ 심볼릭 링크. fetch.yml 이 매일 갱신·커밋
+prices/macro.json          시장 온도: VIX·국채 2년/10년·금리차·하이일드 스프레드·기대인플레이션·기준금리·달러·WTI·비트코인·실업수당·NFCI (FRED, 일부는 Yahoo·미 재무부 대체). market.py --update 가 같이 갱신
 briefs/YYYY-MM-DD.md       일간 브리프 (축별 기사 + 쉬운 말로 + 섹터 정렬 표)
 briefs/direction.md        방향 브리프 (쉬운 말로 읽는 지금의 방향). /brief 가 매일 덮어쓴다. 홈에 표시
 ledger/signals.jsonl       구조적 시그널 누적 장부 (append only)
@@ -106,7 +107,7 @@ logs/                      세션 로그. 비공개 radar-raw 의 logs/ 심볼�
 - `channel`: 실적 | 멀티플 | 수급.
 - `reverses`: 이전 시그널을 뒤집는 행이면 그 줄 번호, 아니면 null. 뒤집는 행은 이전 줄과 반대 방향(+ ↔ −)이어야 한다 (ledger.py 가 검사). 뒤집힌 행은 번복 행의 날짜부터 정렬 점수에서 빠진다.
 - 정렬 % 계산: 가중치 w = impact × horizon(분기 1, 1년 2, 다년 3). 누적(기본)은 유효기간(분기 90일, 1년 365일, 다년 730일) 안의 시그널만 세고 w 에 남은 비중(1 − 지난 일수 ÷ 유효기간)을 곱한다. 창(최근 30일 등)은 창 안의 시그널을 그대로 센다. 축 점수 = Σ 방향×w ÷ (Σ w + 6) 을 소수 2자리로 (분모의 Σ w 는 +·− 행만, ± 는 점수에 영향 없음. 한쪽으로 쌓일수록 ±1 에 가까워지고 반대 근거가 섞이면 0 쪽으로. 2026-10-27 전 브리프의 정렬 숫자는 옛 식 Σ÷6 을 ±1 에서 자른 값). 정렬 % = 50 + 50 × 세 축 평균 (axes.md "3축 정렬"). 상태는 3축 정렬 / 2축 정렬 / 1축 / 엇갈림 / 양쪽 / 역풍 / 신호 없음이고 축 점수 ±0.1 안은 밀어줌·막음으로 세지 않는다. `fetch/scoring.py` 가 유일한 구현이다.
-- 시장 반응: 시그널마다 사건 전날(장부 날짜 이틀 전) 종가 대비 시그널 티커 평균의 1·5·20·60거래일 수익률과 같은 기간 SPY 를 `fetch/market.py` 가 계산한다 (Cboe 지연 시세, prices/prices.json). 판정(방향대로/반대로/보합/아직)은 완료된 가장 긴 구간의 SPY 대비 초과수익 부호를 방향과 비교한 것이고 ± 시그널은 판정하지 않는다. 사이트 카드·장부·섹터 상세와 브리프 "시장 반응" 절에 보인다. 과거 반응은 판단 재료이지 매매 신호가 아니다 (규칙 6).
+- 시장 반응: 시그널마다 사건 전날(장부 날짜 이틀 전) 종가 대비 시그널 티커 평균의 1·5·20·60거래일 수익률과 같은 기간 SPY 를 `fetch/market.py` 가 계산한다 (prices/prices.json. 종목마다 Cboe 지연 시세 → Yahoo → Stooq → Nasdaq 순서로 받고 받은 곳을 src 에 적는다). 판정(방향대로/반대로/보합/아직)은 완료된 가장 긴 구간의 SPY 대비 초과수익 부호를 방향과 비교한 것이고 ± 시그널은 판정하지 않는다. 사이트 카드·장부·섹터 상세와 브리프 "시장 반응" 절에 보인다. 과거 반응은 판단 재료이지 매매 신호가 아니다 (규칙 6).
 - 사이트 빌드(site/build.py)는 자료 문제(깨진 장부 줄, sector_map 오류, 맵에 없는 섹터, 브리프 형식, 방향 브리프 형식·날짜)로 멈추지 않고 data.json 의 warnings 에 적어 사이트 상단 배너로 보여준다. 배너가 보이면 그 자료를 고친다.
 - 장부 1~11번 줄은 backlog 의 4축 장부 11건을 2026-09-17 에 3축으로 다시 분류해 `fetch/ledger.py --append` 로 날짜별로 옮긴 것이다 (note 끝 "(이관: 구 장부 n번 줄)"). 이관 시 부여한 기간·크기·경로는 이관 판단이다. 이 11줄은 팩트 첫 문장 40자 규칙과 note 접미어 규칙(확인 등급 접미어가 맨 끝) 이전에 쓰인 것이라 그 규칙에 어긋나지만 append only 라 그대로 둔다. 12번 줄부터는 ledger.py 가 두 규칙을 검사한다.
 
@@ -148,6 +149,9 @@ logs/                      세션 로그. 비공개 radar-raw 의 logs/ 심볼�
 
 ## 시장 반응 (최근 30일 시그널)
 (market.py --report 출력 그대로)
+
+## 시장 온도 (참고)
+(market.py --macro 출력 그대로. 배경 숫자이지 시그널이 아니고 장부에 올리지 않는다)
 
 ## 맵 수정 제안 (있을 때만)
 ```

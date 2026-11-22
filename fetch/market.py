@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
-"""시장 반응. sector_map 티커와 SPY 의 일별 종가를 받아 두고, 장부 시그널마다 그 뒤 섹터 티커가 어떻게 움직였는지 계산한다.
+"""시장 반응과 시장 온도. sector_map 티커와 SPY 의 일별 종가를 받아 두고, 장부 시그널마다 그 뒤 섹터 티커가 어떻게 움직였는지 계산한다.
+같은 --update 가 금리·신용·변동성 같은 시장 온도 지표(MACRO)도 받아 둔다. 둘 다 판단 재료이지 매매 신호가 아니다.
 
-가격 출처: Cboe 지연 시세 (https://cdn.cboe.com/api/global/delayed_quotes/charts/historical/<티커>.json). 키 없이 열리고 2004년부터 있다.
+가격 출처: 키 없이 열리는 곳을 차례로 시도한다 (PRICE_SOURCES 순서). 한 출처가 이번 실행에서 3번 연달아 막히면(401·403) 남은 종목은 그 출처를 건너뛴다.
+  cboe   Cboe 지연 시세 cdn.cboe.com/api/global/delayed_quotes/charts/historical/<티커>.json (2004년부터. 2026-11-20 부터 Actions 요청을 403 으로 막음)
+  yahoo  Yahoo Finance chart API query1|query2.finance.yahoo.com/v8/finance/chart/<티커>?range=2y&interval=1d
+  stooq  stooq.com/q/d/l/?s=<티커>.us&i=d (CSV)
+  nasdaq api.nasdaq.com/api/quote/<티커>/historical
+  장이 열려 있는 동안 받은 그날 값(미국 동부 16:20 전의 오늘 날짜)은 종가가 아니라서 버린다.
 저장: prices/prices.json (prices/ 는 raw/ 처럼 비공개 radar-raw 의 prices/ 를 가리키는 심볼릭 링크. fetch.yml 이 매일 갱신·커밋한다)
-  {"source": "...", "updated_at": ISO, "keep_days": 730,
-   "tickers": {"SMH": {"dates": ["2024-09-17", ...], "close": [123.4, ...]}, ...}, "errors": {"XXX": "..."}}
+  {"source": "출처별 종목 수", "updated_at": ISO, "keep_days": 730,
+   "tickers": {"SMH": {"dates": ["2024-09-17", ...], "close": [123.4, ...]}, ...}, "src": {"SMH": "cboe"}, "errors": {"XXX": "..."}}
+시장 온도: prices/macro.json. FRED(세인트루이스 연은) 공개 CSV fred.stlouisfed.org/graph/fredgraph.csv?id=<시리즈> 를 기본으로, 막히면 지표별 대체 출처
+  (미 재무부 일별 금리표, Yahoo). {"updated_at", "series": {키: {"label", "unit", "src", "dates", "values"}}, "errors"}
 
 반응 계산 (reactions):
   기준 종가 = 장부 날짜(date) 이틀 전 이전의 마지막 종가. 장부 날짜는 브리프를 쓴 날(KST)이고 사건은 보통 그 전날(ET)이므로
@@ -13,30 +21,58 @@
   ±0.5%p 안이면 "보합", 자료가 모자라면 "아직". ± 시그널은 판정하지 않는다. 판단 재료이지 매매 신호가 아니다.
 
 사용:
-  python3 fetch/market.py --update             prices/prices.json 갱신 (전 종목, 최근 keep_days)
-  python3 fetch/market.py --check              prices.json 상태 (종목 수, 마지막 날짜, 빠진 종목)
+  python3 fetch/market.py --update             prices/prices.json 과 prices/macro.json 갱신 (전 종목·지표, 최근 keep_days)
+  python3 fetch/market.py --check              prices.json·macro.json 상태 (종목 수, 마지막 날짜, 빠진 종목, 실패)
   python3 fetch/market.py --report [--date D]  최근 30일 장부 시그널의 반응 표 (마크다운. 브리프 "시장 반응" 절)
+  python3 fetch/market.py --macro [--date D]   시장 온도 표 (마크다운. 브리프 "시장 온도" 절)
 종료 코드: 0 / 1 일부 종목 실패 또는 자료 없음 / 2 인자·환경 오류
 """
 from __future__ import annotations
 
 import argparse
 import bisect
+import csv
 import datetime
+import io
 import json
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import ROOT, all_tickers, load_sector_map  # noqa: E402
 
 PRICES = ROOT / "prices/prices.json"
+MACRO_PATH = ROOT / "prices/macro.json"
 CBOE = "https://cdn.cboe.com/api/global/delayed_quotes/charts/historical/{t}.json"
-SOURCE = "Cboe delayed quotes (cdn.cboe.com/api/global/delayed_quotes/charts/historical)"
+SOURCE = "Cboe delayed quotes (cdn.cboe.com/api/global/delayed_quotes/charts/historical)"   # 옛 자료에 출처가 안 적혀 있을 때의 기본값
+SOURCE_NAMES = {"cboe": "Cboe delayed quotes", "yahoo": "Yahoo Finance", "stooq": "Stooq", "nasdaq": "Nasdaq", "fred": "FRED", "treasury": "U.S. Treasury"}
+PRICE_SOURCES = ("cboe", "yahoo", "stooq", "nasdaq")
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+CHROME_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+ET = ZoneInfo("America/New_York")
+DOWN_AFTER = 3      # 한 출처가 이번 실행에서 연달아 이만큼 막히면(401·403) 남은 종목은 건너뛴다
+# 시장 온도 지표. (키, 이름, 단위, 변화 표시, FRED 시리즈, 대체 출처). 변화 표시 diff = 차이(금리·지수), pct = 변화율(가격·건수)
+MACRO = [
+    ("vix", "VIX 변동성지수", "pt", "diff", "VIXCLS", ("yahoo", "^VIX")),
+    ("ust2y", "미 국채 2년 금리", "%", "diff", "DGS2", ("treasury", "2 Yr")),
+    ("ust10y", "미 국채 10년 금리", "%", "diff", "DGS10", ("treasury", "10 Yr")),
+    ("curve", "10년−2년 금리차", "%p", "diff", "T10Y2Y", None),
+    ("hy", "하이일드 신용 스프레드", "%p", "diff", "BAMLH0A0HYM2", None),
+    ("be5y", "5년 기대인플레이션", "%", "diff", "T5YIE", None),
+    ("ffr", "연방기금금리 상단", "%", "diff", "DFEDTARU", None),
+    ("usd", "달러 지수(광의)", "", "pct", "DTWEXBGS", None),
+    ("wti", "WTI 유가", "$", "pct", "DCOILWTICO", ("yahoo", "CL=F")),
+    ("btc", "비트코인", "$", "pct", "CBBTCUSD", ("yahoo", "BTC-USD")),
+    ("claims", "신규 실업수당 청구(주간)", "건", "pct", "ICSA", None),
+    ("nfci", "금융여건지수 NFCI(주간, 0 위면 긴축)", "", "diff", "NFCI", None),
+]
+DRAWDOWN = [("SPY", "S&P 500(SPY) 52주 고점 대비"), ("QQQ", "나스닥 100(QQQ) 52주 고점 대비")]   # prices.json 에서 계산
+MACRO_KEEP_DAYS = 400
 BENCH = "SPY"
 HORIZONS = (1, 5, 20, 60)
 KEEP_DAYS = 730
@@ -45,29 +81,124 @@ PACE = 1.2          # 요청 간격 초. 빠르면 429
 
 
 # ---------------------------------------------------------------- 가격 저장
-def fetch_ticker(t: str, keep_from: str, retries: int = 3) -> tuple[list[str], list[float]]:
-    url = CBOE.format(t=t)
+class Blocked(RuntimeError):
+    """출처가 요청을 막았다 (401·403). 같은 실행에서 연달아 나오면 그 출처를 건너뛴다."""
+
+
+def _get(url: str, headers: dict, retries: int = 2, timeout: float = 60) -> bytes:
     last: Exception | None = None
     for attempt in range(retries + 1):
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                d = json.load(resp)
-            rows = [x for x in d.get("data", []) if x.get("close") is not None and str(x.get("date", "")) >= keep_from]
-            rows.sort(key=lambda x: x["date"])
-            return [x["date"] for x in rows], [float(x["close"]) for x in rows]
+            with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=timeout) as resp:
+                return resp.read()
         except urllib.error.HTTPError as e:
             last = e
+            if e.code in (401, 403):
+                raise Blocked(f"HTTP {e.code}") from None
             if e.code == 429 and attempt < retries:
                 time.sleep(15 * (attempt + 1))
                 continue
-            if 400 <= e.code < 500:
+            if 400 <= e.code < 500 and e.code != 408:
                 break
-        except Exception as e:  # 네트워크·JSON
+        except Exception as e:  # 네트워크
             last = e
         if attempt < retries:
             time.sleep(3)
     raise RuntimeError(f"{type(last).__name__}: {last}")
+
+
+def _closed(dates: list[str], close: list[float], keep_from: str) -> tuple[list[str], list[float]]:
+    """날짜순 정렬·keep_from 이후·값 있는 것만. 미국 동부 16:20 전이면 오늘 날짜 값(장중 가격)을 버린다."""
+    now = datetime.datetime.now(ET)
+    today = now.date().isoformat()
+    rows = sorted({d: float(c) for d, c in zip(dates, close) if c is not None and d >= keep_from}.items())
+    if rows and rows[-1][0] == today and (now.hour, now.minute) < (16, 20):
+        rows = rows[:-1]
+    return [d for d, _ in rows], [c for _, c in rows]
+
+
+def _cboe(t: str, keep_from: str) -> tuple[list[str], list[float]]:
+    d = json.loads(_get(CBOE.format(t=t), {"User-Agent": UA, "Accept": "application/json"}))
+    rows = [x for x in d.get("data", []) if x.get("close") is not None]
+    return _closed([str(x["date"]) for x in rows], [x["close"] for x in rows], keep_from)
+
+
+def _yahoo(t: str, keep_from: str) -> tuple[list[str], list[float]]:
+    sym = urllib.parse.quote(t.replace(".", "-"), safe="")
+    days = (datetime.date.today() - datetime.date.fromisoformat(keep_from)).days
+    rng = "2y" if days <= 730 else "5y"
+    last: Exception | None = None
+    for host in ("query1", "query2"):
+        try:
+            b = _get(f"https://{host}.finance.yahoo.com/v8/finance/chart/{sym}?range={rng}&interval=1d&includePrePost=false",
+                     {"User-Agent": CHROME_UA, "Accept": "application/json"})
+            res = json.loads(b)["chart"]["result"][0]
+            tz = ZoneInfo(res.get("meta", {}).get("exchangeTimezoneName") or "America/New_York")
+            ts, close = res.get("timestamp") or [], res["indicators"]["quote"][0].get("close") or []
+            return _closed([datetime.datetime.fromtimestamp(x, tz).date().isoformat() for x in ts], close, keep_from)
+        except Blocked:
+            raise
+        except Exception as e:  # 다른 호스트로 한 번 더
+            last = e
+    raise RuntimeError(f"{type(last).__name__}: {last}")
+
+
+def _stooq(t: str, keep_from: str) -> tuple[list[str], list[float]]:
+    txt = _get(f"https://stooq.com/q/d/l/?s={t.lower()}.us&i=d", {"User-Agent": CHROME_UA}).decode("utf-8", "replace")
+    if not txt.startswith("Date,"):
+        raise RuntimeError(f"CSV 아님: {txt[:80]!r}")
+    rows = [r for r in csv.DictReader(io.StringIO(txt)) if r.get("Close") not in (None, "", "N/D")]
+    return _closed([r["Date"] for r in rows], [r["Close"] for r in rows], keep_from)
+
+
+def _nasdaq(t: str, keep_from: str) -> tuple[list[str], list[float]]:
+    h = {"User-Agent": CHROME_UA, "Accept": "application/json, text/plain, */*", "Origin": "https://www.nasdaq.com", "Referer": "https://www.nasdaq.com/"}
+    for cls in ("etf", "stocks"):
+        d = json.loads(_get(f"https://api.nasdaq.com/api/quote/{t}/historical?assetclass={cls}&fromdate={keep_from}&limit=9999", h))
+        rows = (((d.get("data") or {}).get("tradesTable") or {}).get("rows")) or []
+        if rows:
+            dates = [datetime.datetime.strptime(r["date"], "%m/%d/%Y").date().isoformat() for r in rows]
+            close = [float(str(r["close"]).replace("$", "").replace(",", "")) for r in rows]
+            return _closed(dates, close, keep_from)
+    raise RuntimeError("자료 없음")
+
+
+FETCHERS = {"cboe": _cboe, "yahoo": _yahoo, "stooq": _stooq, "nasdaq": _nasdaq}
+
+
+def fetch_ticker(t: str, keep_from: str, skip: set[str] | frozenset = frozenset(), blocked: dict | None = None) -> tuple[list[str], list[float], str]:
+    """(날짜, 종가, 출처). PRICE_SOURCES 를 차례로 시도한다. blocked 를 주면 막힌 출처의 연속 횟수를 거기에 센다."""
+    errs = []
+    for src in PRICE_SOURCES:
+        if src in skip:
+            continue
+        try:
+            dates, close = FETCHERS[src](t, keep_from)
+            if not dates:
+                raise RuntimeError("자료 없음")
+            if blocked is not None:
+                blocked[src] = 0
+            return dates, close, src
+        except Blocked as e:
+            if blocked is not None:
+                blocked[src] = blocked.get(src, 0) + 1
+            errs.append(f"{src} {e}")
+        except Exception as e:
+            errs.append(f"{src} {type(e).__name__}: {e}")
+    raise RuntimeError("; ".join(errs) or "시도할 출처 없음")
+
+
+def source_label(prices: dict | None) -> str:
+    """사이트·브리프에 적는 가격 출처 한 줄. 출처가 적혀 있지 않은 옛 자료는 Cboe."""
+    if not prices:
+        return SOURCE_NAMES["cboe"]
+    src = prices.get("src")
+    if isinstance(src, dict) and src:
+        c: dict[str, int] = {}
+        for v in src.values():
+            c[v] = c.get(v, 0) + 1
+        return " · ".join(SOURCE_NAMES.get(k, k) + (f" {n}종목" if len(c) > 1 else "") for k, n in sorted(c.items(), key=lambda x: -x[1]))
+    return str(prices.get("source") or SOURCE).split(" (")[0]
 
 
 def update(path: Path = PRICES, keep_days: int = KEEP_DAYS) -> int:
@@ -75,32 +206,192 @@ def update(path: Path = PRICES, keep_days: int = KEEP_DAYS) -> int:
     tickers = sorted(all_tickers(smap) | {BENCH})
     keep_from = (datetime.date.today() - datetime.timedelta(days=keep_days)).isoformat()
     old = load_prices(path) or {}
-    out = {"source": SOURCE, "updated_at": datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat(),
-           "keep_days": keep_days, "tickers": {}, "errors": {}}
+    out = {"source": "", "updated_at": datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat(),
+           "keep_days": keep_days, "tickers": {}, "src": {}, "errors": {}}
+    old_src = old.get("src") if isinstance(old.get("src"), dict) else {}
+    blocked: dict[str, int] = {}
     for i, t in enumerate(tickers):
+        skip = {s for s, n in blocked.items() if n >= DOWN_AFTER}
         try:
-            dates, close = fetch_ticker(t, keep_from)
-            if not dates:
-                raise RuntimeError("자료 없음")
+            dates, close, src = fetch_ticker(t, keep_from, skip, blocked)
             out["tickers"][t] = {"dates": dates, "close": close}
-            print(f"[ok]   {t:<6} {len(dates):>4}일  {dates[0]} ~ {dates[-1]}  종가 {close[-1]}")
+            out["src"][t] = src
+            print(f"[ok]   {t:<6} {len(dates):>4}일  {dates[0]} ~ {dates[-1]}  종가 {close[-1]}  ({src})")
         except Exception as e:
             prev = (old.get("tickers") or {}).get(t)
             out["errors"][t] = str(e)
             if prev:
                 out["tickers"][t] = prev   # 실패한 종목은 이전 자료 유지
+                out["src"][t] = old_src.get(t, "cboe")
                 print(f"[fail] {t:<6} {e}  (이전 자료 유지, 마지막 {prev['dates'][-1]})", file=sys.stderr)
             else:
                 print(f"[fail] {t:<6} {e}", file=sys.stderr)
         if i < len(tickers) - 1:
             time.sleep(PACE)
+    out["source"] = source_label(out)
+    down = sorted(s for s, n in blocked.items() if n >= DOWN_AFTER)
+    if down:
+        print(f"이번 실행에서 막힌 출처: {', '.join(down)} (연달아 {DOWN_AFTER}번 401·403, 남은 종목은 다음 출처로)", file=sys.stderr)
+    _write(path, out)
+    n_err = len(out["errors"])
+    print(f"{len(out['tickers'])}/{len(tickers)} 종목 저장 -> {path} ({out['source']})" + (f", 실패 {n_err}: {', '.join(out['errors'])}" if n_err else ""))
+    rc_macro = update_macro()
+    return 1 if (n_err or rc_macro) else 0
+
+
+def _write(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
     tmp.replace(path)
-    n_err = len(out["errors"])
-    print(f"{len(out['tickers'])}/{len(tickers)} 종목 저장 -> {path}" + (f", 실패 {n_err}: {', '.join(out['errors'])}" if n_err else ""))
-    return 1 if n_err else 0
+
+
+# ---------------------------------------------------------------- 시장 온도 (macro.json)
+def _fred(series: str, keep_from: str) -> tuple[list[str], list[float]]:
+    txt = _get(f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}&cosd={keep_from}", {"User-Agent": CHROME_UA, "Accept": "text/csv,*/*"}).decode("utf-8", "replace")
+    rows = list(csv.reader(io.StringIO(txt)))
+    if not rows or len(rows[0]) < 2 or rows[0][1] != series:
+        raise RuntimeError(f"CSV 아님: {txt[:80]!r}")
+    out = [(r[0], float(r[1])) for r in rows[1:] if len(r) > 1 and r[1] not in ("", ".") and r[0] >= keep_from]
+    return [d for d, _ in out], [v for _, v in out]
+
+
+def _treasury(column: str, keep_from: str) -> tuple[list[str], list[float]]:
+    """미 재무부 일별 국채 금리표 (home.treasury.gov). 해마다 파일이 나뉘어 있어 keep_from 의 해부터 올해까지 받는다."""
+    vals: dict[str, float] = {}
+    for y in range(int(keep_from[:4]), datetime.date.today().year + 1):
+        url = (f"https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{y}/all"
+               f"?type=daily_treasury_yield_curve&field_tdr_date_value={y}&page&_format=csv")
+        for r in csv.DictReader(io.StringIO(_get(url, {"User-Agent": CHROME_UA}).decode("utf-8-sig", "replace"))):
+            if r.get(column) not in (None, ""):
+                vals[datetime.datetime.strptime(r["Date"], "%m/%d/%Y").date().isoformat()] = float(r[column])
+    out = sorted((d, v) for d, v in vals.items() if d >= keep_from)
+    if not out:
+        raise RuntimeError(f"'{column}' 열 없음")
+    return [d for d, _ in out], [v for _, v in out]
+
+
+def update_macro(path: Path = MACRO_PATH, keep_days: int = MACRO_KEEP_DAYS) -> int:
+    """시장 온도 지표를 받아 macro.json 에 쓴다. 지표마다 FRED → 대체 출처 순서. 실패한 지표는 이전 자료를 둔다. 0 / 1 일부 실패."""
+    keep_from = (datetime.date.today() - datetime.timedelta(days=keep_days)).isoformat()
+    old = load_macro(path) or {}
+    out = {"updated_at": datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat(), "keep_days": keep_days, "series": {}, "errors": {}}
+    for i, (key, label, unit, chg, fred_id, alt) in enumerate(MACRO):
+        tries = [("fred", lambda: _fred(fred_id, keep_from))]
+        if alt and alt[0] == "yahoo":
+            tries.append(("yahoo", lambda a=alt: _yahoo(a[1], keep_from)))
+        elif alt and alt[0] == "treasury":
+            tries.append(("treasury", lambda a=alt: _treasury(a[1], keep_from)))
+        errs = []
+        for src, fn in tries:
+            try:
+                dates, values = fn()
+                if not dates:
+                    raise RuntimeError("자료 없음")
+                out["series"][key] = {"label": label, "unit": unit, "chg": chg, "id": fred_id if src == "fred" else alt[1], "src": src, "dates": dates, "values": values}
+                print(f"[ok]   {key:<7} {label:<24} {len(dates):>4}개  {dates[-1]}  {values[-1]}  ({src})")
+                break
+            except Exception as e:
+                errs.append(f"{src} {type(e).__name__}: {e}")
+        else:
+            out["errors"][key] = "; ".join(errs)
+            prev = (old.get("series") or {}).get(key)
+            if prev:
+                out["series"][key] = prev
+            print(f"[fail] {key:<7} {label} {'; '.join(errs)}" + (f"  (이전 자료 유지, 마지막 {prev['dates'][-1]})" if prev else ""), file=sys.stderr)
+        if i < len(MACRO) - 1:
+            time.sleep(0.6)
+    _write(path, out)
+    print(f"시장 온도 {len(out['series'])}/{len(MACRO)} 지표 저장 -> {path}" + (f", 실패 {len(out['errors'])}: {', '.join(out['errors'])}" if out["errors"] else ""))
+    return 1 if out["errors"] else 0
+
+
+def load_macro(path: Path = MACRO_PATH) -> dict | None:
+    """없거나 깨졌으면 None."""
+    try:
+        d = json.loads(Path(path).read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) and isinstance(d.get("series"), dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def _at_or_before(dates: list[str], values: list[float], day: str) -> float | None:
+    i = bisect.bisect_right(dates, day) - 1
+    return values[i] if i >= 0 else None
+
+
+def macro_rows(macro: dict | None, prices: dict | None, today: datetime.date | None = None, spark_n: int = 60) -> list[dict]:
+    """시장 온도 표의 행. 지표마다 마지막 값과 날짜, 1주·1달 전 값, 52주 범위, 최근 spark_n 개 값.
+    today 를 주면 그날 이전(포함) 자료만 본다. S&P 500·나스닥 100 의 52주 고점 대비 하락폭은 prices.json 에서 계산한다."""
+    cut = today.isoformat() if today else "9999-12-31"
+    rows = []
+    def row(key, label, unit, chg, dates, values, src, sid):
+        i = bisect.bisect_right(dates, cut) - 1
+        if i < 0:
+            return
+        d, v = dates[i], values[i]
+        dd = datetime.date.fromisoformat(d)
+        w1 = _at_or_before(dates, values, (dd - datetime.timedelta(days=7)).isoformat())
+        m1 = _at_or_before(dates, values, (dd - datetime.timedelta(days=30)).isoformat())
+        y0 = (dd - datetime.timedelta(days=365)).isoformat()
+        yr = [x for t, x in zip(dates[: i + 1], values[: i + 1]) if t > y0]
+        rows.append({"key": key, "label": label, "unit": unit, "chg": chg, "date": d, "value": v, "w1": w1, "m1": m1,
+                     "lo": min(yr), "hi": max(yr), "src": src, "id": sid, "spark": values[max(0, i + 1 - spark_n): i + 1]})
+    for key, label, unit, chg, fred_id, _alt in MACRO:
+        s = ((macro or {}).get("series") or {}).get(key)
+        if s and s.get("dates"):
+            row(key, label, unit, chg, s["dates"], s["values"], s.get("src", "fred"), s.get("id", fred_id))
+    for t, label in DRAWDOWN:
+        s = ((prices or {}).get("tickers") or {}).get(t)
+        if not s or not s.get("dates"):
+            continue
+        dates, close = s["dates"], s["close"]
+        dd = []
+        for j, d in enumerate(dates):   # 그날까지 52주(365일) 고점 대비
+            y0 = (datetime.date.fromisoformat(d) - datetime.timedelta(days=365)).isoformat()
+            lo = bisect.bisect_right(dates, y0)
+            hi = max(close[lo: j + 1])
+            dd.append(round((close[j] / hi - 1) * 100, 2) if hi else None)
+        row(f"dd_{t.lower()}", label, "%", "diff", dates, dd, (prices or {}).get("src", {}).get(t, "cboe") if isinstance((prices or {}).get("src"), dict) else "cboe", t)
+    return rows
+
+
+def fmt_macro(v: float | None, unit: str) -> str:
+    if v is None:
+        return "없음"
+    if unit in ("%", "%p"):
+        return f"{v:.2f}{unit}"
+    if unit == "$":
+        return f"${v:,.0f}" if abs(v) >= 1000 else f"${v:,.2f}"
+    if unit == "건":
+        return f"{v:,.0f}"
+    if unit == "pt":
+        return f"{v:.1f}"
+    return f"{v:.2f}"
+
+
+def fmt_change(v: float | None, base: float | None, unit: str, chg: str) -> str:
+    if v is None or base is None:
+        return "없음"
+    if chg == "pct":
+        return "없음" if not base else f"{(v / base - 1) * 100:+.1f}%"
+    d = v - base
+    return f"{d:+.2f}%p" if unit in ("%", "%p") else f"{d:+.1f}" if unit == "pt" else f"{d:+.2f}"
+
+
+def macro_report(macro: dict | None, prices: dict | None, today: datetime.date) -> str:
+    """브리프 "시장 온도" 절. 사실 숫자만 적는다. 판단 재료이지 매매 신호가 아니다."""
+    rows = macro_rows(macro, prices, today)
+    if not rows:
+        return "시장 온도 자료 없음 (prices/macro.json). fetch.yml 의 market.py --update 가 만든다."
+    srcs = sorted({SOURCE_NAMES.get(r["src"], r["src"]) for r in rows})
+    lines = [f"기준: 지표마다 {today} 이전 마지막 값. 출처 {', '.join(srcs)}. 판단 재료이지 매매 신호가 아니다.", "",
+             "| 지표 | 값 | 날짜 | 1주 전 대비 | 1달 전 대비 | 52주 범위 |", "|---|---|---|---|---|---|"]
+    for r in rows:
+        u, c = r["unit"], r["chg"]
+        lines.append(f"| {r['label']} | {fmt_macro(r['value'], u)} | {r['date'][5:].replace('-', '/')} | {fmt_change(r['value'], r['w1'], u, c)} | "
+                     f"{fmt_change(r['value'], r['m1'], u, c)} | {fmt_macro(r['lo'], u)} ~ {fmt_macro(r['hi'], u)} |")
+    return "\n".join(lines)
 
 
 def load_prices(path: Path = PRICES) -> dict | None:
@@ -221,7 +512,7 @@ def reactions(rows: list[dict], prices: dict | None) -> dict[int, dict]:
 
 
 def pct(v: float | None) -> str:
-    return "—" if v is None else f"{v * 100:+.1f}%"
+    return "없음" if v is None else f"{v * 100:+.1f}%"
 
 
 def comment(x: dict | None) -> str:
@@ -244,7 +535,7 @@ def report(rows: list[dict], prices: dict | None, today: datetime.date, days: in
     if not w:
         return f"최근 {days}일 장부 행 없음"
     rx = reactions(w, prices)
-    lines = [f"기준: 장부 날짜 이틀 전(사건 전날) 종가. 티커 평균과 SPY. 종가 {asof(prices)} 까지 ({SOURCE.split(' (')[0]}).",
+    lines = [f"기준: 장부 날짜 이틀 전(사건 전날) 종가. 티커 평균과 SPY. 종가 {asof(prices)} 까지 ({source_label(prices)}).",
              "", "| 날짜 | 축 · 섹터 | 시그널 | 방향 | 1일 | 5일 | 20일 | 60일 | 판정 |", "|---|---|---|---|---|---|---|---|---|"]
     for r in sorted(w, key=lambda r: (r["date"], r.get("line", 0)), reverse=True):
         x = rx.get(int(r.get("line", 0)))
@@ -267,7 +558,8 @@ def main(argv=None) -> int:
     g.add_argument("--update", action="store_true", help="prices/prices.json 갱신")
     g.add_argument("--check", action="store_true", help="prices.json 상태")
     g.add_argument("--report", action="store_true", help="최근 30일 장부 시그널의 반응 표")
-    ap.add_argument("--date", default=None, help="--report 기준일 YYYY-MM-DD (기본 오늘)")
+    g.add_argument("--macro", action="store_true", help="시장 온도 표 (금리·신용·변동성 등)")
+    ap.add_argument("--date", default=None, help="--report·--macro 기준일 YYYY-MM-DD (기본 오늘)")
     ap.add_argument("--days", type=int, default=30, help="--report 창 (기본 30)")
     args = ap.parse_args(argv)
     if args.update:
@@ -284,7 +576,7 @@ def main(argv=None) -> int:
         smap = load_sector_map()
         want = sorted(all_tickers(smap) | {BENCH})
         missing = [t for t in want if t not in prices["tickers"]]
-        print(f"{PRICES}: {len(prices['tickers'])}종목, 마지막 종가 {asof(prices)}, 갱신 {prices.get('updated_at')}")
+        print(f"{PRICES}: {len(prices['tickers'])}종목, 마지막 종가 {asof(prices)}, 갱신 {prices.get('updated_at')}, 출처 {source_label(prices)}")
         if missing:
             print(f"빠진 종목: {', '.join(missing)}")
         lag = lagging(prices)
@@ -292,9 +584,19 @@ def main(argv=None) -> int:
             print("멈춘 종목 (최근 종가보다 5일 넘게 뒤): " + ", ".join(f"{t} {dt}" for t, dt in lag))
         if prices.get("errors"):
             print("마지막 갱신 실패: " + ", ".join(f"{k} ({v})" for k, v in prices["errors"].items()))
+        m = load_macro()
+        if not m:
+            print(f"{MACRO_PATH}: 없음 또는 깨짐")
+        else:
+            last = {k: s["dates"][-1] for k, s in m["series"].items() if s.get("dates")}
+            print(f"{MACRO_PATH}: {len(m['series'])}/{len(MACRO)}지표, 마지막 {max(last.values(), default='-')}, 갱신 {m.get('updated_at')}"
+                  + (f", 실패 {', '.join(m['errors'])}" if m.get("errors") else ""))
         return 1 if missing else 0
-    from ledger import load_existing  # noqa: E402  (여기서만 쓴다)
     today = datetime.date.fromisoformat(args.date) if args.date else datetime.date.today()
+    if args.macro:
+        print(macro_report(load_macro(), prices, today))
+        return 0 if load_macro() else 1
+    from ledger import load_existing  # noqa: E402  (여기서만 쓴다)
     rows, _ = load_existing(warnings=[])
     print(report(rows, prices, today, args.days))
     return 0 if prices else 1

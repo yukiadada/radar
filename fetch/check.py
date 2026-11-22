@@ -27,7 +27,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import ROOT, all_tickers, load_sector_map, load_sources  # noqa: E402
 from ledger import LEDGER, load_existing  # noqa: E402
-from market import BENCH, asof, lagging, load_prices  # noqa: E402
+from market import BENCH, asof, lagging, load_macro, load_prices, source_label  # noqa: E402
 
 KST = datetime.timezone(datetime.timedelta(hours=9))
 CHECK_ITEM = re.compile(r"^- (\d{1,2})/(\d{1,2})(?:~(\d{1,2})/(\d{1,2}))? 점검", re.M)
@@ -210,6 +210,14 @@ def section_prices(today: datetime.date) -> None:
     errs = p.get("errors") or {}
     print(f"- 빠진 종목: {', '.join(missing) or '없음'}. 멈춘 종목(최근 종가보다 5일 넘게 뒤): {', '.join(f'{t} {dt}' for t, dt in stale) or '없음'}. "
           f"마지막 갱신 실패: {', '.join(errs) or '없음'}")
+    print(f"- 종가 출처: {source_label(p)}")
+    m = load_macro()
+    if not m:
+        print("- 시장 온도(prices/macro.json) 없음")
+    else:
+        last = {k: v["dates"][-1] for k, v in m["series"].items() if v.get("dates")}
+        print(f"- 시장 온도: {len(m['series'])}개 지표, 갱신 {kst(m['updated_at']) + ' KST' if m.get('updated_at') else '확인 안 됨'}, "
+              f"마지막 값 {min(last.values(), default='없음')}~{max(last.values(), default='없음')}. 마지막 갱신 실패: {', '.join(m.get('errors') or {}) or '없음'}")
 
 
 def section_briefs(dates: list[str]) -> None:

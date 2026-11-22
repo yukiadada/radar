@@ -11,6 +11,7 @@ data.json:
   ledger[행 + line], board{live, w30, w90, ...}(scoring.alignment + delta + orphans. live 는 누적(유효기간), w<n> 은 열린 창), series{같은 키}(scoring.series)
   activity{같은 키}(축별 건수·방향·상위 섹터), attention(scoring.attention), briefs[{date, structural, none_today, signals, md(최신 것만)}]
   raw{날짜: {소스: {count, error, current, backfill}}}, market{장부 줄: 시장 반응(market.reaction)}, market_meta{source, asof, updated_at} | null,
+  macro{updated_at, rows[{label, value_s, date, w1_s, m1_s, range_s, spark, src}]} | null (시장 온도: 금리·신용·변동성. market.macro_rows),
   direction_brief(briefs/direction.md 본문. 홈 "지금 세상의 방향" 서술) | null, warnings[]
   브리프 signals 에는 장부와 (날짜, 출처 URL, 섹터) 가 같은 행의 line 을 붙인다 (카드에 시장 반응을 보이기 위해).
 브리프 카드는 여기서 마크다운을 구조화(parse_brief)해 signals 로 준다. 사이트는 나머지 절만 마크다운으로 그린다.
@@ -32,7 +33,7 @@ sys.path.insert(0, str(ROOT / "fetch"))
 from config import AXES, all_tickers, load_sector_map, load_sources  # noqa: E402
 from ledger import load_existing  # noqa: E402
 from scoring import LABELS, PARAMS, alignment, attach_deltas, attention, enabled_windows, raw_scan, select, series  # noqa: E402
-from market import BENCH, SOURCE as PRICE_SOURCE, asof as price_asof, lagging, load_prices, reactions  # noqa: E402
+from market import BENCH, asof as price_asof, fmt_change, fmt_macro, lagging, load_macro, load_prices, macro_rows, reactions, source_label  # noqa: E402
 
 SITE = ROOT / "site"
 OUT = SITE / "out"
@@ -212,15 +213,32 @@ def main(argv=None) -> int:
     market_meta = None
     if prices:
         pa = price_asof(prices)
-        market_meta = {"source": PRICE_SOURCE, "asof": pa, "updated_at": prices.get("updated_at"), "n": len(market)}
+        market_meta = {"source": source_label(prices), "asof": pa, "updated_at": prices.get("updated_at"), "n": len(market)}
         if pa and (today - d(pa)).days > 5:
             warnings.append(f"가격 자료(prices/prices.json)가 {pa} 까지라 시장 반응이 오래됐다. fetch.yml 의 market.py --update 를 확인")
         if BENCH not in prices["tickers"]:
             warnings.append(f"가격 자료에 {BENCH} 가 없어 시장 반응을 계산하지 못한다. fetch.yml 의 market.py --update 를 확인")
+        perr, ptot = len(prices.get("errors") or {}), len(prices["tickers"])
+        if ptot and perr * 2 >= ptot:   # 출처가 통째로 막히면 이전 자료가 남아 날짜 경고는 며칠 뒤에야 뜬다 (2026-11-20 Cboe 403)
+            warnings.append(f"최근 종가 갱신에서 {perr}/{ptot} 종목이 실패해 이전 자료로 두었다(종가 {pa} 까지). 출처가 막혔을 수 있다. fetch.yml 의 market.py --update 로그를 확인")
         lag = lagging(prices)   # 일부 종목만 갱신이 계속 실패한 경우. 전체 날짜(asof)로는 안 보인다
         if lag:
             warnings.append(f"종가가 멈춘 종목 {len(lag)}개 ({', '.join(f'{t} {dt}' for t, dt in lag[:8])}{' 등' if len(lag) > 8 else ''}). 다른 종목은 {pa} 까지 있다. "
                             "이 종목이 든 시그널의 시장 반응이 멈춘다. fetch.yml 의 market.py --update 로그를 확인")
+    macro = load_macro()
+    macro_data = None
+    if macro:
+        mrows = macro_rows(macro, prices, today)
+        macro_data = {"updated_at": macro.get("updated_at"), "errors": sorted(macro.get("errors") or {}),
+                      "rows": [{"key": r["key"], "label": r["label"], "date": r["date"], "src": r["src"], "id": r["id"],
+                                "value_s": fmt_macro(r["value"], r["unit"]), "w1_s": fmt_change(r["value"], r["w1"], r["unit"], r["chg"]),
+                                "m1_s": fmt_change(r["value"], r["m1"], r["unit"], r["chg"]),
+                                "range_s": f"{fmt_macro(r['lo'], r['unit'])} ~ {fmt_macro(r['hi'], r['unit'])}", "spark": r["spark"]} for r in mrows]}
+        daily = [r["date"] for r in mrows if r["key"] in ("vix", "ust10y", "hy", "btc")]
+        if daily and (today - d(max(daily))).days > 5:
+            warnings.append(f"시장 온도(prices/macro.json)가 {max(daily)} 까지라 오래됐다. fetch.yml 의 market.py --update 로그를 확인")
+        if macro.get("errors") and len(macro["errors"]) * 2 >= len(macro.get("series") or {}) + len(macro["errors"]):
+            warnings.append(f"시장 온도 갱신에서 지표 {len(macro['errors'])}개가 실패했다({', '.join(sorted(macro['errors']))}). 출처가 막혔을 수 있다")
     incomplete = [r["line"] for r in rows if not r.get("source") or not r.get("sector")]   # ledger.py 를 거치지 않은 줄. 빌드는 멈추지 않는다
     if incomplete:
         warnings.append(f"장부 {len(incomplete)}줄에 source 또는 sector 가 없음 (줄 {', '.join(map(str, incomplete[:10]))}). 장부는 수정 금지, Ken 에게 알린다")
@@ -254,6 +272,7 @@ def main(argv=None) -> int:
         "raw": scan["days"],
         "market": market,
         "market_meta": market_meta,
+        "macro": macro_data,   # 시장 온도 (홈). 판단 재료이지 매매 신호가 아니다
         "warnings": warnings,
     }
 
