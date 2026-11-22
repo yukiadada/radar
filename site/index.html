@@ -756,7 +756,7 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
   ];
   function macroTable(M) {
     const sp = v => { const xs = v.filter(x => x != null); if (xs.length < 2) return ''; const lo = Math.min(...xs), hi = Math.max(...xs); return spark(v.map(x => (x == null ? null : hi === lo ? 50 : (x - lo) / (hi - lo) * 100))); };
-    const src = r => ({ fred: 'FRED', yahoo: 'Yahoo', treasury: '미 재무부', cboe: 'Cboe', stooq: 'Stooq', nasdaq: 'Nasdaq' }[r.src] || r.src);
+    const src = r => ({ fred: 'FRED', yahoo: 'Yahoo', treasury: '미 재무부', nyfed: '뉴욕 연은', cboe: 'Cboe', stooq: 'Stooq', nasdaq: 'Nasdaq' }[r.src] || r.src);
     return `<div class="tbl"><table class="secs"><thead><tr><th>지표</th><th class="num">값</th><th class="num">1주 전 대비</th><th class="num">1달 전 대비</th><th class="num">52주 범위</th><th>최근 흐름</th></tr></thead><tbody>` +
       M.rows.map(r => `<tr><td>${esc(r.label)}<br><span class="dim small">${esc(r.date.slice(5).replace('-', '/'))} · ${esc(src(r))} ${esc(r.id)}</span></td><td class="num"><b>${esc(r.value_s)}</b></td><td class="num">${esc(r.w1_s)}</td><td class="num">${esc(r.m1_s)}</td><td class="num small">${esc(r.range_s)}</td><td>${sp(r.spark)}</td></tr>`).join('') +
       `</tbody></table></div>` + (M.errors && M.errors.length ? `<p class="keys">마지막 갱신에서 못 받은 지표: ${M.errors.map(esc).join(', ')}. 출처가 막힌 날은 빠지거나 이전 값으로 보입니다.</p>` : '');
