@@ -2,7 +2,8 @@
 """시장 반응과 시장 온도. sector_map 티커와 SPY 의 일별 종가를 받아 두고, 장부 시그널마다 그 뒤 섹터 티커가 어떻게 움직였는지 계산한다.
 같은 --update 가 금리·신용·변동성 같은 시장 온도 지표(MACRO)도 받아 둔다. 둘 다 판단 재료이지 매매 신호가 아니다.
 
-가격 출처: 키 없이 열리는 곳을 차례로 시도한다 (PRICE_SOURCES 순서). 한 출처가 이번 실행에서 3번 연달아 막히면(401·403) 남은 종목은 그 출처를 건너뛴다.
+가격 출처: 키 없이 열리는 곳을 차례로 시도한다 (PRICE_SOURCES 순서). 한 출처가 이번 실행에서 3번 연달아 실패하면(막힘·429·응답 없음) 남은 종목은 그 출처를 건너뛴다.
+  전체 15분(PRICE_BUDGET)을 넘기면 남은 종목은 이전 자료를 둔다.
   cboe   Cboe 지연 시세 cdn.cboe.com/api/global/delayed_quotes/charts/historical/<티커>.json (2004년부터. 2026-11-20 부터 Actions 요청을 403 으로 막음)
   yahoo  Yahoo Finance chart API query1|query2.finance.yahoo.com/v8/finance/chart/<티커>?range=2y&interval=1d
   stooq  stooq.com/q/d/l/?s=<티커>.us&i=d (CSV)
@@ -55,7 +56,9 @@ PRICE_SOURCES = ("cboe", "yahoo", "stooq", "nasdaq")
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
 CHROME_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 ET = ZoneInfo("America/New_York")
-DOWN_AFTER = 3      # 한 출처가 이번 실행에서 연달아 이만큼 막히면(401·403) 남은 종목은 건너뛴다
+DOWN_AFTER = 3      # 한 출처가 이번 실행에서 연달아 이만큼 실패하면(막힘·429·응답 없음·자료 없음) 남은 종목은 건너뛴다
+FALLBACK_TIMEOUT = 20   # 대체 출처(cboe 밖)의 요청 제한 시간 초. 응답 없는 출처가 종목마다 몇 분씩 잡아먹지 않게
+PRICE_BUDGET = 15 * 60  # 종가 갱신 전체 시간 상한 초. 넘으면 남은 종목은 이전 자료를 둔다 (fetch.yml 은 이 단계 뒤에 raw 를 push 한다)
 # 시장 온도 지표. (키, 이름, 단위, 변화 표시, FRED 시리즈, 대체 출처). 변화 표시 diff = 차이(금리·지수), pct = 변화율(가격·건수)
 MACRO = [
     ("vix", "VIX 변동성지수", "pt", "diff", "VIXCLS", ("yahoo", "^VIX")),
@@ -85,7 +88,7 @@ class Blocked(RuntimeError):
     """출처가 요청을 막았다 (401·403). 같은 실행에서 연달아 나오면 그 출처를 건너뛴다."""
 
 
-def _get(url: str, headers: dict, retries: int = 2, timeout: float = 60) -> bytes:
+def _get(url: str, headers: dict, retries: int = 2, timeout: float = 60, wait429: float = 15) -> bytes:
     last: Exception | None = None
     for attempt in range(retries + 1):
         try:
@@ -96,7 +99,7 @@ def _get(url: str, headers: dict, retries: int = 2, timeout: float = 60) -> byte
             if e.code in (401, 403):
                 raise Blocked(f"HTTP {e.code}") from None
             if e.code == 429 and attempt < retries:
-                time.sleep(15 * (attempt + 1))
+                time.sleep(wait429 * (attempt + 1))
                 continue
             if 400 <= e.code < 500 and e.code != 408:
                 break
@@ -131,7 +134,7 @@ def _yahoo(t: str, keep_from: str) -> tuple[list[str], list[float]]:
     for host in ("query1", "query2"):
         try:
             b = _get(f"https://{host}.finance.yahoo.com/v8/finance/chart/{sym}?range={rng}&interval=1d&includePrePost=false",
-                     {"User-Agent": CHROME_UA, "Accept": "application/json"})
+                     {"User-Agent": CHROME_UA, "Accept": "application/json"}, retries=1, timeout=FALLBACK_TIMEOUT, wait429=5)
             res = json.loads(b)["chart"]["result"][0]
             tz = ZoneInfo(res.get("meta", {}).get("exchangeTimezoneName") or "America/New_York")
             ts, close = res.get("timestamp") or [], res["indicators"]["quote"][0].get("close") or []
@@ -144,7 +147,7 @@ def _yahoo(t: str, keep_from: str) -> tuple[list[str], list[float]]:
 
 
 def _stooq(t: str, keep_from: str) -> tuple[list[str], list[float]]:
-    txt = _get(f"https://stooq.com/q/d/l/?s={t.lower()}.us&i=d", {"User-Agent": CHROME_UA}).decode("utf-8", "replace")
+    txt = _get(f"https://stooq.com/q/d/l/?s={t.lower()}.us&i=d", {"User-Agent": CHROME_UA}, retries=1, timeout=FALLBACK_TIMEOUT, wait429=5).decode("utf-8", "replace")
     if not txt.startswith("Date,"):
         raise RuntimeError(f"CSV 아님: {txt[:80]!r}")
     rows = [r for r in csv.DictReader(io.StringIO(txt)) if r.get("Close") not in (None, "", "N/D")]
@@ -154,11 +157,17 @@ def _stooq(t: str, keep_from: str) -> tuple[list[str], list[float]]:
 def _nasdaq(t: str, keep_from: str) -> tuple[list[str], list[float]]:
     h = {"User-Agent": CHROME_UA, "Accept": "application/json, text/plain, */*", "Origin": "https://www.nasdaq.com", "Referer": "https://www.nasdaq.com/"}
     for cls in ("etf", "stocks"):
-        d = json.loads(_get(f"https://api.nasdaq.com/api/quote/{t}/historical?assetclass={cls}&fromdate={keep_from}&limit=9999", h))
-        rows = (((d.get("data") or {}).get("tradesTable") or {}).get("rows")) or []
-        if rows:
-            dates = [datetime.datetime.strptime(r["date"], "%m/%d/%Y").date().isoformat() for r in rows]
-            close = [float(str(r["close"]).replace("$", "").replace(",", "")) for r in rows]
+        d = json.loads(_get(f"https://api.nasdaq.com/api/quote/{t}/historical?assetclass={cls}&fromdate={keep_from}&limit=9999", h,
+                            retries=1, timeout=FALLBACK_TIMEOUT, wait429=5))
+        dates, close = [], []
+        for r in (((d.get("data") or {}).get("tradesTable") or {}).get("rows")) or []:
+            try:   # 'N/A' 같은 값은 그 줄만 버린다
+                c = float(str(r.get("close")).replace("$", "").replace(",", ""))
+                dates.append(datetime.datetime.strptime(str(r.get("date")), "%m/%d/%Y").date().isoformat())
+                close.append(c)
+            except ValueError:
+                continue
+        if dates:
             return _closed(dates, close, keep_from)
     raise RuntimeError("자료 없음")
 
@@ -167,7 +176,7 @@ FETCHERS = {"cboe": _cboe, "yahoo": _yahoo, "stooq": _stooq, "nasdaq": _nasdaq}
 
 
 def fetch_ticker(t: str, keep_from: str, skip: set[str] | frozenset = frozenset(), blocked: dict | None = None) -> tuple[list[str], list[float], str]:
-    """(날짜, 종가, 출처). PRICE_SOURCES 를 차례로 시도한다. blocked 를 주면 막힌 출처의 연속 횟수를 거기에 센다."""
+    """(날짜, 종가, 출처). PRICE_SOURCES 를 차례로 시도한다. blocked 를 주면 출처마다 연속 실패 횟수를 거기에 센다 (성공하면 0)."""
     errs = []
     for src in PRICE_SOURCES:
         if src in skip:
@@ -179,12 +188,10 @@ def fetch_ticker(t: str, keep_from: str, skip: set[str] | frozenset = frozenset(
             if blocked is not None:
                 blocked[src] = 0
             return dates, close, src
-        except Blocked as e:
+        except Exception as e:   # 막힘(401·403)뿐 아니라 429·응답 없음·자료 없음도 센다. 그래야 죽은 출처가 종목마다 시간을 잡아먹지 않는다
             if blocked is not None:
                 blocked[src] = blocked.get(src, 0) + 1
-            errs.append(f"{src} {e}")
-        except Exception as e:
-            errs.append(f"{src} {type(e).__name__}: {e}")
+            errs.append(f"{src} {e}" if isinstance(e, Blocked) else f"{src} {type(e).__name__}: {e}")
     raise RuntimeError("; ".join(errs) or "시도할 출처 없음")
 
 
@@ -210,9 +217,12 @@ def update(path: Path = PRICES, keep_days: int = KEEP_DAYS) -> int:
            "keep_days": keep_days, "tickers": {}, "src": {}, "errors": {}}
     old_src = old.get("src") if isinstance(old.get("src"), dict) else {}
     blocked: dict[str, int] = {}
+    t0 = time.monotonic()
     for i, t in enumerate(tickers):
         skip = {s for s, n in blocked.items() if n >= DOWN_AFTER}
         try:
+            if time.monotonic() - t0 > PRICE_BUDGET:
+                raise RuntimeError(f"시간 상한 {PRICE_BUDGET // 60}분 초과로 건너뜀")
             dates, close, src = fetch_ticker(t, keep_from, skip, blocked)
             out["tickers"][t] = {"dates": dates, "close": close}
             out["src"][t] = src
@@ -231,12 +241,12 @@ def update(path: Path = PRICES, keep_days: int = KEEP_DAYS) -> int:
     out["source"] = source_label(out)
     down = sorted(s for s, n in blocked.items() if n >= DOWN_AFTER)
     if down:
-        print(f"이번 실행에서 막힌 출처: {', '.join(down)} (연달아 {DOWN_AFTER}번 401·403, 남은 종목은 다음 출처로)", file=sys.stderr)
+        print(f"이번 실행에서 건너뛴 출처: {', '.join(down)} (연달아 {DOWN_AFTER}번 실패, 남은 종목은 다음 출처로)", file=sys.stderr)
     _write(path, out)
     n_err = len(out["errors"])
     print(f"{len(out['tickers'])}/{len(tickers)} 종목 저장 -> {path} ({out['source']})" + (f", 실패 {n_err}: {', '.join(out['errors'])}" if n_err else ""))
-    rc_macro = update_macro()
-    return 1 if (n_err or rc_macro) else 0
+    update_macro()   # 시장 온도 실패는 [fail] 줄로만 알린다. 종료 코드는 종가 기준 (fetch.yml 이 "종가 일부 종목 실패"로 읽는다)
+    return 1 if n_err else 0
 
 
 def _write(path: Path, data: dict) -> None:
@@ -248,7 +258,7 @@ def _write(path: Path, data: dict) -> None:
 
 # ---------------------------------------------------------------- 시장 온도 (macro.json)
 def _fred(series: str, keep_from: str) -> tuple[list[str], list[float]]:
-    txt = _get(f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}&cosd={keep_from}", {"User-Agent": CHROME_UA, "Accept": "text/csv,*/*"}).decode("utf-8", "replace")
+    txt = _get(f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}&cosd={keep_from}", {"User-Agent": CHROME_UA, "Accept": "text/csv,*/*"}, retries=1, timeout=FALLBACK_TIMEOUT, wait429=5).decode("utf-8", "replace")
     rows = list(csv.reader(io.StringIO(txt)))
     if not rows or len(rows[0]) < 2 or rows[0][1] != series:
         raise RuntimeError(f"CSV 아님: {txt[:80]!r}")
@@ -262,7 +272,7 @@ def _treasury(column: str, keep_from: str) -> tuple[list[str], list[float]]:
     for y in range(int(keep_from[:4]), datetime.date.today().year + 1):
         url = (f"https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{y}/all"
                f"?type=daily_treasury_yield_curve&field_tdr_date_value={y}&page&_format=csv")
-        for r in csv.DictReader(io.StringIO(_get(url, {"User-Agent": CHROME_UA}).decode("utf-8-sig", "replace"))):
+        for r in csv.DictReader(io.StringIO(_get(url, {"User-Agent": CHROME_UA}, retries=1, timeout=FALLBACK_TIMEOUT, wait429=5).decode("utf-8-sig", "replace"))):
             if r.get(column) not in (None, ""):
                 vals[datetime.datetime.strptime(r["Date"], "%m/%d/%Y").date().isoformat()] = float(r[column])
     out = sorted((d, v) for d, v in vals.items() if d >= keep_from)
@@ -276,6 +286,7 @@ def update_macro(path: Path = MACRO_PATH, keep_days: int = MACRO_KEEP_DAYS) -> i
     keep_from = (datetime.date.today() - datetime.timedelta(days=keep_days)).isoformat()
     old = load_macro(path) or {}
     out = {"updated_at": datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat(), "keep_days": keep_days, "series": {}, "errors": {}}
+    fails: dict[str, int] = {}   # 출처별 연속 실패. DOWN_AFTER 번이면 남은 지표는 그 출처를 건너뛴다
     for i, (key, label, unit, chg, fred_id, alt) in enumerate(MACRO):
         tries = [("fred", lambda: _fred(fred_id, keep_from))]
         if alt and alt[0] == "yahoo":
@@ -284,14 +295,19 @@ def update_macro(path: Path = MACRO_PATH, keep_days: int = MACRO_KEEP_DAYS) -> i
             tries.append(("treasury", lambda a=alt: _treasury(a[1], keep_from)))
         errs = []
         for src, fn in tries:
+            if fails.get(src, 0) >= DOWN_AFTER:
+                errs.append(f"{src} 건너뜀(연달아 {DOWN_AFTER}번 실패)")
+                continue
             try:
                 dates, values = fn()
                 if not dates:
                     raise RuntimeError("자료 없음")
                 out["series"][key] = {"label": label, "unit": unit, "chg": chg, "id": fred_id if src == "fred" else alt[1], "src": src, "dates": dates, "values": values}
                 print(f"[ok]   {key:<7} {label:<24} {len(dates):>4}개  {dates[-1]}  {values[-1]}  ({src})")
+                fails[src] = 0
                 break
             except Exception as e:
+                fails[src] = fails.get(src, 0) + 1
                 errs.append(f"{src} {type(e).__name__}: {e}")
         else:
             out["errors"][key] = "; ".join(errs)
@@ -334,7 +350,9 @@ def macro_rows(macro: dict | None, prices: dict | None, today: datetime.date | N
         w1 = _at_or_before(dates, values, (dd - datetime.timedelta(days=7)).isoformat())
         m1 = _at_or_before(dates, values, (dd - datetime.timedelta(days=30)).isoformat())
         y0 = (dd - datetime.timedelta(days=365)).isoformat()
-        yr = [x for t, x in zip(dates[: i + 1], values[: i + 1]) if t > y0]
+        yr = [x for t, x in zip(dates[: i + 1], values[: i + 1]) if t > y0 and x is not None]
+        if v is None or not yr:
+            return
         rows.append({"key": key, "label": label, "unit": unit, "chg": chg, "date": d, "value": v, "w1": w1, "m1": m1,
                      "lo": min(yr), "hi": max(yr), "src": src, "id": sid, "spark": values[max(0, i + 1 - spark_n): i + 1]})
     for key, label, unit, chg, fred_id, _alt in MACRO:

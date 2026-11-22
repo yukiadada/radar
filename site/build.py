@@ -237,7 +237,7 @@ def main(argv=None) -> int:
         daily = [r["date"] for r in mrows if r["key"] in ("vix", "ust10y", "hy", "btc")]
         if daily and (today - d(max(daily))).days > 5:
             warnings.append(f"시장 온도(prices/macro.json)가 {max(daily)} 까지라 오래됐다. fetch.yml 의 market.py --update 로그를 확인")
-        if macro.get("errors") and len(macro["errors"]) * 2 >= len(macro.get("series") or {}) + len(macro["errors"]):
+        if macro.get("errors") and len(macro["errors"]) * 2 >= len(set(macro.get("series") or {}) | set(macro["errors"])):   # 실패한 지표도 이전 자료로 series 에 남아 있다
             warnings.append(f"시장 온도 갱신에서 지표 {len(macro['errors'])}개가 실패했다({', '.join(sorted(macro['errors']))}). 출처가 막혔을 수 있다")
     incomplete = [r["line"] for r in rows if not r.get("source") or not r.get("sector")]   # ledger.py 를 거치지 않은 줄. 빌드는 멈추지 않는다
     if incomplete:
