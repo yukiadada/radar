@@ -33,7 +33,7 @@ sys.path.insert(0, str(ROOT / "fetch"))
 from config import AXES, all_tickers, load_sector_map, load_sources  # noqa: E402
 from ledger import load_existing  # noqa: E402
 from scoring import LABELS, PARAMS, alignment, attach_deltas, attention, enabled_windows, raw_scan, select, series  # noqa: E402
-from market import BENCH, asof as price_asof, fmt_change, fmt_macro, lagging, load_macro, load_prices, macro_rows, reactions, source_label  # noqa: E402
+from market import BENCH, asof as price_asof, fmt_change, fmt_macro, lagging, MACRO, load_macro, load_prices, macro_rows, reactions, source_label  # noqa: E402
 
 SITE = ROOT / "site"
 OUT = SITE / "out"
@@ -229,7 +229,9 @@ def main(argv=None) -> int:
     macro_data = None
     if macro:
         mrows = macro_rows(macro, prices, today)
-        macro_data = {"updated_at": macro.get("updated_at"), "errors": sorted(macro.get("errors") or {}),
+        labels = {k: v[1] for k, v in ((m[0], m) for m in MACRO)}
+        macro_data = {"updated_at": macro.get("updated_at"), "errors": [labels.get(k, k) + ("(이전 값)" if k in (macro.get("series") or {}) else "")
+                                                                       for k in sorted(macro.get("errors") or {})],
                       "rows": [{"key": r["key"], "label": r["label"], "date": r["date"], "src": r["src"], "id": r["id"],
                                 "value_s": fmt_macro(r["value"], r["unit"]), "w1_s": fmt_change(r["value"], r["w1"], r["unit"], r["chg"]),
                                 "m1_s": fmt_change(r["value"], r["m1"], r["unit"], r["chg"]),
@@ -238,7 +240,7 @@ def main(argv=None) -> int:
         if daily and (today - d(max(daily))).days > 5:
             warnings.append(f"시장 온도(prices/macro.json)가 {max(daily)} 까지라 오래됐다. fetch.yml 의 market.py --update 로그를 확인")
         if macro.get("errors") and len(macro["errors"]) * 2 >= len(set(macro.get("series") or {}) | set(macro["errors"])):   # 실패한 지표도 이전 자료로 series 에 남아 있다
-            warnings.append(f"시장 온도 갱신에서 지표 {len(macro['errors'])}개가 실패했다({', '.join(sorted(macro['errors']))}). 출처가 막혔을 수 있다")
+            warnings.append(f"시장 온도 갱신에서 지표 {len(macro['errors'])}개가 실패했다({', '.join(labels.get(k, k) for k in sorted(macro['errors']))}). 출처가 막혔을 수 있다. fetch.yml 의 market.py --update 로그를 확인")
     incomplete = [r["line"] for r in rows if not r.get("source") or not r.get("sector")]   # ledger.py 를 거치지 않은 줄. 빌드는 멈추지 않는다
     if incomplete:
         warnings.append(f"장부 {len(incomplete)}줄에 source 또는 sector 가 없음 (줄 {', '.join(map(str, incomplete[:10]))}). 장부는 수정 금지, Ken 에게 알린다")

@@ -36,6 +36,7 @@ import csv
 import datetime
 import io
 import json
+import re
 import sys
 import time
 import urllib.error
@@ -51,7 +52,7 @@ PRICES = ROOT / "prices/prices.json"
 MACRO_PATH = ROOT / "prices/macro.json"
 CBOE = "https://cdn.cboe.com/api/global/delayed_quotes/charts/historical/{t}.json"
 SOURCE = "Cboe delayed quotes (cdn.cboe.com/api/global/delayed_quotes/charts/historical)"   # 옛 자료에 출처가 안 적혀 있을 때의 기본값
-SOURCE_NAMES = {"cboe": "Cboe delayed quotes", "yahoo": "Yahoo Finance", "stooq": "Stooq", "nasdaq": "Nasdaq", "fred": "FRED", "treasury": "U.S. Treasury"}
+SOURCE_NAMES = {"cboe": "Cboe delayed quotes", "yahoo": "Yahoo Finance", "stooq": "Stooq", "nasdaq": "Nasdaq", "fred": "FRED", "treasury": "U.S. Treasury", "nyfed": "New York Fed"}
 PRICE_SOURCES = ("cboe", "yahoo", "stooq", "nasdaq")
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
 CHROME_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
@@ -64,11 +65,11 @@ MACRO = [
     ("vix", "VIX 변동성지수", "pt", "diff", "VIXCLS", ("yahoo", "^VIX")),
     ("ust2y", "미 국채 2년 금리", "%", "diff", "DGS2", ("treasury", "2 Yr")),
     ("ust10y", "미 국채 10년 금리", "%", "diff", "DGS10", ("treasury", "10 Yr")),
-    ("curve", "10년−2년 금리차", "%p", "diff", "T10Y2Y", None),
+    ("curve", "10년−2년 금리차", "%p", "diff", "T10Y2Y", ("treasury_spread", "10 Yr − 2 Yr")),
     ("hy", "하이일드 신용 스프레드", "%p", "diff", "BAMLH0A0HYM2", None),
-    ("be5y", "5년 기대인플레이션", "%", "diff", "T5YIE", None),
-    ("ffr", "연방기금금리 상단", "%", "diff", "DFEDTARU", None),
-    ("usd", "달러 지수(광의)", "", "pct", "DTWEXBGS", None),
+    ("be5y", "5년 기대인플레이션", "%", "diff", "T5YIE", ("treasury_be", "5 Yr − 실질 5 Yr")),
+    ("ffr", "연방기금금리 상단", "%", "diff", "DFEDTARU", ("nyfed", "EFFR 목표 상단")),
+    ("usd", "달러 지수", "", "pct", "DTWEXBGS", ("yahoo", "DX-Y.NYB")),
     ("wti", "WTI 유가", "$", "pct", "DCOILWTICO", ("yahoo", "CL=F")),
     ("btc", "비트코인", "$", "pct", "CBBTCUSD", ("yahoo", "BTC-USD")),
     ("claims", "신규 실업수당 청구(주간)", "건", "pct", "ICSA", None),
@@ -127,7 +128,7 @@ def _cboe(t: str, keep_from: str) -> tuple[list[str], list[float]]:
 
 
 def _yahoo(t: str, keep_from: str) -> tuple[list[str], list[float]]:
-    sym = urllib.parse.quote(t.replace(".", "-"), safe="")
+    sym = urllib.parse.quote(t.replace(".", "-") if re.fullmatch(r"[A-Z]+\.[A-Z]", t) else t, safe="")   # BRK.B → BRK-B, DX-Y.NYB 는 그대로
     days = (datetime.date.today() - datetime.date.fromisoformat(keep_from)).days
     rng = "2y" if days <= 730 else "5y"
     last: Exception | None = None
@@ -266,19 +267,58 @@ def _fred(series: str, keep_from: str) -> tuple[list[str], list[float]]:
     return [d for d, _ in out], [v for _, v in out]
 
 
-def _treasury(column: str, keep_from: str) -> tuple[list[str], list[float]]:
-    """미 재무부 일별 국채 금리표 (home.treasury.gov). 해마다 파일이 나뉘어 있어 keep_from 의 해부터 올해까지 받는다."""
+_TREASURY_CACHE: dict[tuple[str, int], list[dict]] = {}
+
+
+def _treasury(column: str, keep_from: str, kind: str = "daily_treasury_yield_curve") -> tuple[list[str], list[float]]:
+    """미 재무부 일별 국채 금리표 (home.treasury.gov). 해마다 파일이 나뉘어 있어 keep_from 의 해부터 올해까지 받는다.
+    kind: daily_treasury_yield_curve (명목) | daily_treasury_real_yield_curve (실질, TIPS). 열 이름은 대소문자를 가리지 않는다. 한 실행 안에서는 받은 표를 다시 쓴다."""
     vals: dict[str, float] = {}
     for y in range(int(keep_from[:4]), datetime.date.today().year + 1):
-        url = (f"https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{y}/all"
-               f"?type=daily_treasury_yield_curve&field_tdr_date_value={y}&page&_format=csv")
-        for r in csv.DictReader(io.StringIO(_get(url, {"User-Agent": CHROME_UA}, retries=1, timeout=FALLBACK_TIMEOUT, wait429=5).decode("utf-8-sig", "replace"))):
-            if r.get(column) not in (None, ""):
-                vals[datetime.datetime.strptime(r["Date"], "%m/%d/%Y").date().isoformat()] = float(r[column])
+        if (kind, y) not in _TREASURY_CACHE:
+            url = (f"https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{y}/all"
+                   f"?type={kind}&field_tdr_date_value={y}&page&_format=csv")
+            _TREASURY_CACHE[(kind, y)] = list(csv.DictReader(io.StringIO(
+                _get(url, {"User-Agent": CHROME_UA}, retries=1, timeout=FALLBACK_TIMEOUT, wait429=5).decode("utf-8-sig", "replace"))))
+        for r in _TREASURY_CACHE[(kind, y)]:
+            row = {k.strip().lower(): v for k, v in r.items() if k}
+            v = row.get(column.lower())
+            if v not in (None, "", "N/A"):
+                vals[datetime.datetime.strptime(row["date"], "%m/%d/%Y").date().isoformat()] = float(v)
     out = sorted((d, v) for d, v in vals.items() if d >= keep_from)
     if not out:
-        raise RuntimeError(f"'{column}' 열 없음")
+        raise RuntimeError(f"'{column}' 열 없음 ({kind})")
     return [d for d, _ in out], [v for _, v in out]
+
+
+def _diff(a: tuple[list[str], list[float]], b: tuple[list[str], list[float]]) -> tuple[list[str], list[float]]:
+    """같은 날짜끼리 a − b."""
+    bm = dict(zip(*b))
+    out = [(d, round(v - bm[d], 4)) for d, v in zip(*a) if d in bm]
+    return [d for d, _ in out], [v for _, v in out]
+
+
+def _nyfed_target_upper(keep_from: str) -> tuple[list[str], list[float]]:
+    """뉴욕 연은 EFFR 자료의 목표 범위 상단 (markets.newyorkfed.org, 키 없음)."""
+    d = json.loads(_get(f"https://markets.newyorkfed.org/api/rates/unsecured/effr/search.json?startDate={keep_from}&endDate={datetime.date.today().isoformat()}",
+                        {"User-Agent": CHROME_UA, "Accept": "application/json"}, retries=1, timeout=FALLBACK_TIMEOUT, wait429=5))
+    out = sorted((r["effectiveDate"], float(r["targetRateTo"])) for r in d.get("refRates") or [] if r.get("targetRateTo") is not None)
+    return [x for x, _ in out], [v for _, v in out]
+
+
+def _alt_fetch(alt: tuple[str, str], keep_from: str) -> tuple[list[str], list[float]]:
+    kind, arg = alt
+    if kind == "yahoo":
+        return _yahoo(arg, keep_from)
+    if kind == "treasury":
+        return _treasury(arg, keep_from)
+    if kind == "treasury_spread":   # 10년 − 2년
+        return _diff(_treasury("10 Yr", keep_from), _treasury("2 Yr", keep_from))
+    if kind == "treasury_be":       # 5년 명목 − 5년 실질 = 손익분기 기대인플레이션 (FRED T5YIE 와 같은 정의)
+        return _diff(_treasury("5 Yr", keep_from), _treasury("5 YR", keep_from, "daily_treasury_real_yield_curve"))
+    if kind == "nyfed":
+        return _nyfed_target_upper(keep_from)
+    raise RuntimeError(f"모르는 대체 출처 {kind}")
 
 
 def update_macro(path: Path = MACRO_PATH, keep_days: int = MACRO_KEEP_DAYS) -> int:
@@ -289,10 +329,8 @@ def update_macro(path: Path = MACRO_PATH, keep_days: int = MACRO_KEEP_DAYS) -> i
     fails: dict[str, int] = {}   # 출처별 연속 실패. DOWN_AFTER 번이면 남은 지표는 그 출처를 건너뛴다
     for i, (key, label, unit, chg, fred_id, alt) in enumerate(MACRO):
         tries = [("fred", lambda: _fred(fred_id, keep_from))]
-        if alt and alt[0] == "yahoo":
-            tries.append(("yahoo", lambda a=alt: _yahoo(a[1], keep_from)))
-        elif alt and alt[0] == "treasury":
-            tries.append(("treasury", lambda a=alt: _treasury(a[1], keep_from)))
+        if alt:
+            tries.append((alt[0].split("_")[0], lambda a=alt: _alt_fetch(a, keep_from)))
         errs = []
         for src, fn in tries:
             if fails.get(src, 0) >= DOWN_AFTER:

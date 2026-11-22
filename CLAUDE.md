@@ -33,7 +33,7 @@ fetch/                     fetch.py 수집, ledger.py 장부 검증·추가(장�
                            market.py 종가·시장 온도 갱신과 시장 반응 계산(--update / --report / --macro), backfill.py 과거 raw 소급 수집, check.py /check 집계(읽기만)
 raw/YYYY-MM-DD/            당일 수집 원문. 비공개 저장소 radar-raw 에만 커밋 (여기서는 ../radar-raw/raw 심볼릭 링크, git 미추적). 2026-06-19~09-16 은 backfill.py 소급분(backfill:true, 그날 수집보다 성김)
 prices/prices.json         sector_map 티커 + SPY 일별 종가 (Cboe 지연 시세, 막히면 Yahoo → Stooq → Nasdaq). radar-raw 의 prices/ 심볼릭 링크. fetch.yml 이 매일 갱신·커밋
-prices/macro.json          시장 온도: VIX·국채 2년/10년·금리차·하이일드 스프레드·기대인플레이션·기준금리·달러·WTI·비트코인·실업수당·NFCI (FRED, 일부는 Yahoo·미 재무부 대체). market.py --update 가 같이 갱신
+prices/macro.json          시장 온도: VIX·국채 2년/10년·금리차·하이일드 스프레드·기대인플레이션·기준금리·달러·WTI·비트코인·실업수당·NFCI (FRED, 막히면 미 재무부·뉴욕 연은·Yahoo 로 대체. 하이일드·실업수당·NFCI 는 FRED 만). market.py --update 가 같이 갱신
 briefs/YYYY-MM-DD.md       일간 브리프 (축별 기사 + 쉬운 말로 + 섹터 정렬 표)
 briefs/direction.md        방향 브리프 (쉬운 말로 읽는 지금의 방향). /brief 가 매일 덮어쓴다. 홈에 표시
 ledger/signals.jsonl       구조적 시그널 누적 장부 (append only)

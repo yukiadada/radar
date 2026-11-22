@@ -749,7 +749,7 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
     ['국채 2년 · 10년', '2년은 연준 금리 예상에, 10년은 장기 성장·물가·재정 걱정에 민감하다. 금리차가 0 아래면 장단기 역전.'],
     ['하이일드 스프레드', '신용등급 낮은 회사채 금리가 국채보다 얼마나 높은지. 넓어지면 돈 빌리기가 어려워지고 부도 걱정이 커졌다는 뜻.'],
     ['기대인플레이션 · 연방기금금리', '채권값에 담긴 앞으로 5년 물가 예상, 그리고 연준이 정한 기준금리 상단.'],
-    ['달러 · 유가 · 비트코인', '달러 지수는 주요 통화 대비 달러 값(광의, 주간 갱신에 가까움). 유가·비트코인은 위험 선호의 온도계로 같이 본다.'],
+    ['달러 · 유가 · 비트코인', '달러 지수는 주요 통화 대비 달러 값(FRED 광의 지수, 막히면 ICE 달러 지수 DX-Y.NYB). 유가·비트코인은 위험 선호의 온도계로 같이 본다.'],
     ['실업수당 · NFCI', '주간 지표. 신규 실업수당 청구는 해고가 느는지, 금융여건지수는 0 위면 평소보다 긴축(돈이 귀함)이라는 뜻.'],
     ['고점 대비', '그날까지 52주 최고 종가에서 몇 % 내려와 있나.'],
     ['날짜', '지표마다 마지막 값의 날짜가 다르다(FRED 는 하루 이틀 늦고, 주간 지표는 일주일 단위).'],
@@ -759,7 +759,7 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
     const src = r => ({ fred: 'FRED', yahoo: 'Yahoo', treasury: '미 재무부', cboe: 'Cboe', stooq: 'Stooq', nasdaq: 'Nasdaq' }[r.src] || r.src);
     return `<div class="tbl"><table class="secs"><thead><tr><th>지표</th><th class="num">값</th><th class="num">1주 전 대비</th><th class="num">1달 전 대비</th><th class="num">52주 범위</th><th>최근 흐름</th></tr></thead><tbody>` +
       M.rows.map(r => `<tr><td>${esc(r.label)}<br><span class="dim small">${esc(r.date.slice(5).replace('-', '/'))} · ${esc(src(r))} ${esc(r.id)}</span></td><td class="num"><b>${esc(r.value_s)}</b></td><td class="num">${esc(r.w1_s)}</td><td class="num">${esc(r.m1_s)}</td><td class="num small">${esc(r.range_s)}</td><td>${sp(r.spark)}</td></tr>`).join('') +
-      `</tbody></table></div>` + (M.errors && M.errors.length ? `<p class="keys">마지막 갱신에서 못 받은 지표(이전 값 표시): ${M.errors.map(esc).join(', ')}</p>` : '');
+      `</tbody></table></div>` + (M.errors && M.errors.length ? `<p class="keys">마지막 갱신에서 못 받은 지표: ${M.errors.map(esc).join(', ')}. 출처가 막힌 날은 빠지거나 이전 값으로 보입니다.</p>` : '');
   }
   function spark(values) {
     const n = values.length, W = 120, H = 28, x = i => (n > 1 ? i / (n - 1) * (W - 4) + 2 : W / 2), y = v => H - 2 - (v / 100) * (H - 4);
