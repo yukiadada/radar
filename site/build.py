@@ -230,8 +230,10 @@ def main(argv=None) -> int:
     if macro:
         mrows = macro_rows(macro, prices, today)
         labels = {k: v[1] for k, v in ((m[0], m) for m in MACRO)}
-        macro_data = {"updated_at": macro.get("updated_at"), "errors": [labels.get(k, k) + ("(이전 값)" if k in (macro.get("series") or {}) else "")
-                                                                       for k in sorted(macro.get("errors") or {})],
+        shown = {r["key"] for r in mrows}
+        stale = [k for k, v in (macro.get("series") or {}).items() if k not in shown and k not in (macro.get("errors") or {})]   # 갱신이 멈춰 표에서 뺀 지표
+        macro_data = {"updated_at": macro.get("updated_at"), "errors": [labels.get(k, k) + ("(이전 값)" if k in shown else "")
+                                                                       for k in sorted(macro.get("errors") or {})] + [labels.get(k, k) + "(자료 갱신이 멈춤)" for k in sorted(stale)],
                       "rows": [{"key": r["key"], "label": r["label"], "date": r["date"], "src": r["src"], "id": r["id"],
                                 "value_s": fmt_macro(r["value"], r["unit"]), "w1_s": fmt_change(r["value"], r["w1"], r["unit"], r["chg"]),
                                 "m1_s": fmt_change(r["value"], r["m1"], r["unit"], r["chg"]),

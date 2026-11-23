@@ -6,8 +6,8 @@
   전체 15분(PRICE_BUDGET)을 넘기면 남은 종목은 이전 자료를 둔다.
   cboe   Cboe 지연 시세 cdn.cboe.com/api/global/delayed_quotes/charts/historical/<티커>.json (2004년부터. 2026-11-20 부터 Actions 요청을 403 으로 막음)
   yahoo  Yahoo Finance chart API query1|query2.finance.yahoo.com/v8/finance/chart/<티커>?range=2y&interval=1d
-  stooq  stooq.com/q/d/l/?s=<티커>.us&i=d (CSV)
-  nasdaq api.nasdaq.com/api/quote/<티커>/historical
+  nasdaq api.nasdaq.com/api/quote/<티커>/historical (2026-11-23 Actions 에서 열림)
+  stooq  stooq.com/q/d/l/?s=<티커>.us&i=d (CSV. 2026-11-23 Actions 에서는 HTML 만 돌려줌)
   장이 열려 있는 동안 받은 그날 값(미국 동부 16:20 전의 오늘 날짜)은 종가가 아니라서 버린다.
 저장: prices/prices.json (prices/ 는 raw/ 처럼 비공개 radar-raw 의 prices/ 를 가리키는 심볼릭 링크. fetch.yml 이 매일 갱신·커밋한다)
   {"source": "출처별 종목 수", "updated_at": ISO, "keep_days": 730,
@@ -54,7 +54,8 @@ CBOE = "https://cdn.cboe.com/api/global/delayed_quotes/charts/historical/{t}.jso
 SOURCE = "Cboe delayed quotes (cdn.cboe.com/api/global/delayed_quotes/charts/historical)"   # 옛 자료에 출처가 안 적혀 있을 때의 기본값
 SOURCE_NAMES = {"cboe": "Cboe delayed quotes", "yahoo": "Yahoo Finance", "stooq": "Stooq", "nasdaq": "Nasdaq", "fred": "FRED", "treasury": "U.S. Treasury",
                 "nyfed": "New York Fed", "dol": "U.S. Department of Labor", "chicagofed": "Chicago Fed"}
-PRICE_SOURCES = ("cboe", "yahoo", "stooq", "nasdaq")
+PRICE_SOURCES = ("cboe", "yahoo", "nasdaq", "stooq")   # 2026-11-23 Actions 점검: Stooq 는 HTML 만 돌려줘 맨 뒤로
+MACRO_STALE_DAYS = 45   # 시장 온도 지표의 마지막 값이 이보다 오래되면 실패로 보고 표에도 안 보인다 (예: 갱신이 멈춘 파일)
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
 CHROME_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 ET = ZoneInfo("America/New_York")
@@ -430,6 +431,8 @@ def update_macro(path: Path = MACRO_PATH, keep_days: int = MACRO_KEEP_DAYS) -> i
                 dates, values = fn()
                 if not dates:
                     raise RuntimeError("자료 없음")
+                if not _fresh(dates[-1]):
+                    raise RuntimeError(f"오래된 자료(마지막 {dates[-1]})")
                 out["series"][key] = {"label": label, "unit": unit, "chg": chg, "id": fred_id if src == "fred" else alt[1], "src": src, "dates": dates, "values": values}
                 print(f"[ok]   {key:<7} {label:<24} {len(dates):>4}개  {dates[-1]}  {values[-1]}  ({src})")
                 fails[src] = 0
@@ -440,7 +443,7 @@ def update_macro(path: Path = MACRO_PATH, keep_days: int = MACRO_KEEP_DAYS) -> i
         else:
             out["errors"][key] = "; ".join(errs)
             prev = (old.get("series") or {}).get(key)
-            if prev:
+            if prev and prev.get("dates") and _fresh(prev["dates"][-1]):
                 out["series"][key] = prev
             print(f"[fail] {key:<7} {label} {'; '.join(errs)}" + (f"  (이전 자료 유지, 마지막 {prev['dates'][-1]})" if prev else ""), file=sys.stderr)
         if i < len(MACRO) - 1:
@@ -448,6 +451,10 @@ def update_macro(path: Path = MACRO_PATH, keep_days: int = MACRO_KEEP_DAYS) -> i
     _write(path, out)
     print(f"시장 온도 {len(out['series'])}/{len(MACRO)} 지표 저장 -> {path}" + (f", 실패 {len(out['errors'])}: {', '.join(out['errors'])}" if out["errors"] else ""))
     return 1 if out["errors"] else 0
+
+
+def _fresh(day: str, today: datetime.date | None = None) -> bool:
+    return ((today or datetime.date.today()) - datetime.date.fromisoformat(day)).days <= MACRO_STALE_DAYS
 
 
 def load_macro(path: Path = MACRO_PATH) -> dict | None:
@@ -475,6 +482,8 @@ def macro_rows(macro: dict | None, prices: dict | None, today: datetime.date | N
             return
         d, v = dates[i], values[i]
         dd = datetime.date.fromisoformat(d)
+        if not _fresh(d, today):   # 갱신이 멈춘 지표는 지금 값처럼 보이지 않게 뺀다
+            return
         w1 = _at_or_before(dates, values, (dd - datetime.timedelta(days=7)).isoformat())
         m1 = _at_or_before(dates, values, (dd - datetime.timedelta(days=30)).isoformat())
         y0 = (dd - datetime.timedelta(days=365)).isoformat()
