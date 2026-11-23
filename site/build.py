@@ -11,7 +11,7 @@ data.json:
   ledger[행 + line], board{live, w30, w90, ...}(scoring.alignment + delta + orphans. live 는 누적(유효기간), w<n> 은 열린 창), series{같은 키}(scoring.series)
   activity{같은 키}(축별 건수·방향·상위 섹터), attention(scoring.attention), briefs[{date, structural, none_today, signals, md(최신 것만)}]
   raw{날짜: {소스: {count, error, current, backfill}}}, market{장부 줄: 시장 반응(market.reaction)}, market_meta{source, asof, updated_at} | null,
-  macro{updated_at, rows[{label, value_s, date, w1_s, m1_s, range_s, spark, src}]} | null (시장 온도: 금리·신용·변동성. market.macro_rows),
+  macro{updated_at, hot[긴장 쪽 숫자], errors, rows[{label, value_s, date, w1_s, m1_s, range_s, spark, src, id, reading}]} | null (시장 온도: 금리·신용·변동성. market.macro_rows·macro_reading·macro_hot),
   direction_brief(briefs/direction.md 본문. 홈 "지금 세상의 방향" 서술) | null, warnings[]
   브리프 signals 에는 장부와 (날짜, 출처 URL, 섹터) 가 같은 행의 line 을 붙인다 (카드에 시장 반응을 보이기 위해).
 브리프 카드는 여기서 마크다운을 구조화(parse_brief)해 signals 로 준다. 사이트는 나머지 절만 마크다운으로 그린다.
@@ -33,7 +33,7 @@ sys.path.insert(0, str(ROOT / "fetch"))
 from config import AXES, all_tickers, load_sector_map, load_sources  # noqa: E402
 from ledger import load_existing  # noqa: E402
 from scoring import LABELS, PARAMS, alignment, attach_deltas, attention, enabled_windows, raw_scan, select, series  # noqa: E402
-from market import BENCH, asof as price_asof, fmt_change, fmt_macro, lagging, MACRO, load_macro, load_prices, macro_rows, reactions, source_label  # noqa: E402
+from market import BENCH, asof as price_asof, fmt_change, fmt_macro, lagging, MACRO, load_macro, load_prices, macro_hot, macro_reading, macro_rows, reactions, source_label  # noqa: E402
 
 SITE = ROOT / "site"
 OUT = SITE / "out"
@@ -235,7 +235,9 @@ def main(argv=None) -> int:
                       "rows": [{"key": r["key"], "label": r["label"], "date": r["date"], "src": r["src"], "id": r["id"],
                                 "value_s": fmt_macro(r["value"], r["unit"]), "w1_s": fmt_change(r["value"], r["w1"], r["unit"], r["chg"]),
                                 "m1_s": fmt_change(r["value"], r["m1"], r["unit"], r["chg"]),
-                                "range_s": f"{fmt_macro(r['lo'], r['unit'])} ~ {fmt_macro(r['hi'], r['unit'])}", "spark": r["spark"]} for r in mrows]}
+                                "range_s": f"{fmt_macro(r['lo'], r['unit'])} ~ {fmt_macro(r['hi'], r['unit'])}", "spark": r["spark"],
+                                "reading": macro_reading(r)} for r in mrows],
+                      "hot": macro_hot(mrows)}
         daily = [r["date"] for r in mrows if r["key"] in ("vix", "ust10y", "hy", "btc")]
         if daily and (today - d(max(daily))).days > 5:
             warnings.append(f"시장 온도(prices/macro.json)가 {max(daily)} 까지라 오래됐다. fetch.yml 의 market.py --update 로그를 확인")

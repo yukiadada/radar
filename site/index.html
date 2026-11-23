@@ -253,6 +253,22 @@ input[type=search]{width:100%}
 .kpi>span{font-size:var(--fs-cap);font-weight:600;color:var(--ink2)}
 .kpi b .small{font-size:inherit}
 .dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(310px,100%),1fr));gap:12px;margin:0}
+/* 시장 온도 */
+.msum{background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-card);padding:16px 20px;margin:0 0 12px;font-size:var(--fs-body);line-height:1.75}
+.msum ul{margin:6px 0 0;padding-left:20px}
+.mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:12px}
+.mcard{background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-card);padding:16px 18px;min-width:0;display:flex;flex-direction:column;gap:8px}
+.mcard header{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.mcard h3{font-size:var(--fs-body);font-weight:600;margin:0;line-height:1.4}
+.mcard .mval{font-size:22px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mcard .mrow{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.mcard .mchg{display:flex;flex-wrap:wrap;gap:2px 12px;font-size:var(--fs-cap);color:var(--ink2);font-variant-numeric:tabular-nums}
+.mcard .mrow svg.spark{flex:none}
+.mcard p{margin:0;font-size:var(--fs-sm);line-height:1.7}
+details.mmore{margin:12px 0 0}
+details.mmore>summary{display:inline-flex;align-items:center;min-height:40px;padding:0 14px;border:1px solid var(--hair);border-radius:var(--r-ctl);background:var(--panel);color:var(--ink2);font-weight:500;cursor:pointer;list-style:none}
+details.mmore>summary::-webkit-details-marker{display:none}
+details.mmore[open]>summary{margin-bottom:12px}
 .dcard{background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-card);padding:18px 20px 16px;min-width:0;transition:border-color .15s,box-shadow .15s}
 .dcard:hover{border-color:color-mix(in srgb,var(--ink2) 40%,var(--hair));box-shadow:var(--shadow)}
 .dcard header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
@@ -626,17 +642,18 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
     let cards = '';
     for (const a of D.axes) {
       const list = b.signals.filter(s => s.axis === a), sec = secs.find(x => x.title === a);
-      if (!sec) continue;
-      cards += `<h3 class="axh ${axCls(a)}"><i class="sw2"></i>${esc(a)} <span class="dim">${list.length ? `${list.length}건` : '해당 없음'}</span></h3>`;
-      if (list.length) cards += `<div class="sigs">${list.map(signalCard).join('')}</div>`;
+      if (!sec || !list.length) continue;   // 해당 없는 축은 머리도 보이지 않는다
+      cards += `<h3 class="axh ${axCls(a)}"><i class="sw2"></i>${esc(a)} <span class="dim">${list.length}건</span></h3>`;
+      cards += `<div class="sigs">${list.map(signalCard).join('')}</div>`;
     }
-    container.innerHTML = KEYS + cards + (b.none_today ? `<p class="keys">오늘 구조적 시그널 없음. 위 카드는 아직 확정되지 않은 재료입니다.</p>` : '');
+    container.innerHTML = cards ? KEYS + cards + (b.none_today ? `<p class="keys">오늘 구조적 시그널 없음. 위 카드는 아직 확정되지 않은 재료입니다.</p>` : '')
+      : `<p class="empty">오늘 구조적 시그널 없음.</p>`;
     const rest = secs.filter(x => !isAxis(x.title) && !isEasy(x.title));
     if (compact) {
       if (rest.length) container.insertAdjacentHTML('beforeend', `<p class="keys">${rest.map(x => esc(x.title.replace(/\s*\(.*\)\s*$/, ''))).join(' · ')}은 <a href="#/brief/${esc(b.date)}">브리프 탭</a>에서 봅니다.</p>`);
     } else for (const x of rest) container.appendChild(md('## ' + x.title + '\n' + x.md));
     const dd = document.createElement('details'); dd.className = 'more'; dd.innerHTML = '<summary>원본 시그널 표 · 해석 · 확인 방법 메모</summary>';
-    for (const x of secs.filter(x => isAxis(x.title) || isEasy(x.title))) dd.appendChild(md('## ' + x.title + '\n' + x.md));
+    for (const x of secs.filter(x => (isAxis(x.title) && b.signals.some(s => s.axis === x.title)) || isEasy(x.title))) dd.appendChild(md('## ' + x.title + '\n' + x.md));   // 해당 없는 축 절은 빼고
     container.appendChild(dd);
     decorateTables(container);
   }
@@ -743,23 +760,26 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
     el.innerHTML = s + `</svg>`;
   }
   /* 스파크라인: 표 안의 추이 */
-  /* 시장 온도 표. 값·변화는 build.py 가 market.fmt_macro·fmt_change 로 만든 글자 그대로. 작은 선은 최근 값들을 그 구간의 최저~최고로 늘린 모양 */
-  const MACRO_KEY = [
-    ['VIX', 'S&P 500 옵션 값에서 뽑은 앞으로 30일 변동성 예상치. 높을수록 시장이 크게 흔들릴 것으로 본다는 뜻.'],
-    ['국채 2년 · 10년', '2년은 연준 금리 예상에, 10년은 장기 성장·물가·재정 걱정에 민감하다. 금리차가 0 아래면 장단기 역전.'],
-    ['하이일드 스프레드', '신용등급 낮은 회사채 금리가 국채보다 얼마나 높은지. 넓어지면 돈 빌리기가 어려워지고 부도 걱정이 커졌다는 뜻.'],
-    ['기대인플레이션 · 연방기금금리', '채권값에 담긴 앞으로 5년 물가 예상, 그리고 연준이 정한 기준금리 상단.'],
-    ['달러 · 유가 · 비트코인', '달러 지수는 주요 통화 대비 달러 값(FRED 광의 지수, 막히면 ICE 달러 지수 DX-Y.NYB). 유가·비트코인은 위험 선호의 온도계로 같이 본다.'],
-    ['실업수당 · NFCI', '주간 지표. 신규 실업수당 청구는 해고가 느는지, 금융여건지수는 0 위면 평소보다 긴축(돈이 귀함)이라는 뜻.'],
-    ['고점 대비', '그날까지 52주 최고 종가에서 몇 % 내려와 있나.'],
-    ['날짜', '지표마다 마지막 값의 날짜가 다르다(FRED 는 하루 이틀 늦고, 주간 지표는 일주일 단위).'],
-  ];
-  function macroTable(M) {
+  /* 시장 온도: 한 줄 요약 + 지표 카드. 값·변화·읽는 법은 build.py 가 market.fmt_macro·fmt_change·macro_reading·macro_summary 로 만든 글자 그대로.
+     작은 선은 최근 값들을 그 구간의 최저~최고로 늘린 모양. 앞 MACRO_FIRST 개만 보이고 나머지는 "지표 더 보기" 안에 */
+  const MACRO_ORDER = ['dd_spy', 'dd_qqq', 'vix', 'hy', 'hyg', 'ust10y', 'ust2y', 'curve', 'be5y', 'ffr', 'nfci', 'claims', 'usd', 'wti', 'btc'];
+  const MACRO_FIRST = 6;
+  function macroPanel(M) {
     const sp = v => { const xs = v.filter(x => x != null); if (xs.length < 2) return ''; const lo = Math.min(...xs), hi = Math.max(...xs); return spark(v.map(x => (x == null ? null : hi === lo ? 50 : (x - lo) / (hi - lo) * 100))); };
-    const src = r => ({ fred: 'FRED', yahoo: 'Yahoo', treasury: '미 재무부', nyfed: '뉴욕 연은', cboe: 'Cboe', stooq: 'Stooq', nasdaq: 'Nasdaq' }[r.src] || r.src);
-    return `<div class="tbl"><table class="secs"><thead><tr><th>지표</th><th class="num">값</th><th class="num">1주 전 대비</th><th class="num">1달 전 대비</th><th class="num">52주 범위</th><th>최근 흐름</th></tr></thead><tbody>` +
-      M.rows.map(r => `<tr><td>${esc(r.label)}<br><span class="dim small">${esc(r.date.slice(5).replace('-', '/'))} · ${esc(src(r))} ${esc(r.id)}</span></td><td class="num"><b>${esc(r.value_s)}</b></td><td class="num">${esc(r.w1_s)}</td><td class="num">${esc(r.m1_s)}</td><td class="num small">${esc(r.range_s)}</td><td>${sp(r.spark)}</td></tr>`).join('') +
-      `</tbody></table></div>` + (M.errors && M.errors.length ? `<p class="keys">마지막 갱신에서 못 받은 지표: ${M.errors.map(esc).join(', ')}. 출처가 막힌 날은 빠지거나 이전 값으로 보입니다.</p>` : '');
+    const src = r => ({ fred: 'FRED', yahoo: 'Yahoo', treasury: '미 재무부', nyfed: '뉴욕 연은', dol: '노동부', chicagofed: '시카고 연은', cboe: 'Cboe', stooq: 'Stooq', nasdaq: 'Nasdaq' }[r.src] || r.src);
+    const rank = k => { const i = MACRO_ORDER.indexOf(k); return i < 0 ? 99 : i; };
+    const rows = M.rows.slice().sort((a, c) => rank(a.key) - rank(c.key));
+    const card = r => `<article class="mcard"><header><h3>${esc(r.label)}</h3><b class="mval">${esc(r.value_s)}</b></header>` +
+      `<div class="mrow"><div class="mchg"><span>1주 ${esc(r.w1_s)}</span><span>1달 ${esc(r.m1_s)}</span><span>52주 ${esc(r.range_s)}</span></div>${sp(r.spark)}</div>` +
+      (r.reading ? `<p>${esc(r.reading)}</p>` : '') + `<p class="dim small">${esc(r.date.slice(5).replace('-', '/'))} · ${esc(src(r))} ${esc(r.id)}</p></article>`;
+    const head = rows.slice(0, MACRO_FIRST), rest = rows.slice(MACRO_FIRST);
+    const hot = M.hot || [];
+    return `<div class="msum">${hot.length ? `<b>긴장 쪽으로 읽히는 숫자 ${hot.length}개</b><ul>${hot.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`
+      : `<b>긴장 쪽으로 읽히는 숫자가 눈에 띄지 않습니다.</b> <span class="dim">VIX 20 아래, 주가가 52주 고점 대비 −10% 안.</span>`}</div>` +
+      `<div class="mgrid">${head.map(card).join('')}</div>` +
+      (rest.length ? `<details class="mmore"><summary>지표 ${rest.length}개 더 보기</summary><div class="mgrid">${rest.map(card).join('')}</div></details>` : '') +
+      `<p class="keys">읽는 법은 흔히 쓰는 어림 기준입니다. 원인을 단정하지 않고, 판단 재료이지 매매 신호가 아닙니다.` +
+      (M.errors && M.errors.length ? ` 마지막 갱신에서 못 받은 지표: ${M.errors.map(esc).join(', ')}.` : '') + `</p>`;
   }
   function spark(values) {
     const n = values.length, W = 120, H = 28, x = i => (n > 1 ? i / (n - 1) * (W - 4) + 2 : W / 2), y = v => H - 2 - (v / 100) * (H - 4);
@@ -813,7 +833,7 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
     /* 시장 온도: 브리프 아래, 방향별 정렬 위. 장부(문서로 확정된 근거)와 따로, 지금 시장이 얼마나 긴장했는지를 숫자로만 보인다 */
     if (D.macro && D.macro.rows && D.macro.rows.length) {
       h += secHead('시장 온도', '금리·신용·변동성처럼 시장 전체의 온도를 보여 주는 숫자입니다. 장부의 근거가 아니라 배경이고, 판단 재료이지 매매 신호가 아닙니다.');
-      h += legendBox(MACRO_KEY, '지표 읽는 법') + macroTable(D.macro);
+      h += macroPanel(D.macro);
     }
     /* 방향 카드 */
     h += secHead('방향별 정렬', `${spanText(B)}. 정렬 %가 높은 순서입니다.`, `<a href="#/sectors">섹터별로 보기 →</a>`);
@@ -844,9 +864,6 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
     h += secHead('섹터 한눈에', '살아 있는 시그널 기준. 막는 축이 없는 섹터와, 막는 축이 있는 섹터를 나눴습니다.', `<a href="#/sectors">전체 섹터 →</a>`);
     h += `<section class="glance"><div class="gl"><h3>밀어주는 축만 있는 섹터</h3>${ups.length ? `<ol>${ups.map(li).join('')}</ol>` : '<p class="empty">없음</p>'}</div><div class="gl neg"><h3>역풍 · 엇갈림 섹터</h3>${downs.length ? `<ol>${downs.map(li).join('')}</ol>` : '<p class="empty">없음</p>'}${neutral.length ? `<p class="keys">양쪽(± 만 있어 점수 0): ${neutral.map(x => sectorLink(x.sector)).join(', ')}</p>` : ''}</div></section>`;
 
-    if (D.briefs.length > 1) {
-      h += secHead('지난 브리프', '', D.briefs.length > 8 ? `<a href="#/briefs">전체 ${D.briefs.length}건 →</a>` : '') + `<ul class="plain">` + D.briefs.slice(1, 8).map(x => `<li><a href="#/brief/${x.date}">${fmtDate(x.date)}</a> <span class="dim small">구조적 ${x.none_today ? '없음' : x.structural + '건'}</span></li>`).join('') + `</ul>`;
-    }
     app.innerHTML = h;
     if (DB) {
       document.getElementById('dirlead').appendChild(md(DB.lead));

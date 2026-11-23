@@ -52,7 +52,8 @@ PRICES = ROOT / "prices/prices.json"
 MACRO_PATH = ROOT / "prices/macro.json"
 CBOE = "https://cdn.cboe.com/api/global/delayed_quotes/charts/historical/{t}.json"
 SOURCE = "Cboe delayed quotes (cdn.cboe.com/api/global/delayed_quotes/charts/historical)"   # 옛 자료에 출처가 안 적혀 있을 때의 기본값
-SOURCE_NAMES = {"cboe": "Cboe delayed quotes", "yahoo": "Yahoo Finance", "stooq": "Stooq", "nasdaq": "Nasdaq", "fred": "FRED", "treasury": "U.S. Treasury", "nyfed": "New York Fed"}
+SOURCE_NAMES = {"cboe": "Cboe delayed quotes", "yahoo": "Yahoo Finance", "stooq": "Stooq", "nasdaq": "Nasdaq", "fred": "FRED", "treasury": "U.S. Treasury",
+                "nyfed": "New York Fed", "dol": "U.S. Department of Labor", "chicagofed": "Chicago Fed"}
 PRICE_SOURCES = ("cboe", "yahoo", "stooq", "nasdaq")
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
 CHROME_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
@@ -67,13 +68,14 @@ MACRO = [
     ("ust10y", "미 국채 10년 금리", "%", "diff", "DGS10", ("treasury", "10 Yr")),
     ("curve", "10년−2년 금리차", "%p", "diff", "T10Y2Y", ("treasury_spread", "10 Yr − 2 Yr")),
     ("hy", "하이일드 신용 스프레드", "%p", "diff", "BAMLH0A0HYM2", None),
+    ("hyg", "하이일드 채권 ETF(HYG)", "$", "pct", None, ("yahoo", "HYG")),   # FRED 가 막혀도 보이는 신용 걱정 온도계. 스프레드가 넓어지면 값이 내려간다
     ("be5y", "5년 기대인플레이션", "%", "diff", "T5YIE", ("treasury_be", "5 Yr − 실질 5 Yr")),
     ("ffr", "연방기금금리 상단", "%", "diff", "DFEDTARU", ("nyfed", "EFFR 목표 상단")),
     ("usd", "달러 지수", "", "pct", "DTWEXBGS", ("yahoo", "DX-Y.NYB")),
     ("wti", "WTI 유가", "$", "pct", "DCOILWTICO", ("yahoo", "CL=F")),
     ("btc", "비트코인", "$", "pct", "CBBTCUSD", ("yahoo", "BTC-USD")),
-    ("claims", "신규 실업수당 청구(주간)", "건", "pct", "ICSA", None),
-    ("nfci", "금융여건지수 NFCI(주간, 0 위면 긴축)", "", "diff", "NFCI", None),
+    ("claims", "신규 실업수당 청구(주간)", "건", "pct", "ICSA", ("dol", "ETA 539 주별 합계, 계절조정 전")),
+    ("nfci", "금융여건지수 NFCI(주간)", "", "diff", "NFCI", ("chicagofed", "NFCI")),
 ]
 DRAWDOWN = [("SPY", "S&P 500(SPY) 52주 고점 대비"), ("QQQ", "나스닥 100(QQQ) 52주 고점 대비")]   # prices.json 에서 계산
 MACRO_KEEP_DAYS = 400
@@ -111,12 +113,16 @@ def _get(url: str, headers: dict, retries: int = 2, timeout: float = 60, wait429
     raise RuntimeError(f"{type(last).__name__}: {last}")
 
 
-def _closed(dates: list[str], close: list[float], keep_from: str) -> tuple[list[str], list[float]]:
-    """날짜순 정렬·keep_from 이후·값 있는 것만. 미국 동부 16:20 전이면 오늘 날짜 값(장중 가격)을 버린다."""
-    now = datetime.datetime.now(ET)
+def _closed(dates: list[str], close: list[float], keep_from: str, tz: str = "America/New_York") -> tuple[list[str], list[float]]:
+    """날짜순 정렬·keep_from 이후·값 있는 것만. 끝나지 않은 그날 값(장중 가격)은 버린다.
+    미국 시장(기본): 동부 16:20 전의 오늘 날짜 값과 주말 날짜 값(선물의 일요일 저녁 거래)을 버린다.
+    tz 가 UTC 인 24시간 자산(비트코인): UTC 오늘 날짜 값을 버린다."""
+    utc = tz.upper() in ("UTC", "GMT", "ETC/UTC")
+    now = datetime.datetime.now(datetime.timezone.utc if utc else ET)
     today = now.date().isoformat()
-    rows = sorted({d: float(c) for d, c in zip(dates, close) if c is not None and d >= keep_from}.items())
-    if rows and rows[-1][0] == today and (now.hour, now.minute) < (16, 20):
+    rows = sorted({d: float(c) for d, c in zip(dates, close)
+                   if c is not None and d >= keep_from and (utc or datetime.date.fromisoformat(d).weekday() < 5)}.items())
+    if rows and rows[-1][0] == today and (utc or (now.hour, now.minute) < (16, 20)):
         rows = rows[:-1]
     return [d for d, _ in rows], [c for _, c in rows]
 
@@ -137,9 +143,10 @@ def _yahoo(t: str, keep_from: str) -> tuple[list[str], list[float]]:
             b = _get(f"https://{host}.finance.yahoo.com/v8/finance/chart/{sym}?range={rng}&interval=1d&includePrePost=false",
                      {"User-Agent": CHROME_UA, "Accept": "application/json"}, retries=1, timeout=FALLBACK_TIMEOUT, wait429=5)
             res = json.loads(b)["chart"]["result"][0]
-            tz = ZoneInfo(res.get("meta", {}).get("exchangeTimezoneName") or "America/New_York")
+            tzname = res.get("meta", {}).get("exchangeTimezoneName") or "America/New_York"
+            tz = ZoneInfo(tzname)
             ts, close = res.get("timestamp") or [], res["indicators"]["quote"][0].get("close") or []
-            return _closed([datetime.datetime.fromtimestamp(x, tz).date().isoformat() for x in ts], close, keep_from)
+            return _closed([datetime.datetime.fromtimestamp(x, tz).date().isoformat() for x in ts], close, keep_from, tzname)
         except Blocked:
             raise
         except Exception as e:  # 다른 호스트로 한 번 더
@@ -196,6 +203,27 @@ def fetch_ticker(t: str, keep_from: str, skip: set[str] | frozenset = frozenset(
     raise RuntimeError("; ".join(errs) or "시도할 출처 없음")
 
 
+def probe_sources(used: set[str], t0: float, t: str = BENCH) -> dict:
+    """이번 실행에 쓰지 않은 가격 출처가 지금 열리는지 SPY 한 종목으로 확인한다. 앞 출처가 막혔을 때 실제로 넘어갈 수 있는지 미리 알기 위해서다.
+    {"checked_at", 출처: "ok n일 ~ 마지막 날짜" | "fail 오류"}. 시간 상한을 넘겼으면 건너뛴다."""
+    res: dict[str, str] = {"checked_at": datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat()}
+    keep_from = (datetime.date.today() - datetime.timedelta(days=30)).isoformat()
+    for src in PRICE_SOURCES:
+        if src in used:
+            res[src] = "used"
+            continue
+        if time.monotonic() - t0 > PRICE_BUDGET:
+            res[src] = "skip 시간 상한"
+            continue
+        try:
+            dates, _ = FETCHERS[src](t, keep_from)
+            res[src] = f"ok {len(dates)}일 ~ {dates[-1]}" if dates else "fail 자료 없음"
+        except Exception as e:
+            res[src] = f"fail {e if isinstance(e, Blocked) else type(e).__name__ + ': ' + str(e)}"[:200]
+        print(f"[probe] {src:<6} {t} {res[src]}")
+    return res
+
+
 def source_label(prices: dict | None) -> str:
     """사이트·브리프에 적는 가격 출처 한 줄. 출처가 적혀 있지 않은 옛 자료는 Cboe."""
     if not prices:
@@ -240,6 +268,7 @@ def update(path: Path = PRICES, keep_days: int = KEEP_DAYS) -> int:
         if i < len(tickers) - 1:
             time.sleep(PACE)
     out["source"] = source_label(out)
+    out["probe"] = probe_sources(set(out["src"][t] for t in out["src"] if t not in out["errors"]), t0)
     down = sorted(s for s, n in blocked.items() if n >= DOWN_AFTER)
     if down:
         print(f"이번 실행에서 건너뛴 출처: {', '.join(down)} (연달아 {DOWN_AFTER}번 실패, 남은 종목은 다음 출처로)", file=sys.stderr)
@@ -306,6 +335,63 @@ def _nyfed_target_upper(keep_from: str) -> tuple[list[str], list[float]]:
     return [x for x, _ in out], [v for _, v in out]
 
 
+def _parse_day(x: str) -> str | None:
+    for f in ("%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y", "%Y/%m/%d"):
+        try:
+            return datetime.datetime.strptime(x.strip(), f).date().isoformat()
+        except ValueError:
+            continue
+    return None
+
+
+def _chicagofed_nfci(keep_from: str) -> tuple[list[str], list[float]]:
+    """시카고 연은 NFCI CSV. 열 이름이 바뀌어도 되게 날짜 열(첫 열)과 이름이 NFCI 인 열을 찾는다. 형식이 다르면 첫 줄을 오류에 담는다."""
+    txt = _get("https://www.chicagofed.org/-/media/publications/nfci/nfci-data-series-csv.csv", {"User-Agent": CHROME_UA, "Accept": "text/csv,*/*"},
+               retries=1, timeout=FALLBACK_TIMEOUT, wait429=5).decode("utf-8-sig", "replace")
+    rows = list(csv.reader(io.StringIO(txt)))
+    head = [h.strip().lower() for h in rows[0]] if rows else []
+    if "nfci" not in head:
+        raise RuntimeError(f"NFCI 열 없음: {txt[:120]!r}")
+    j = head.index("nfci")
+    out = []
+    for r in rows[1:]:
+        d = _parse_day(r[0]) if r else None
+        if d and len(r) > j and r[j].strip() not in ("", "."):
+            out.append((d, float(r[j])))
+    out = sorted(x for x in out if x[0] >= keep_from)
+    if not out or not -5 < out[-1][1] < 10:
+        raise RuntimeError(f"값이 이상함: {out[-1:]!r} / {txt[:120]!r}")
+    return [d for d, _ in out], [v for _, v in out]
+
+
+def _dol_claims(keep_from: str) -> tuple[list[str], list[float]]:
+    """노동부 ETA 539 주별 주(州) 자료(oui.doleta.gov ar539.csv)의 신규 청구(c3)를 주마다 더한다. 계절조정 전이라 FRED ICSA 와 수준이 다르다.
+    주간 끝 날짜는 c2(반영 주 끝)를 쓴다. 열이 없거나 합계가 전국 신규 청구로 보기 어려운 크기면 실패로 둔다."""
+    txt = _get("https://oui.doleta.gov/unemploy/csv/ar539.csv", {"User-Agent": CHROME_UA, "Accept": "text/csv,*/*"},
+               retries=1, timeout=45, wait429=5).decode("utf-8-sig", "replace")
+    rd = csv.DictReader(io.StringIO(txt))
+    cols = [c.strip().lower() for c in (rd.fieldnames or [])]
+    if not {"st", "c2", "c3"} <= set(cols):
+        raise RuntimeError(f"열 없음(st·c2·c3): {txt[:120]!r}")
+    tot: dict[str, float] = {}
+    n: dict[str, int] = {}
+    for r in rd:
+        r = {k.strip().lower(): v for k, v in r.items() if k}
+        d = _parse_day(r.get("c2") or "")
+        if not d or d < keep_from:
+            continue
+        try:
+            tot[d] = tot.get(d, 0.0) + float(r["c3"])
+            n[d] = n.get(d, 0) + 1
+        except (TypeError, ValueError):
+            continue
+    full = max(n.values(), default=0)
+    out = sorted((d, v) for d, v in tot.items() if n[d] >= full - 3)   # 아직 모든 주가 보고하지 않은 주는 뺀다
+    if not out or not 100_000 <= out[-1][1] <= 1_200_000:
+        raise RuntimeError(f"합계가 이상함: {out[-1:]!r}, 주 {full}개")
+    return [d for d, _ in out], [v for _, v in out]
+
+
 def _alt_fetch(alt: tuple[str, str], keep_from: str) -> tuple[list[str], list[float]]:
     kind, arg = alt
     if kind == "yahoo":
@@ -318,6 +404,10 @@ def _alt_fetch(alt: tuple[str, str], keep_from: str) -> tuple[list[str], list[fl
         return _diff(_treasury("5 Yr", keep_from), _treasury("5 YR", keep_from, "daily_treasury_real_yield_curve"))
     if kind == "nyfed":
         return _nyfed_target_upper(keep_from)
+    if kind == "dol":
+        return _dol_claims(keep_from)
+    if kind == "chicagofed":
+        return _chicagofed_nfci(keep_from)
     raise RuntimeError(f"모르는 대체 출처 {kind}")
 
 
@@ -328,7 +418,7 @@ def update_macro(path: Path = MACRO_PATH, keep_days: int = MACRO_KEEP_DAYS) -> i
     out = {"updated_at": datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat(), "keep_days": keep_days, "series": {}, "errors": {}}
     fails: dict[str, int] = {}   # 출처별 연속 실패. DOWN_AFTER 번이면 남은 지표는 그 출처를 건너뛴다
     for i, (key, label, unit, chg, fred_id, alt) in enumerate(MACRO):
-        tries = [("fred", lambda: _fred(fred_id, keep_from))]
+        tries = [("fred", lambda: _fred(fred_id, keep_from))] if fred_id else []
         if alt:
             tries.append((alt[0].split("_")[0], lambda a=alt: _alt_fetch(a, keep_from)))
         errs = []
@@ -412,6 +502,127 @@ def macro_rows(macro: dict | None, prices: dict | None, today: datetime.date | N
     return rows
 
 
+# ---------------------------------------------------------------- 시장 온도 읽는 법
+# 숫자마다 흔히 쓰는 읽는 법(어림 기준)을 한 줄로 붙인다. 원인을 단정하지 않고 "흔히 ~로 읽는다"로 쓴다. 판단 재료이지 매매 신호가 아니다.
+def _pos(r: dict) -> str:
+    lo, hi, v = r["lo"], r["hi"], r["value"]
+    if hi - lo <= 0:
+        return ""
+    q = (v - lo) / (hi - lo)
+    return " 52주 최고 수준." if q >= 0.95 else " 52주 최저 수준." if q <= 0.05 else ""
+
+
+def _m1(r: dict) -> float | None:
+    """1달 전 대비 변화. diff 는 차이, pct 는 % 변화."""
+    if r["m1"] is None:
+        return None
+    if r["chg"] == "pct":
+        return (r["value"] / r["m1"] - 1) * 100 if r["m1"] else None
+    return r["value"] - r["m1"]
+
+
+def macro_reading(r: dict) -> str:
+    k, v, m = r["key"], r["value"], _m1(r)
+    pos = _pos(r)
+    if k == "vix":
+        band = "공포 구간" if v >= 30 else "불안 구간" if v >= 20 else "보통" if v >= 15 else "평온"
+        return f"{band}. 앞으로 30일 주가가 크게 흔들릴 것으로 보는 정도로, 흔히 20 위를 불안, 30 위를 공포로 읽는다.{pos}"
+    if k.startswith("dd_"):
+        if v <= -20:
+            band = "약세장 구간(고점 대비 −20% 아래)"
+        elif v <= -10:
+            band = "조정 구간(고점 대비 −10% 아래)" + (f". 흔히 약세장이라고 부르는 −20% 까지 {v + 20:.1f}%p" if v > -20 and v <= -15 else "")
+        elif v <= -5:
+            band = "얕은 하락"
+        else:
+            band = "고점 근처"
+        return f"{band}."
+    if k == "ust2y":
+        d = "1달 새 큰 변화 없음" if m is None or abs(m) < 0.15 else f"1달 새 {m:+.2f}%p: " + ("연준이 금리를 덜 올리거나 내릴 것으로 보는 쪽, 또는 안전자산으로 돈이 몰린 쪽으로 흔히 읽는다" if m < 0 else "연준이 금리를 더 올릴 것으로 보는 쪽으로 흔히 읽는다")
+        return f"연준 기준금리 예상에 민감한 금리. {d}.{pos}"
+    if k == "ust10y":
+        d = "1달 새 큰 변화 없음" if m is None or abs(m) < 0.15 else f"1달 새 {m:+.2f}%p: " + ("안전자산 수요나 경기 둔화 걱정 쪽으로 흔히 읽는다" if m < 0 else "대출·회사채 금리가 오르고 성장주 값에 부담이 되는 쪽으로 흔히 읽는다")
+        return f"주택담보대출·회사채 금리의 기준. {d}.{pos}"
+    if k == "curve":
+        if v < 0:
+            return f"역전(2년 금리가 10년보다 높음). 경기 둔화를 예상하는 신호로 흔히 본다.{pos}"
+        return ("평평한 편(0 근처). 장기 금리가 단기보다 조금만 높다." if v < 0.5 else "정상(장기 금리가 단기보다 높음).") + pos
+    if k == "hy":
+        band = "신용 걱정이 큰 편" if v >= 5 else "다소 높음" if v >= 4 else "낮은 편(신용 걱정 적음)"
+        d = "" if m is None or abs(m) < 0.25 else f" 1달 새 {m:+.2f}%p " + ("넓어짐: 신용등급 낮은 회사가 돈 빌리기 어려워지는 쪽." if m > 0 else "좁아짐: 신용 걱정이 줄어든 쪽.")
+        return f"{band}.{d}{pos}"
+    if k == "hyg":
+        d = "1달 새 큰 변화 없음" if m is None or abs(m) < 1.5 else f"1달 {m:+.1f}%: " + ("신용등급 낮은 회사채 값이 떨어져 신용 걱정이 커진 쪽" if m < 0 else "신용 걱정이 줄어든 쪽")
+        return f"신용등급 낮은 회사채 묶음의 값. 신용 걱정이 커지면 내려간다. {d}.{pos}"
+    if k == "be5y":
+        band = "연준 목표(2%) 근처" if 1.8 <= v <= 2.5 else "연준 목표(2%)보다 높음" if v > 2.5 else "연준 목표(2%)보다 낮음"
+        d = "" if m is None or abs(m) < 0.15 else f" 1달 새 {m:+.2f}%p: " + ("시장이 물가보다 경기 둔화를 더 걱정하는 쪽으로 흔히 읽는다." if m < 0 else "물가 걱정이 커진 쪽으로 흔히 읽는다.")
+        return f"채권값에 담긴 앞으로 5년 물가 예상. {band}.{d}{pos}"
+    if k == "ffr":
+        d = "1달 새 변화 없음" if m is None or abs(m) < 0.01 else f"1달 새 {m:+.2f}%p " + ("올림" if m > 0 else "내림")
+        return f"연준이 정한 기준금리 범위의 위쪽 끝. {d}. 다음 회의 예상은 이 표에 없다."
+    if k == "usd":
+        d = "1달 새 큰 변화 없음" if m is None or abs(m) < 1.5 else f"1달 {m:+.1f}%: " + ("달러 강세. 해외 매출이 큰 미국 기업과 신흥국에 부담이고, 불안할 때 흔히 오른다" if m > 0 else "달러 약세. 해외 매출이 큰 미국 기업에 도움")
+        return f"주요 통화 대비 달러 값. {d}.{pos}"
+    if k == "wti":
+        d = "1달 새 큰 변화 없음" if m is None or abs(m) < 10 else f"1달 {m:+.1f}%: " + ("경기 둔화 걱정이나 공급 증가를 반영하는 경우가 많고, 물가에는 내림 압력" if m < 0 else "물가에 오름 압력")
+        return f"{d}.{pos}"
+    if k == "btc":
+        d = "1달 새 큰 변화 없음" if m is None or abs(m) < 15 else f"1달 {m:+.1f}%: " + ("위험한 자산을 피하는 분위기(위험 회피)" if m < 0 else "위험한 자산을 찾는 분위기(위험 선호)")
+        return f"위험 선호의 온도계로 흔히 본다. {d}.{pos}"
+    if k == "claims":
+        band = "많은 편(해고가 늘어나는 쪽)" if v >= 300_000 else "늘어나는 편" if v >= 250_000 else "낮은 편(해고가 적음)"
+        note = " 계절조정 전 합계라 명절 주간에 튄다." if r["src"] == "dol" else ""
+        return f"한 주 동안 새로 실업수당을 신청한 사람 수. {band}.{note}"
+    if k == "nfci":
+        band = "평소보다 긴축(돈 구하기 어려움)" if v > 0 else "평소보다 느슨(돈 구하기 쉬움)"
+        d = "" if m is None or abs(m) < 0.05 else (" 1달 새 조여짐." if m > 0 else " 1달 새 풀림.")
+        return f"0 이 평균. {band}.{d}"
+    return ""
+
+
+def macro_hot(rows: list[dict]) -> list[str]:
+    """긴장 쪽으로 읽히는 숫자들 (어림 기준은 macro_reading 과 같다)."""
+    by = {r["key"]: r for r in rows}
+    hot = []
+    v = by.get("vix")
+    if v and v["value"] >= 20:
+        hot.append(f"변동성 {'공포' if v['value'] >= 30 else '불안'} 구간(VIX {v['value']:.1f})")
+    dds = [(by[k]["value"], n) for k, n in (("dd_spy", "S&P 500"), ("dd_qqq", "나스닥 100")) if k in by]
+    if dds and min(x for x, _ in dds) <= -10:
+        hot.append("주가가 52주 고점 대비 " + ", ".join(f"{n} {x:.1f}%" for x, n in dds))
+    c = by.get("curve")
+    if c and c["value"] < 0:
+        hot.append("장단기 금리 역전")
+    h = by.get("hy")
+    if h and h["value"] >= 5:
+        hot.append(f"신용 스프레드 {h['value']:.2f}%p")
+    g = by.get("hyg")
+    if g and (_m1(g) or 0) <= -1.5:
+        hot.append(f"하이일드 채권 1달 {_m1(g):+.1f}%")
+    n = by.get("nfci")
+    if n and n["value"] > 0:
+        hot.append("금융여건 긴축")
+    t, b = by.get("ust10y"), by.get("be5y")
+    if t and (_m1(t) or 0) <= -0.15 and (b is None or (_m1(b) or 0) < 0):
+        hot.append("금리·기대인플레이션 하락(안전자산·경기 걱정 쪽)")
+    u = by.get("usd")
+    if u and (_m1(u) or 0) >= 1.5:
+        hot.append("달러 강세")
+    w = by.get("btc")
+    if w and (_m1(w) or 0) <= -15:
+        hot.append(f"비트코인 1달 {_m1(w):+.0f}%")
+    return hot
+
+
+def macro_summary(rows: list[dict]) -> str:
+    """시장 온도 한 줄 요약."""
+    hot = macro_hot(rows)
+    if not hot:
+        return "한 줄로: 긴장 쪽으로 읽히는 숫자가 눈에 띄지 않는다(VIX 20 아래, 주가 고점 대비 −10% 안)."
+    return f"한 줄로: 긴장 쪽으로 읽히는 숫자 {len(hot)}개. " + " · ".join(hot) + "."
+
+
 def fmt_macro(v: float | None, unit: str) -> str:
     if v is None:
         return "없음"
@@ -441,12 +652,13 @@ def macro_report(macro: dict | None, prices: dict | None, today: datetime.date) 
     if not rows:
         return "시장 온도 자료 없음 (prices/macro.json). fetch.yml 의 market.py --update 가 만든다."
     srcs = sorted({SOURCE_NAMES.get(r["src"], r["src"]) for r in rows})
-    lines = [f"기준: 지표마다 {today} 이전 마지막 값. 출처 {', '.join(srcs)}. 판단 재료이지 매매 신호가 아니다.", "",
-             "| 지표 | 값 | 날짜 | 1주 전 대비 | 1달 전 대비 | 52주 범위 |", "|---|---|---|---|---|---|"]
+    lines = [f"기준: 지표마다 {today} 이전 마지막 값. 출처 {', '.join(srcs)}. 읽는 법은 흔히 쓰는 어림 기준이고, 판단 재료이지 매매 신호가 아니다.", "",
+             macro_summary(rows), "",
+             "| 지표 | 값 | 날짜 | 1주 전 대비 | 1달 전 대비 | 52주 범위 | 읽는 법 |", "|---|---|---|---|---|---|---|"]
     for r in rows:
         u, c = r["unit"], r["chg"]
         lines.append(f"| {r['label']} | {fmt_macro(r['value'], u)} | {r['date'][5:].replace('-', '/')} | {fmt_change(r['value'], r['w1'], u, c)} | "
-                     f"{fmt_change(r['value'], r['m1'], u, c)} | {fmt_macro(r['lo'], u)} ~ {fmt_macro(r['hi'], u)} |")
+                     f"{fmt_change(r['value'], r['m1'], u, c)} | {fmt_macro(r['lo'], u)} ~ {fmt_macro(r['hi'], u)} | {macro_reading(r)} |")
     return "\n".join(lines)
 
 
