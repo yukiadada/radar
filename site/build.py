@@ -11,7 +11,7 @@ data.json:
   ledger[행 + line], board{live, w30, w90, ...}(scoring.alignment + delta + orphans. live 는 누적(유효기간), w<n> 은 열린 창), series{같은 키}(scoring.series)
   activity{같은 키}(축별 건수·방향·상위 섹터), attention(scoring.attention), briefs[{date, structural, none_today, signals, md(최신 것만)}]
   raw{날짜: {소스: {count, error, current, backfill}}}, market{장부 줄: 시장 반응(market.reaction)}, market_meta{source, asof, updated_at} | null,
-  macro{updated_at, hot[긴장 쪽 숫자], errors, rows[{label, value_s, date, w1_s, m1_s, range_s, spark, src, id, reading}]} | null (시장 온도: 금리·신용·변동성. market.macro_rows·macro_reading·macro_hot),
+  macro{updated_at, hot[{title, why}: 긴장 쪽 숫자와 쉬운 말 설명], errors, rows[{label, value_s, date, w1_s, m1_s, range_s, spark, src, id, reading}]} | null (시장 온도: 금리·신용·변동성. market.macro_rows·macro_reading·macro_hot),
   direction_brief(briefs/direction.md 본문. 홈 "지금 세상의 방향" 서술) | null, warnings[]
   브리프 signals 에는 장부와 (날짜, 출처 URL, 섹터) 가 같은 행의 line 을 붙인다 (카드에 시장 반응을 보이기 위해).
 브리프 카드는 여기서 마크다운을 구조화(parse_brief)해 signals 로 준다. 사이트는 나머지 절만 마크다운으로 그린다.
@@ -33,7 +33,7 @@ sys.path.insert(0, str(ROOT / "fetch"))
 from config import AXES, all_tickers, load_sector_map, load_sources  # noqa: E402
 from ledger import load_existing  # noqa: E402
 from scoring import LABELS, PARAMS, alignment, attach_deltas, attention, enabled_windows, raw_scan, select, series  # noqa: E402
-from market import BENCH, asof as price_asof, fmt_change, fmt_macro, lagging, MACRO, load_macro, load_prices, macro_hot, macro_reading, macro_rows, reactions, source_label  # noqa: E402
+from market import BENCH, asof as price_asof, fmt_change, fmt_macro, fresh, lagging, MACRO, load_macro, load_prices, macro_hot, macro_reading, macro_rows, reactions, source_label  # noqa: E402
 
 SITE = ROOT / "site"
 OUT = SITE / "out"
@@ -231,7 +231,8 @@ def main(argv=None) -> int:
         mrows = macro_rows(macro, prices, today)
         labels = {k: v[1] for k, v in ((m[0], m) for m in MACRO)}
         shown = {r["key"] for r in mrows}
-        stale = [k for k, v in (macro.get("series") or {}).items() if k not in shown and k not in (macro.get("errors") or {})]   # 갱신이 멈춰 표에서 뺀 지표
+        stale = [k for k, v in (macro.get("series") or {}).items()   # 갱신이 멈춰 표에서 뺀 지표 (마지막 값이 MACRO_STALE_DAYS 넘게 오래됨)
+                 if k not in shown and k not in (macro.get("errors") or {}) and v.get("dates") and not fresh(v["dates"][-1], today)]
         macro_data = {"updated_at": macro.get("updated_at"), "errors": [labels.get(k, k) + ("(이전 값)" if k in shown else "")
                                                                        for k in sorted(macro.get("errors") or {})] + [labels.get(k, k) + "(자료 갱신이 멈춤)" for k in sorted(stale)],
                       "rows": [{"key": r["key"], "label": r["label"], "date": r["date"], "src": r["src"], "id": r["id"],

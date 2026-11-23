@@ -27,7 +27,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import ROOT, all_tickers, load_sector_map, load_sources  # noqa: E402
 from ledger import LEDGER, load_existing  # noqa: E402
-from market import BENCH, asof, lagging, load_macro, load_prices, source_label  # noqa: E402
+from market import BENCH, MACRO_STALE_DAYS, asof, fresh, lagging, load_macro, load_prices, source_label  # noqa: E402
 
 KST = datetime.timezone(datetime.timedelta(hours=9))
 CHECK_ITEM = re.compile(r"^- (\d{1,2})/(\d{1,2})(?:~(\d{1,2})/(\d{1,2}))? 점검", re.M)
@@ -172,11 +172,26 @@ def section_sources(dates: list[str], commits: dict) -> None:
         print(f"- 기간 내내 0건: {', '.join(sorted(always))}")
 
 
+def line_ranges(lines: list[int]) -> str:
+    """[312, 313, 314, 306] → "306, 312~314". 소급 행이 장부 끝에 붙어 날짜 순서와 줄 순서가 다를 수 있어 이어진 구간으로 적는다."""
+    out, run = [], []
+    for n in sorted(set(lines)):
+        if run and n == run[-1] + 1:
+            run.append(n)
+        else:
+            if run:
+                out.append(f"{run[0]}~{run[-1]}" if len(run) > 1 else str(run[0]))
+            run = [n]
+    if run:
+        out.append(f"{run[0]}~{run[-1]}" if len(run) > 1 else str(run[0]))
+    return ", ".join(out)
+
+
 def section_ledger(rows: list[dict], lo: str, hi: str) -> collections.Counter:
     print("\n## 장부")
     sel = [r for r in rows if lo <= r["date"] <= hi]
     per_day = collections.Counter(r["date"] for r in sel)
-    print(f"- 장부 {len(rows)}줄, 기간 {len(sel)}건" + (f" (줄 {sel[0]['line']}~{sel[-1]['line']})" if sel else ""))
+    print(f"- 장부 {len(rows)}줄, 기간 {len(sel)}건" + (f" (줄 {line_ranges([r['line'] for r in sel])})" if sel else ""))
     if not sel:
         return per_day
     pm = sum(r["direction"] == "±" for r in sel)
@@ -211,13 +226,22 @@ def section_prices(today: datetime.date) -> None:
     print(f"- 빠진 종목: {', '.join(missing) or '없음'}. 멈춘 종목(최근 종가보다 5일 넘게 뒤): {', '.join(f'{t} {dt}' for t, dt in stale) or '없음'}. "
           f"마지막 갱신 실패: {', '.join(errs) or '없음'}")
     print(f"- 종가 출처: {source_label(p)}")
+    probe = p.get("probe") or {}
+    if probe:   # 이번에 안 쓴 출처를 SPY 로 점검한 결과. 앞 출처가 막혔을 때 넘어갈 곳이 살아 있는지
+        print(f"- 출처 점검({kst(probe['checked_at']) + ' KST' if probe.get('checked_at') else '시각 없음'}): "
+              + ", ".join(f"{k} {v}" for k, v in probe.items() if k != "checked_at"))
+    else:
+        print("- 출처 점검: 기록 없음 (2026-11-23 전 자료)")
     m = load_macro()
     if not m:
         print("- 시장 온도(prices/macro.json) 없음")
     else:
         last = {k: v["dates"][-1] for k, v in m["series"].items() if v.get("dates")}
-        print(f"- 시장 온도: {len(m['series'])}개 지표, 갱신 {kst(m['updated_at']) + ' KST' if m.get('updated_at') else '확인 안 됨'}, "
-              f"마지막 값 {min(last.values(), default='없음')}~{max(last.values(), default='없음')}. 마지막 갱신 실패: {', '.join(m.get('errors') or {}) or '없음'}")
+        live = {k: dt for k, dt in last.items() if fresh(dt, today)}
+        stale = sorted(f"{k} {dt}" for k, dt in last.items() if k not in live)
+        print(f"- 시장 온도: {len(live)}개 지표 표시, 갱신 {kst(m['updated_at']) + ' KST' if m.get('updated_at') else '확인 안 됨'}, "
+              f"마지막 값 {min(live.values(), default='없음')}~{max(live.values(), default='없음')}. 마지막 갱신 실패: {', '.join(m.get('errors') or {}) or '없음'}. "
+              f"{MACRO_STALE_DAYS}일 넘게 멈춰 뺀 지표: {', '.join(stale) or '없음'}")
 
 
 def section_briefs(dates: list[str]) -> None:

@@ -255,7 +255,12 @@ input[type=search]{width:100%}
 .dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(310px,100%),1fr));gap:12px;margin:0}
 /* 시장 온도 */
 .msum{background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-card);padding:16px 20px;margin:0 0 12px;font-size:var(--fs-body);line-height:1.75}
-.msum ul{margin:6px 0 0;padding-left:20px}
+.msum h3{font-size:var(--fs-lg);margin:0 0 4px}
+.msum>p{margin:0 0 4px;font-size:var(--fs-sm)}
+.msum ul{margin:8px 0 0;padding-left:20px}
+.msum li{margin:0 0 10px}
+.msum li:last-child{margin-bottom:0}
+.msum li p{margin:2px 0 0;font-size:var(--fs-sm);line-height:1.75;color:var(--ink2)}
 .mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:12px}
 .mcard{background:var(--panel);border:1px solid var(--hair);border-radius:var(--r-card);padding:16px 18px;min-width:0;display:flex;flex-direction:column;gap:8px}
 .mcard header{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
@@ -647,13 +652,13 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
       cards += `<div class="sigs">${list.map(signalCard).join('')}</div>`;
     }
     container.innerHTML = cards ? KEYS + cards + (b.none_today ? `<p class="keys">오늘 구조적 시그널 없음. 위 카드는 아직 확정되지 않은 재료입니다.</p>` : '')
-      : `<p class="empty">오늘 구조적 시그널 없음.</p>`;
+      : `<p class="empty">${b.none_today ? '오늘 구조적 시그널 없음.' : '카드로 보일 시그널이 없습니다. 아래 원본 표를 확인하세요.'}</p>`;
     const rest = secs.filter(x => !isAxis(x.title) && !isEasy(x.title));
     if (compact) {
       if (rest.length) container.insertAdjacentHTML('beforeend', `<p class="keys">${rest.map(x => esc(x.title.replace(/\s*\(.*\)\s*$/, ''))).join(' · ')}은 <a href="#/brief/${esc(b.date)}">브리프 탭</a>에서 봅니다.</p>`);
     } else for (const x of rest) container.appendChild(md('## ' + x.title + '\n' + x.md));
     const dd = document.createElement('details'); dd.className = 'more'; dd.innerHTML = '<summary>원본 시그널 표 · 해석 · 확인 방법 메모</summary>';
-    for (const x of secs.filter(x => (isAxis(x.title) && b.signals.some(s => s.axis === x.title)) || isEasy(x.title))) dd.appendChild(md('## ' + x.title + '\n' + x.md));   // 해당 없는 축 절은 빼고
+    for (const x of secs.filter(x => (isAxis(x.title) && /^\s*\|/m.test(x.md)) || isEasy(x.title))) dd.appendChild(md('## ' + x.title + '\n' + x.md));   // "해당 없음" 축 절은 빼고, 표가 있는 축은 형식이 깨져 카드가 없어도 남긴다
     container.appendChild(dd);
     decorateTables(container);
   }
@@ -773,9 +778,11 @@ mark.todo{background:color-mix(in srgb,var(--neg) 10%,var(--panel));color:var(--
       `<div class="mrow"><div class="mchg"><span>1주 ${esc(r.w1_s)}</span><span>1달 ${esc(r.m1_s)}</span><span>52주 ${esc(r.range_s)}</span></div>${sp(r.spark)}</div>` +
       (r.reading ? `<p>${esc(r.reading)}</p>` : '') + `<p class="dim small">${esc(r.date.slice(5).replace('-', '/'))} · ${esc(src(r))} ${esc(r.id)}</p></article>`;
     const head = rows.slice(0, MACRO_FIRST), rest = rows.slice(MACRO_FIRST);
-    const hot = M.hot || [];
-    return `<div class="msum">${hot.length ? `<b>긴장 쪽으로 읽히는 숫자 ${hot.length}개</b><ul>${hot.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`
-      : `<b>긴장 쪽으로 읽히는 숫자가 눈에 띄지 않습니다.</b> <span class="dim">VIX 20 아래, 주가가 52주 고점 대비 −10% 안.</span>`}</div>` +
+    const hot = M.hot || [];   // [{title, why}] 긴장 쪽 숫자와 쉬운 말 설명 (market.macro_hot)
+    return `<div class="msum">${hot.length ? `<h3>긴장 쪽으로 읽히는 숫자 ${hot.length}개</h3>` +
+        (hot.length >= 3 ? `<p class="dim">여럿이 함께 나와 시장 전체가 위험을 피하는 쪽으로 움직이는 모습으로 흔히 읽습니다.</p>` : '') +
+        `<ul>${hot.map(x => (typeof x === 'string' ? `<li>${esc(x)}</li>` : `<li><b>${esc(x.title)}</b><p>${esc(x.why)}</p></li>`)).join('')}</ul>`
+      : `<b>긴장 쪽으로 읽히는 숫자가 눈에 띄지 않습니다.</b> <span class="dim">VIX 20 아래, 주가가 1년 최고점 대비 −10% 안.</span>`}</div>` +
       `<div class="mgrid">${head.map(card).join('')}</div>` +
       (rest.length ? `<details class="mmore"><summary>지표 ${rest.length}개 더 보기</summary><div class="mgrid">${rest.map(card).join('')}</div></details>` : '') +
       `<p class="keys">읽는 법은 흔히 쓰는 어림 기준입니다. 원인을 단정하지 않고, 판단 재료이지 매매 신호가 아닙니다.` +

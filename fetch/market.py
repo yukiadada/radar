@@ -129,7 +129,7 @@ def _closed(dates: list[str], close: list[float], keep_from: str, tz: str = "Ame
 
 
 def _cboe(t: str, keep_from: str) -> tuple[list[str], list[float]]:
-    d = json.loads(_get(CBOE.format(t=t), {"User-Agent": UA, "Accept": "application/json"}))
+    d = json.loads(_get(CBOE.format(t=t), {"User-Agent": UA, "Accept": "application/json"}, retries=1, timeout=30, wait429=5))   # 응답 없는 날 종목마다 몇 분씩 잡지 않게
     rows = [x for x in d.get("data", []) if x.get("close") is not None]
     return _closed([str(x["date"]) for x in rows], [x["close"] for x in rows], keep_from)
 
@@ -165,9 +165,16 @@ def _stooq(t: str, keep_from: str) -> tuple[list[str], list[float]]:
 
 def _nasdaq(t: str, keep_from: str) -> tuple[list[str], list[float]]:
     h = {"User-Agent": CHROME_UA, "Accept": "application/json, text/plain, */*", "Origin": "https://www.nasdaq.com", "Referer": "https://www.nasdaq.com/"}
-    for cls in ("etf", "stocks"):
-        d = json.loads(_get(f"https://api.nasdaq.com/api/quote/{t}/historical?assetclass={cls}&fromdate={keep_from}&limit=9999", h,
-                            retries=1, timeout=FALLBACK_TIMEOUT, wait429=5))
+    last: Exception | None = None
+    for cls in ("etf", "stocks"):   # 종목이 ETF 인지 주식인지 몰라 둘 다 본다. 한쪽 오류로 다른 쪽을 건너뛰지 않는다
+        try:
+            d = json.loads(_get(f"https://api.nasdaq.com/api/quote/{t}/historical?assetclass={cls}&fromdate={keep_from}&limit=9999", h,
+                                retries=1, timeout=FALLBACK_TIMEOUT, wait429=5))
+        except Blocked:
+            raise
+        except Exception as e:
+            last = e
+            continue
         dates, close = [], []
         for r in (((d.get("data") or {}).get("tradesTable") or {}).get("rows")) or []:
             try:   # 'N/A' 같은 값은 그 줄만 버린다
@@ -178,7 +185,7 @@ def _nasdaq(t: str, keep_from: str) -> tuple[list[str], list[float]]:
                 continue
         if dates:
             return _closed(dates, close, keep_from)
-    raise RuntimeError("자료 없음")
+    raise RuntimeError(f"자료 없음 ({type(last).__name__}: {last})" if last else "자료 없음")
 
 
 FETCHERS = {"cboe": _cboe, "yahoo": _yahoo, "stooq": _stooq, "nasdaq": _nasdaq}
@@ -431,7 +438,7 @@ def update_macro(path: Path = MACRO_PATH, keep_days: int = MACRO_KEEP_DAYS) -> i
                 dates, values = fn()
                 if not dates:
                     raise RuntimeError("자료 없음")
-                if not _fresh(dates[-1]):
+                if not fresh(dates[-1]):
                     raise RuntimeError(f"오래된 자료(마지막 {dates[-1]})")
                 out["series"][key] = {"label": label, "unit": unit, "chg": chg, "id": fred_id if src == "fred" else alt[1], "src": src, "dates": dates, "values": values}
                 print(f"[ok]   {key:<7} {label:<24} {len(dates):>4}개  {dates[-1]}  {values[-1]}  ({src})")
@@ -443,9 +450,10 @@ def update_macro(path: Path = MACRO_PATH, keep_days: int = MACRO_KEEP_DAYS) -> i
         else:
             out["errors"][key] = "; ".join(errs)
             prev = (old.get("series") or {}).get(key)
-            if prev and prev.get("dates") and _fresh(prev["dates"][-1]):
+            if prev and prev.get("dates") and fresh(prev["dates"][-1]):
                 out["series"][key] = prev
-            print(f"[fail] {key:<7} {label} {'; '.join(errs)}" + (f"  (이전 자료 유지, 마지막 {prev['dates'][-1]})" if prev else ""), file=sys.stderr)
+            kept = key in out["series"]
+            print(f"[fail] {key:<7} {label} {'; '.join(errs)}" + (f"  (이전 자료 유지, 마지막 {prev['dates'][-1]})" if kept else "  (이전 자료가 오래돼 뺌)" if prev else ""), file=sys.stderr)
         if i < len(MACRO) - 1:
             time.sleep(0.6)
     _write(path, out)
@@ -453,7 +461,8 @@ def update_macro(path: Path = MACRO_PATH, keep_days: int = MACRO_KEEP_DAYS) -> i
     return 1 if out["errors"] else 0
 
 
-def _fresh(day: str, today: datetime.date | None = None) -> bool:
+def fresh(day: str, today: datetime.date | None = None) -> bool:
+    """시장 온도 지표의 마지막 값이 MACRO_STALE_DAYS 안인가. 아니면 갱신이 멈춘 지표로 보고 표에서 뺀다."""
     return ((today or datetime.date.today()) - datetime.date.fromisoformat(day)).days <= MACRO_STALE_DAYS
 
 
@@ -482,7 +491,7 @@ def macro_rows(macro: dict | None, prices: dict | None, today: datetime.date | N
             return
         d, v = dates[i], values[i]
         dd = datetime.date.fromisoformat(d)
-        if not _fresh(d, today):   # 갱신이 멈춘 지표는 지금 값처럼 보이지 않게 뺀다
+        if not fresh(d, today):   # 갱신이 멈춘 지표는 지금 값처럼 보이지 않게 뺀다
             return
         w1 = _at_or_before(dates, values, (dd - datetime.timedelta(days=7)).isoformat())
         m1 = _at_or_before(dates, values, (dd - datetime.timedelta(days=30)).isoformat())
@@ -521,6 +530,15 @@ def _pos(r: dict) -> str:
     return " 52주 최고 수준." if q >= 0.95 else " 52주 최저 수준." if q <= 0.05 else ""
 
 
+def _chg_text(m: float | None, small: float, fmt: str, up: str, down: str) -> str:
+    """1달 변화 문장. m 이 None 이면 자료 없음, small 보다 작으면 큰 변화 없음."""
+    if m is None:
+        return "1달 전 자료 없음"
+    if abs(m) < small:
+        return "1달 새 큰 변화 없음"
+    return f"1달 {'새 ' if fmt.endswith('p') else ''}{m:+.{2 if fmt.endswith('p') else 1}f}{fmt}: " + (up if m > 0 else down)
+
+
 def _m1(r: dict) -> float | None:
     """1달 전 대비 변화. diff 는 차이, pct 는 % 변화."""
     if r["m1"] is None:
@@ -547,10 +565,10 @@ def macro_reading(r: dict) -> str:
             band = "고점 근처"
         return f"{band}."
     if k == "ust2y":
-        d = "1달 새 큰 변화 없음" if m is None or abs(m) < 0.15 else f"1달 새 {m:+.2f}%p: " + ("연준이 금리를 덜 올리거나 내릴 것으로 보는 쪽, 또는 안전자산으로 돈이 몰린 쪽으로 흔히 읽는다" if m < 0 else "연준이 금리를 더 올릴 것으로 보는 쪽으로 흔히 읽는다")
+        d = _chg_text(m, 0.15, "%p", "연준이 금리를 더 올릴 것으로 보는 쪽으로 흔히 읽는다", "연준이 금리를 덜 올리거나 내릴 것으로 보는 쪽, 또는 안전자산으로 돈이 몰린 쪽으로 흔히 읽는다")
         return f"연준 기준금리 예상에 민감한 금리. {d}.{pos}"
     if k == "ust10y":
-        d = "1달 새 큰 변화 없음" if m is None or abs(m) < 0.15 else f"1달 새 {m:+.2f}%p: " + ("안전자산 수요나 경기 둔화 걱정 쪽으로 흔히 읽는다" if m < 0 else "대출·회사채 금리가 오르고 성장주 값에 부담이 되는 쪽으로 흔히 읽는다")
+        d = _chg_text(m, 0.15, "%p", "대출·회사채 금리가 오르고 성장주 값에 부담이 되는 쪽으로 흔히 읽는다", "안전자산 수요나 경기 둔화 걱정 쪽으로 흔히 읽는다")
         return f"주택담보대출·회사채 금리의 기준. {d}.{pos}"
     if k == "curve":
         if v < 0:
@@ -558,26 +576,26 @@ def macro_reading(r: dict) -> str:
         return ("평평한 편(0 근처). 장기 금리가 단기보다 조금만 높다." if v < 0.5 else "정상(장기 금리가 단기보다 높음).") + pos
     if k == "hy":
         band = "신용 걱정이 큰 편" if v >= 5 else "다소 높음" if v >= 4 else "낮은 편(신용 걱정 적음)"
-        d = "" if m is None or abs(m) < 0.25 else f" 1달 새 {m:+.2f}%p " + ("넓어짐: 신용등급 낮은 회사가 돈 빌리기 어려워지는 쪽." if m > 0 else "좁아짐: 신용 걱정이 줄어든 쪽.")
+        d = "" if m is None or abs(m) < 0.25 else f" 1달 새 {m:+.2f}%p " + ("넓어짐: 신용등급 낮은 회사가 돈 빌리기 어려워지는 쪽으로 흔히 읽는다." if m > 0 else "좁아짐: 신용 걱정이 줄어든 쪽으로 흔히 읽는다.")
         return f"{band}.{d}{pos}"
     if k == "hyg":
-        d = "1달 새 큰 변화 없음" if m is None or abs(m) < 1.5 else f"1달 {m:+.1f}%: " + ("신용등급 낮은 회사채 값이 떨어져 신용 걱정이 커진 쪽" if m < 0 else "신용 걱정이 줄어든 쪽")
+        d = _chg_text(m, 1.5, "%", "신용 걱정이 줄어든 쪽으로 흔히 읽는다", "신용등급 낮은 회사채 값이 떨어져 신용 걱정이 커진 쪽으로 흔히 읽는다")
         return f"신용등급 낮은 회사채 묶음의 값. 신용 걱정이 커지면 내려간다. {d}.{pos}"
     if k == "be5y":
         band = "연준 목표(2%) 근처" if 1.8 <= v <= 2.5 else "연준 목표(2%)보다 높음" if v > 2.5 else "연준 목표(2%)보다 낮음"
         d = "" if m is None or abs(m) < 0.15 else f" 1달 새 {m:+.2f}%p: " + ("시장이 물가보다 경기 둔화를 더 걱정하는 쪽으로 흔히 읽는다." if m < 0 else "물가 걱정이 커진 쪽으로 흔히 읽는다.")
         return f"채권값에 담긴 앞으로 5년 물가 예상. {band}.{d}{pos}"
     if k == "ffr":
-        d = "1달 새 변화 없음" if m is None or abs(m) < 0.01 else f"1달 새 {m:+.2f}%p " + ("올림" if m > 0 else "내림")
+        d = "1달 전 자료 없음" if m is None else "1달 새 변화 없음" if abs(m) < 0.01 else f"1달 새 {m:+.2f}%p " + ("올림" if m > 0 else "내림")
         return f"연준이 정한 기준금리 범위의 위쪽 끝. {d}. 다음 회의 예상은 이 표에 없다."
     if k == "usd":
-        d = "1달 새 큰 변화 없음" if m is None or abs(m) < 1.5 else f"1달 {m:+.1f}%: " + ("달러 강세. 해외 매출이 큰 미국 기업과 신흥국에 부담이고, 불안할 때 흔히 오른다" if m > 0 else "달러 약세. 해외 매출이 큰 미국 기업에 도움")
+        d = _chg_text(m, 1.5, "%", "달러 강세. 불안할 때 흔히 오르고, 해외 매출이 큰 미국 기업과 신흥국에는 부담으로 흔히 본다", "달러 약세. 해외 매출이 큰 미국 기업에는 도움으로 흔히 본다")
         return f"주요 통화 대비 달러 값. {d}.{pos}"
     if k == "wti":
-        d = "1달 새 큰 변화 없음" if m is None or abs(m) < 10 else f"1달 {m:+.1f}%: " + ("경기 둔화 걱정이나 공급 증가를 반영하는 경우가 많고, 물가에는 내림 압력" if m < 0 else "물가에 오름 압력")
+        d = _chg_text(m, 10, "%", "물가를 밀어 올리는 쪽으로 흔히 본다", "경기 둔화 걱정이나 공급 증가를 반영하는 경우가 많고, 물가에는 내림 쪽으로 흔히 본다")
         return f"{d}.{pos}"
     if k == "btc":
-        d = "1달 새 큰 변화 없음" if m is None or abs(m) < 15 else f"1달 {m:+.1f}%: " + ("위험한 자산을 피하는 분위기(위험 회피)" if m < 0 else "위험한 자산을 찾는 분위기(위험 선호)")
+        d = _chg_text(m, 15, "%", "위험한 자산을 찾는 분위기(위험 선호)로 흔히 읽는다", "위험한 자산을 피하는 분위기(위험 회피)로 흔히 읽는다")
         return f"위험 선호의 온도계로 흔히 본다. {d}.{pos}"
     if k == "claims":
         band = "많은 편(해고가 늘어나는 쪽)" if v >= 300_000 else "늘어나는 편" if v >= 250_000 else "낮은 편(해고가 적음)"
@@ -590,46 +608,71 @@ def macro_reading(r: dict) -> str:
     return ""
 
 
-def macro_hot(rows: list[dict]) -> list[str]:
-    """긴장 쪽으로 읽히는 숫자들 (어림 기준은 macro_reading 과 같다)."""
+def macro_hot(rows: list[dict]) -> list[dict]:
+    """긴장 쪽으로 읽히는 숫자들. [{"title": 짧은 이름, "why": 쉬운 말 두세 문장}]. 어림 기준은 macro_reading 과 같다.
+    why 는 브리프 "쉬운 말로"의 "왜 중요"처럼 중학생이 읽어도 되게 쓴다. 원인을 단정하지 않고 "흔히 ~로 읽는다"로 쓴다."""
     by = {r["key"]: r for r in rows}
-    hot = []
+    hot: list[dict] = []
     v = by.get("vix")
     if v and v["value"] >= 20:
-        hot.append(f"변동성 {'공포' if v['value'] >= 30 else '불안'} 구간(VIX {v['value']:.1f})")
+        band = "공포" if v["value"] >= 30 else "불안"
+        hot.append({"title": f"변동성 {band} 구간 (VIX {v['value']:.1f})",
+                    "why": f"VIX 는 앞으로 한 달 동안 주가가 얼마나 크게 흔들릴지 시장이 예상하는 숫자입니다(옵션 값으로 계산). "
+                           f"평소에는 20 아래인데 지금은 {v['value']:.1f} 로, 흔히 '{band} 구간'이라고 부르는 수준입니다."
+                           + (" 최근 1년 중 가장 높습니다." if _pos(v).strip().startswith("52주 최고") else "")})
     dds = [(by[k]["value"], n) for k, n in (("dd_spy", "S&P 500"), ("dd_qqq", "나스닥 100")) if k in by]
     if dds and min(x for x, _ in dds) <= -10:
-        hot.append("주가가 52주 고점 대비 " + ", ".join(f"{n} {x:.1f}%" for x, n in dds))
+        near = [(x, n) for x, n in dds if -20 < x <= -15]
+        hot.append({"title": "주가가 1년 최고점에서 크게 내려옴",
+                    "why": "최근 1년 가장 높았던 날보다 " + ", ".join(f"{n} 은 {-x:.1f}%" for x, n in dds) + " 낮습니다. "
+                           "흔히 10% 넘게 빠지면 '조정', 20% 넘게 빠지면 '약세장'이라고 부릅니다."
+                           + "".join(f" {n} 은 약세장 기준(−20%)까지 {x + 20:.1f}%p 남았습니다." for x, n in near)
+                           + "".join(f" {n} 은 이미 약세장 기준(−20%) 아래입니다." for x, n in dds if x <= -20)})
     c = by.get("curve")
     if c and c["value"] < 0:
-        hot.append("장단기 금리 역전")
+        hot.append({"title": f"장단기 금리 역전 ({c['value']:+.2f}%p)",
+                    "why": "보통은 돈을 오래 빌릴수록 이자가 높은데, 지금은 2년 국채 금리가 10년보다 높습니다. "
+                           "시장이 앞으로 경기가 나빠질 것으로 볼 때 흔히 나타나는 모양입니다."})
     h = by.get("hy")
     if h and h["value"] >= 5:
-        hot.append(f"신용 스프레드 {h['value']:.2f}%p")
+        hot.append({"title": f"신용 스프레드 {h['value']:.2f}%p",
+                    "why": f"신용등급이 낮은 회사가 돈을 빌릴 때 나라(국채)보다 {h['value']:.2f}%p 더 비싼 이자를 내야 합니다. "
+                           "이 차이가 벌어지면 회사들이 돈 빌리기 어려워지고 부도 걱정이 커졌다는 뜻으로 흔히 읽습니다."})
     g = by.get("hyg")
     if g and (_m1(g) or 0) <= -1.5:
-        hot.append(f"하이일드 채권 1달 {_m1(g):+.1f}%")
+        hot.append({"title": f"하이일드 채권 1달 {_m1(g):+.1f}%",
+                    "why": f"신용등급이 낮은 회사들의 채권을 묶은 상품(HYG) 값이 한 달 새 {-_m1(g):.1f}% 내렸습니다. "
+                           "돈을 빌려준 사람들이 이런 회사가 돈을 못 갚을까 걱정할 때 흔히 이렇게 움직입니다."})
     n = by.get("nfci")
     if n and n["value"] > 0:
-        hot.append("금융여건 긴축")
+        hot.append({"title": f"금융여건 긴축 (NFCI {n['value']:+.2f})",
+                    "why": "시카고 연은의 금융여건지수가 0(평균) 위입니다. 기업과 가계가 평소보다 돈을 구하기 어렵다는 뜻입니다."})
     t, b = by.get("ust10y"), by.get("be5y")
     if t and (_m1(t) or 0) <= -0.15 and (b is None or (_m1(b) or 0) < 0):
-        hot.append("금리·기대인플레이션 하락(안전자산·경기 걱정 쪽)")
+        hot.append({"title": "금리와 물가 예상이 같이 내려감",
+                    "why": f"미국 10년 국채 금리가 한 달 새 {-_m1(t):.2f}%p 내렸고"
+                           + (f", 앞으로 5년 물가 예상(기대인플레이션)도 {-_m1(b):.2f}%p 내렸습니다. " if b and _m1(b) is not None else "습니다. ")
+                           + "사람들이 주식 같은 위험한 자산에서 안전한 국채로 옮기고, 물가보다 경기가 식을까 더 걱정할 때 흔히 나타나는 모습입니다."})
     u = by.get("usd")
     if u and (_m1(u) or 0) >= 1.5:
-        hot.append("달러 강세")
+        hot.append({"title": f"달러 강세 (1달 {_m1(u):+.1f}%)",
+                    "why": f"주요 통화와 비교한 달러 값이 한 달 새 {_m1(u):.1f}% 올랐습니다. 불안할 때 안전한 달러를 찾는 사람이 늘면 흔히 오릅니다. "
+                           "해외에서 많이 파는 미국 기업에는 부담으로 흔히 봅니다."})
     w = by.get("btc")
     if w and (_m1(w) or 0) <= -15:
-        hot.append(f"비트코인 1달 {_m1(w):+.0f}%")
+        hot.append({"title": f"비트코인 1달 {_m1(w):+.0f}%",
+                    "why": f"비트코인이 한 달 새 {-_m1(w):.0f}% 내렸습니다. 비트코인은 사람들이 위험을 감수하려는 분위기의 온도계로 흔히 보는데, "
+                           "크게 떨어졌다는 것은 위험한 자산을 피하는 분위기로 흔히 읽습니다."})
     return hot
 
 
 def macro_summary(rows: list[dict]) -> str:
-    """시장 온도 한 줄 요약."""
+    """브리프 "시장 온도" 절 맨 위의 쉬운 말 요약. 긴장 쪽 숫자마다 굵은 이름과 두세 문장."""
     hot = macro_hot(rows)
     if not hot:
-        return "한 줄로: 긴장 쪽으로 읽히는 숫자가 눈에 띄지 않는다(VIX 20 아래, 주가 고점 대비 −10% 안)."
-    return f"한 줄로: 긴장 쪽으로 읽히는 숫자 {len(hot)}개. " + " · ".join(hot) + "."
+        return "한 줄로: 긴장 쪽으로 읽히는 숫자가 눈에 띄지 않는다(VIX 20 아래, 주가 1년 최고점 대비 −10% 안)."
+    head = f"한 줄로: 긴장 쪽으로 읽히는 숫자 {len(hot)}개." + (" 여럿이 함께 나와 시장 전체가 위험을 피하는 쪽으로 움직이는 모습으로 흔히 읽는다." if len(hot) >= 3 else "")
+    return head + "\n\n" + "\n".join(f"- **{x['title']}**: {x['why']}" for x in hot)
 
 
 def fmt_macro(v: float | None, unit: str) -> str:
@@ -800,7 +843,7 @@ def comment(x: dict | None) -> str:
     if not parts and x["latest"]:
         parts = [f"{x['latest']['days']}거래일 {pct(x['latest']['r'])} (SPY {pct(x['latest']['spy'])})"]
     s = f"기준 {x['base']} 종가 대비 " + (" · ".join(parts) if parts else "아직 거래일 없음")
-    return s + (f" — {x['verdict']}" if x["verdict"] else "")
+    return s + (f". 판정: {x['verdict']}" if x["verdict"] else "")
 
 
 def report(rows: list[dict], prices: dict | None, today: datetime.date, days: int = 30) -> str:
@@ -820,10 +863,10 @@ def report(rows: list[dict], prices: dict | None, today: datetime.date, days: in
         if len(fact) > 40:
             fact = fact[:39] + "…"
         if x:
-            cells = [f"{pct(v['r'])} / {pct(v['spy'])}" if v else "—" for v in (x["h"]["1"], x["h"]["5"], x["h"]["20"], x["h"]["60"])]
-            verdict = x["verdict"] or "—"
+            cells = [f"{pct(v['r'])} / {pct(v['spy'])}" if v else "없음" for v in (x["h"]["1"], x["h"]["5"], x["h"]["20"], x["h"]["60"])]
+            verdict = x["verdict"] or "판정 안 함(±)"
         else:
-            cells, verdict = ["—", "—", "—", "—"], "자료 없음"
+            cells, verdict = ["없음"] * 4, "자료 없음"
         lines.append(f"| {r['date']} | {r['axis']} · {r['sector']} | {fact} | {r['direction']} | {cells[0]} | {cells[1]} | {cells[2]} | {cells[3]} | {verdict} |")
     return "\n".join(lines)
 
